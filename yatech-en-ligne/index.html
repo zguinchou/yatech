@@ -2603,11 +2603,13 @@ const UTILISATEURS = [
 /* --- planning ------------------------------------------------------------ */
 const JOURS_SEMAINE = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
-/** '09:30' → 570. Une heure illisible vaut l'ouverture plutôt qu'un NaN. */
+/** '09:30' → 570. Tout ce qui n'est pas une heure — champ vide, texte, heure
+ *  impossible — vaut le repli qu'on lui donne, jamais 0 ni NaN. */
 const enMinutes = (h, defaut) => {
-  const [a, b] = String(h || '').split(':');
-  const m = (+a) * 60 + (+b || 0);
-  return Number.isFinite(m) ? m : defaut;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(h || '').trim());
+  if (!m) return defaut;
+  const total = (+m[1]) * 60 + (+m[2]);
+  return total >= 0 && total <= 1440 ? total : defaut;
 };
 const enHeure = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 
@@ -2787,8 +2789,18 @@ const LIBELLES_DEFAUT = {};
   });
 });
 
-/* Une pastille sur le plan ne tient pas un nom entier : on garde le premier mot. */
-const abreger = (t) => String(t).trim().split(/[\s—·/-]+/)[0].slice(0, 9) || '—';
+/* Une pastille sur le plan ne tient pas un nom entier : on garde le premier
+   mot qui dit quelque chose. « Au sol » abrégé en « AU » ne désignait rien —
+   les petits mots de liaison passent donc leur tour, sauf s'il ne reste
+   qu'eux. */
+const MOTS_VIDES = ['au', 'aux', 'le', 'la', 'les', 'l', 'un', 'une', 'du', 'de', 'des', 'd',
+                    'en', 'a', 'sur', 'sous'];
+const abreger = (t) => {
+  // l'apostrophe sépare aussi : sans elle, « l'extérieur » resterait entier
+  const mots = String(t).trim().split(/[\s—·/'’-]+/).filter(Boolean);
+  const plein = mots.find(m => !MOTS_VIDES.includes(m.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()));
+  return (plein || mots[0] || '').slice(0, 9) || '—';
+};
 
 function appliquerLibelles(r) {
   const perso = (r && r.libelles) || {};
@@ -3720,7 +3732,6 @@ const S = {
   focusPresta: null,     // ligne de tarif tout juste ajoutée, à faire pointer
   memoDe: null,
   memosFaits: false,
-  semaine: 0,
   parcVue: 'iso',
   parcFiltre: 'tous',
   parcCote: 'tous',
@@ -3804,10 +3815,6 @@ function placesLibres() {
   const prises = new Set(DB.etat.occupations.map(o => o.placeId));
   return PLACES.filter(p => !prises.has(p.id));
 }
-function alertesTotal() {
-  return appelsATraiter().length + aRelancer().length + pretsARendre().length;
-}
-
 /* ==========================================================================
    ACTIONS
    ========================================================================== */
@@ -6452,12 +6459,6 @@ function vueFicheDevis() {
    ========================================================================== */
 const minuit = (ts) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
-function lundiDe(decalage) {
-  const d = new Date(); d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + decalage * 7);
-  return d.getTime();
-}
-
 /* Le planning se regarde au mois, une semaine à la fois. On liste les lundis
    qui touchent le mois affiché — quatre le plus souvent, cinq ou six parfois,
    selon le jour où il tombe. Chacun devient un onglet, et on glisse de l'un à
@@ -6538,20 +6539,33 @@ function libelleSemaine(lundi, fin) {
     : `Semaine du ${jour(lundi)} ${mois(lundi)} au ${jour(fin)} ${mois(fin)}${an}`;
 }
 
-/* Passer à la semaine voisine. Au bout du mois, on continue naturellement sur
-   le mois suivant ou précédent : sinon le geste s'arrêterait sur un mur. */
+/** Se poser sur la semaine qui contient ce lundi-là, dans le mois qu'il faut.
+
+    Une semaine à cheval appartient aux deux mois qu'elle touche : la dernière
+    d'août est aussi la première de septembre. Compter en « mois + rang »
+    tombait donc deux fois sur la même semaine à chaque changement de mois, et
+    la flèche paraissait morte une fois par mois. On cherche la semaine par sa
+    date, et le mois suit. */
+function poserSemaine(lundi) {
+  const cible = minuit(lundi);
+  const depart = S.moisPlanning || 0;
+  // le mois courant d'abord : une semaine à cheval reste là où on la regardait
+  for (const dec of [0, 1, -1, 2, -2]) {
+    const m = semainesDuMois(depart + dec);
+    const i = m.semaines.findIndex(s => cible >= s.lundi && cible <= s.dimanche);
+    if (i >= 0) { S.moisPlanning = depart + dec; S.semaineDuMois = i; return true; }
+  }
+  return false;
+}
+
+/* Passer à la semaine voisine — en jours de calendrier, jamais en ajoutant
+   7 × 24 h : la semaine du changement d'heure ne dure pas 168 heures. */
 function glisserSemaine(sens) {
   const mois = semainesDuMois(S.moisPlanning || 0);
-  const i = semaineAffichee(mois) + sens;
-  if (i < 0) {
-    S.moisPlanning = (S.moisPlanning || 0) - 1;
-    S.semaineDuMois = Math.max(0, semainesDuMois(S.moisPlanning).semaines.length - 1);
-  } else if (i >= mois.semaines.length) {
-    S.moisPlanning = (S.moisPlanning || 0) + 1;
-    S.semaineDuMois = 0;
-  } else {
-    S.semaineDuMois = i;
-  }
+  const sem = mois.semaines[semaineAffichee(mois)];
+  const d = new Date(sem.lundi);
+  d.setDate(d.getDate() + sens * 7);
+  poserSemaine(d.getTime());
   rendre();
 }
 
@@ -6559,7 +6573,10 @@ function glisserSemaine(sens) {
 function dureeEstimee(d) {
   if (!d || !d.lignes.length) return Number(DB.etat.reglages.dureeDefaut) || 1;
   const mo = d.lignes.filter(l => l.type !== 'piece').reduce((s, l) => s + l.qte * l.prixHT, 0);
-  const taux = DB.estPro(DB.client(d.clientId)) ? DB.etat.reglages.tauxHorairePro : DB.etat.reglages.tauxHoraire;
+  /* Un taux horaire vidé dans les réglages donnait une durée infinie, qui
+     partait ensuite dans le rendez-vous et dans la charge de la journée. */
+  const affiche = DB.estPro(DB.client(d.clientId)) ? DB.etat.reglages.tauxHorairePro : DB.etat.reglages.tauxHoraire;
+  const taux = Number(affiche) > 0 ? Number(affiche) : 1;
   return Math.max(0.5, Math.round((mo / taux) * 2) / 2);
 }
 
@@ -6618,6 +6635,10 @@ function vuePlanning() {
   const suivi = S.planningQui && DB.utilisateur(S.planningQui) ? S.planningQui : null;
   const rdvVus = (ts) => rdvDu(ts, suivi || undefined);
 
+  // au-delà de quoi une journée est pleine : une personne, ou tout l'atelier
+  const capaciteJour = heuresOuvertes(DB.etat.reglages)
+    * (suivi ? 1 : Math.max(1, DB.etat.utilisateurs.length));
+
   const carteRdv = (p) => {
     const e = EMPLACEMENTS[p.emplacement] || EMPLACEMENTS.sol;
     const immat = immatRdv(p);
@@ -6666,7 +6687,8 @@ function vuePlanning() {
       <div class="carte-corps rangee" style="gap:8px">
         ${attente.map(d => {
           const i = infosDevis(d);
-          return `<button class="a-poser" data-act="planif-nouveau" data-devis="${d.id}" data-jour="${lundi}" data-user="${S.userId}">
+          return `<button class="a-poser" data-act="planif-nouveau" data-devis="${d.id}"
+                    data-jour="${Math.max(lundi, aujourdhui)}" data-user="${S.planningQui || S.userId}">
             <b>${esc(i.vehiculeTexte)}</b>
             <span>${esc(i.nomClient)} · ${esc(i.immat)} · ${heuresFr(dureeEstimee(d))} estimées</span>
           </button>`;
@@ -6707,8 +6729,7 @@ function vuePlanning() {
     <div class="planning" id="planning-glisse">
       ${jours.map(j => {
         const charge = rdvVus(j.ts).reduce((s, p) => s + p.duree, 0);
-        const parJour = heuresOuvertes(DB.etat.reglages);
-        const plein = charge > parJour * (suivi ? 1 : Math.max(1, DB.etat.utilisateurs.length));
+        const plein = charge > capaciteJour;
         return `
         <div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''}">
           <b>${esc(j.nom)}</b>
@@ -7255,9 +7276,6 @@ function vueParking() {
 function tiroirPlace(placeId) {
   const p = DB.place(placeId);
   const o = DB.occupation(placeId);
-  const t = TYPE_PLACE[p.type];
-  const z = ZONES.find(x => x.id === p.zone);
-
   /* Place libre : une seule chose à taper, l'immatriculation.
      Si le véhicule est connu, tout le reste suit tout seul. */
   // une place hors service ne reçoit pas de voiture : on le dit, c'est tout
@@ -8102,7 +8120,6 @@ function vueCatalogue() {
           </tr></thead>
           <tbody>${filtre.filter(p => p.famille === f).map((p, iL, mesLignes) => {
             const ecart = p.prixHT > 0 && p.prixPro != null ? Math.round((1 - p.prixPro / p.prixHT) * 100) : 0;
-            const ailleurs = toutes.filter(x => x !== p.famille);
             const premiere = iL === 0, derniere = iL === mesLignes.length - 1;
             return `<tr class="${S.prestaBougee === p.id ? 'vient-de-bouger' : ''}">
               <td class="td-lib"><input class="saisie" data-champ-presta="libelle" data-id="${p.id}"
@@ -8495,9 +8512,12 @@ document.addEventListener('keydown', (e) => {
 
 function vueReglages() {
   const r = DB.etat.reglages;
+  /* `min="0"` sur les nombres : un taux ou une durée négative ne veut rien dire
+     et se propagerait dans les devis comme dans le planning. */
   const ch = (label, cle, type, aide) => `<div class="champ">
     <label>${label}</label>
-    <input class="saisie ${type === 'number' ? 'num' : ''}" type="${type || 'text'}" data-champ-reglage="${cle}" value="${esc(r[cle])}">
+    <input class="saisie ${type === 'number' ? 'num' : ''}" type="${type || 'text'}"
+           ${type === 'number' ? 'min="0"' : ''} data-champ-reglage="${cle}" value="${esc(r[cle])}">
     ${aide ? `<span class="aide">${aide}</span>` : ''}
   </div>`;
 
@@ -11210,11 +11230,6 @@ document.addEventListener('click', (e) => {
     // à bascule : recliquer sur le filtre actif le désactive
     'parc-filtre'() { S.parcFiltre = S.parcFiltre === id ? 'tous' : id; rendre(); },
     'parc-cote'() { S.parcCote = S.parcCote === id ? 'tous' : id; S.parcZoom = null; rendre(); },
-    'planif-semaine'() {
-      S.semaine = id === '0' ? 0 : S.semaine + Number(id);
-      rendre();
-    },
-
     /* Le planning défile de semaine en semaine, sans se soucier des mois :
        glisserSemaine() passe au mois voisin quand il faut. « Cette semaine »
        ramène sur aujourd'hui, d'où qu'on vienne. */
@@ -11749,7 +11764,6 @@ document.addEventListener('click', (e) => {
     'envoyer-pdf'() {
       const d = DB.devis(id);
       if (!d || !d.pdf) return;
-      const i = infosDevis(d);
       const texte = messageClient(d);
       RESERVE.prendre('devis:' + d.id).then(blob => {
         if (!blob) { toast('Le fichier n\'est plus sur cet appareil'); return; }
@@ -13404,8 +13418,6 @@ function vueTableauAtelier() {
   const ceJour = minuit(Date.now());
   const rdvJour = DB.etat.planning.filter(p => minuit(p.jour) === ceJour).length;
   const rue = DB.dansLaRue().length;
-  const q = (S.rechAccueil || '').trim();
-
   const item = (val, leg, ton, vue, extra) => `<button class="brief-item ${val ? '' : 'calme'}"
       style="--ton:${ton}" data-act="aller" data-vue="${vue}" ${extra || ''}>
     <span class="val">${val}</span><span class="leg">${leg}</span>
