@@ -11203,6 +11203,234 @@ function quiVoix(mot) {
       || null;
 }
 
+/* ==========================================================================
+   Comprendre une date, une heure, une durée dites à voix haute
+   --------------------------------------------------------------------------
+   Chaque fonction cherche son morceau n'importe où dans la phrase, le retire,
+   et rend le reste : « rendez-vous demain 14 h pendant 2 heures » se démonte
+   ainsi sans imposer d'ordre à celui qui parle.
+   ========================================================================== */
+const JOURS_DITS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const MOIS_DITS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+                   'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+
+/** Le jour dit, ramené à minuit. Rend { ts, reste } ou null. */
+function dateVocale(t) {
+  const jour = minuit(Date.now());
+  const pris = (ts, m) => ({ ts, reste: t.replace(m, ' ').replace(/\s+/g, ' ').trim() });
+  const decale = (n) => { const d = new Date(jour); d.setDate(d.getDate() + n); return d.getTime(); };
+  let m;
+
+  if ((m = /\b(aujourd'hui|ce matin|cet apres-midi|ce soir|dans la journee)\b/.exec(t))) return pris(jour, m[0]);
+  if ((m = /\bapres-demain\b/.exec(t))) return pris(decale(2), m[0]);
+  if ((m = /\bdemain\b/.exec(t))) return pris(decale(1), m[0]);
+
+  // « mardi », « mardi prochain » : la prochaine fois qu'on y sera
+  if ((m = /\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(\s+prochain)?\b/.exec(t))) {
+    const vise = JOURS_DITS.indexOf(m[1]);
+    const d = new Date(jour);
+    let ecart = (vise - d.getDay() + 7) % 7;
+    if (ecart === 0 && m[2]) ecart = 7;      // « mardi prochain », dit un mardi
+    return pris(decale(ecart), m[0]);
+  }
+
+  // « le 25 », « le 25 septembre », « 25 septembre »
+  if ((m = new RegExp('\\b(?:le\\s+)?(\\d{1,2})(?:er)?\\s+(' + MOIS_DITS.join('|') + ')\\b').exec(t))) {
+    const d = new Date(jour);
+    d.setMonth(MOIS_DITS.indexOf(m[2]), +m[1]);
+    if (d.getTime() < jour) d.setFullYear(d.getFullYear() + 1);
+    return pris(minuit(d.getTime()), m[0]);
+  }
+  if ((m = /\ble\s+(\d{1,2})(?:er)?\b/.exec(t))) {
+    const d = new Date(jour);
+    d.setDate(+m[1]);
+    if (d.getTime() < jour) d.setMonth(d.getMonth() + 1);
+    return pris(minuit(d.getTime()), m[0]);
+  }
+  // « 25/09 », « 25 09 2026 »
+  if ((m = /\b(\d{1,2})[/](\d{1,2})(?:[/](\d{2,4}))?\b/.exec(t))) {
+    const an = m[3] ? (m[3].length === 2 ? 2000 + (+m[3]) : +m[3]) : new Date(jour).getFullYear();
+    const d = new Date(an, (+m[2]) - 1, +m[1]);
+    if (!m[3] && d.getTime() < jour) d.setFullYear(an + 1);
+    return pris(minuit(d.getTime()), m[0]);
+  }
+  return null;
+}
+
+/** L'heure dite, en « 14:30 ». Rend { heure, reste } ou null. */
+function heureVocale(t) {
+  const pose = (h, min, m) => {
+    const hh = Math.min(23, Math.max(0, h));
+    const mm = Math.min(59, Math.max(0, min));
+    return { heure: String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0'),
+             reste: t.replace(m, ' ').replace(/\s+/g, ' ').trim() };
+  };
+  let m;
+  if ((m = /\b(?:a\s+)?midi\b/.exec(t))) return pose(12, 0, m[0]);
+  /* « 14 h », « 14h30 », « 14 heures et demie », « 9 h moins le quart ». Le
+     « à » est facultatif : personne ne le dit toujours. */
+  // « heures » avant « h » : sinon l'expression s'arrête au h et laisse « eures »
+  const re = /\b(?:a\s+|vers\s+)?(\d{1,2})\s*(?:heures?|h|:)\s*(\d{1,2})?\s*(et demie|et quart|moins le quart)?/;
+  if ((m = re.exec(t))) {
+    let h = +m[1], min = m[2] ? +m[2] : 0;
+    if (m[3] === 'et demie') min = 30;
+    else if (m[3] === 'et quart') min = 15;
+    else if (m[3] === 'moins le quart') { h -= 1; min = 45; }
+    return pose(h, min, m[0]);
+  }
+  return null;
+}
+
+/** La durée dite, en heures décimales. Toujours annoncée — « pendant deux
+ *  heures », « durée 30 minutes » — sinon on la confondrait avec l'heure. */
+function dureeVocale(t) {
+  const pris = (h, m) => ({ duree: Math.max(0.5, Math.round(h * 2) / 2),
+                            reste: t.replace(m, ' ').replace(/\s+/g, ' ').trim() });
+  let m;
+  if ((m = /\b(?:pendant|duree|dure|en|sur)\s+(?:une\s+)?demi[- ]heure\b/.exec(t))) return pris(0.5, m[0]);
+  if ((m = /\b(?:pendant|duree|dure|en|sur)\s+(\d{1,2})\s*h\s*(\d{2})\b/.exec(t))) return pris(+m[1] + (+m[2]) / 60, m[0]);
+  if ((m = /\b(?:pendant|duree|dure|en|sur)\s+(\d{1,3})\s*(?:min|minutes?)\b/.exec(t))) return pris((+m[1]) / 60, m[0]);
+  if ((m = /\b(?:pendant|duree|dure|en|sur)\s+(\d{1,2})(?:[.,](\d))?\s*(?:h|heures?)?\s*(et demie)?\b/.exec(t))) {
+    let h = +m[1] + (m[2] ? +('0.' + m[2]) : 0);
+    if (m[3]) h += 0.5;
+    return pris(h, m[0]);
+  }
+  return null;
+}
+
+/* ==========================================================================
+   Remplir le formulaire ouvert
+   --------------------------------------------------------------------------
+   On écrit dans le champ, on prévient la page, et surtout on ne redessine pas :
+   un redessin reconstruit la fenêtre depuis zéro et effacerait tout ce qui
+   vient d'être dicté.
+   ========================================================================== */
+function poserChamp(nom, valeur) {
+  const zone = document.querySelector('.voile') || document;
+  const el = zone.querySelector('[name="' + nom + '"]');
+  if (!el) return null;
+  if (el.tagName === 'SELECT') {
+    const v = String(valeur);
+    const opt = [...el.options].find(o => o.value === v)
+             || [...el.options].find(o => normaliserVoix(o.textContent) === normaliserVoix(v))
+             || [...el.options].find(o => normaliserVoix(o.textContent).startsWith(normaliserVoix(v)));
+    if (!opt) return null;
+    el.value = opt.value;
+  } else {
+    el.value = valeur;
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return el;
+}
+
+/** Y a-t-il un formulaire sous la main — une fenêtre ouverte, ou celui des mémos ? */
+function formulaireOuvert() {
+  return document.querySelector('.voile form') || document.getElementById('form-memo');
+}
+
+/** Le champ « jour » du formulaire ouvert : il ne porte pas le même nom partout. */
+function champJour() {
+  const f = formulaireOuvert();
+  if (!f) return null;
+  return f.querySelector('[name=jourDate]') ? 'jourDate'
+       : f.querySelector('[name=quand]') ? 'quand' : null;
+}
+
+/* ==========================================================================
+   Lire un rendez-vous dicté d'une traite
+   --------------------------------------------------------------------------
+   « rendez-vous demain 14 h pendant 2 heures pour Yoann au pont client Dupont
+   distribution » : on retire un à un les morceaux qu'on sait reconnaître, et
+   ce qui reste est du texte libre. La durée s'annonce (« pendant »), sans quoi
+   on la confondrait avec l'heure.
+   ========================================================================== */
+function lireRdv(dit, brut) {
+  const lu = { jour: minuit(Date.now()), heure: '', duree: 0, userId: '',
+               emplacement: '', client: '', prestation: '', jourDit: false };
+  let t = dit;
+
+  const d = dureeVocale(t); if (d) { lu.duree = d.duree; t = d.reste; }
+  const j = dateVocale(t);  if (j) { lu.jour = j.ts; lu.jourDit = true; t = j.reste; }
+  const h = heureVocale(t); if (h) { lu.heure = h.heure; t = h.reste; }
+
+  let m;
+  if ((m = /\b(?:au|sur le|sur la)\s+(pont|elevateur|sol)\b/.exec(t))) {
+    lu.emplacement = m[1] === 'sol' ? 'sol' : 'pont';
+    t = t.replace(m[0], ' ');
+  }
+  /* « pour Yoann » nomme un mécanicien ; « pour Dupont » nomme le client. On
+     tranche sur l'équipe, la seule liste dont on soit sûr. */
+  if ((m = /\b(?:pour|avec)\s+([a-z-]+)\b/.exec(t))) {
+    const u = quiVoix(m[1]);
+    if (u) { lu.userId = u.id; t = t.replace(m[0], ' '); }
+  }
+  if ((m = /\b(?:client|chez|pour le client)\s+(.+?)(?=\s+(?:prestation|travaux|pour|au pont|au sol)\b|$)/.exec(t))) {
+    lu.client = m[1].trim(); t = t.replace(m[0], ' ');
+  }
+  if ((m = /\b(?:prestation|travaux|pour la|il faut)\s+(.+)$/.exec(t))) {
+    lu.prestation = m[1].trim(); t = t.replace(m[0], ' ');
+  }
+
+  /* Ce qui reste sans étiquette est un nom de client : c'est ce qu'on dit en
+     premier au téléphone, et le champ le plus souvent rempli. */
+  const reste = t.replace(/\s+/g, ' ').trim();
+  if (reste && !lu.client) lu.client = reste;
+  else if (reste && !lu.prestation) lu.prestation = reste;
+
+  // le nom et la prestation dits d'affilée : le catalogue tranche
+  if (lu.client && !lu.prestation) {
+    const coupe = couperPrestation(lu.client);
+    lu.client = coupe.client; lu.prestation = coupe.prestation;
+  }
+
+  /* Les majuscules du nom se reprennent sur la phrase d'origine. */
+  if (brut) {
+    [['client', lu.client], ['prestation', lu.prestation]].forEach(([cle, val]) => {
+      if (!val) return;
+      const trouve = motifAccents(val).exec(brut);
+      if (trouve) lu[cle] = trouve[0];
+    });
+  }
+  return lu;
+}
+
+/* « client Dupont distribution » : rien ne dit où s'arrête le nom. Mais le
+   catalogue de l'atelier, lui, sait ce qu'est une distribution. On coupe au
+   premier mot que le catalogue reconnaît — le reste devant est le client. */
+function couperPrestation(texte) {
+  const mots = String(texte || '').trim().split(/\s+/).filter(Boolean);
+  if (mots.length < 2) return { client: texte, prestation: '' };
+
+  const libelles = DB.etat.catalogue.map(p => normaliserVoix(p.libelle))
+    .concat(DB.etat.planning.map(p => normaliserVoix(p.prestation || '')));
+  const connu = (mot) => mot.length >= 4 && libelles.some(l => l.includes(mot));
+
+  const i = mots.findIndex(m => connu(normaliserVoix(m)));
+  if (i <= 0) return { client: texte, prestation: '' };   // rien de connu, ou dès le premier mot
+  return { client: mots.slice(0, i).join(' '), prestation: mots.slice(i).join(' ') };
+}
+
+/** De quoi confirmer à voix haute ce qu'on a compris. */
+function resumeRdv(lu) {
+  const bouts = [];
+  bouts.push(lu.jourDit ? dateCourte(lu.jour) : "aujourd'hui");
+  if (lu.heure) bouts.push(lu.heure);
+  if (lu.duree) bouts.push(heuresFr(lu.duree));
+  if (lu.client) bouts.push(lu.client);
+  const u = lu.userId ? DB.utilisateur(lu.userId) : null;
+  if (u) bouts.push('pour ' + u.nom);
+  return bouts.join(' · ');
+}
+
+/** Une expression qui retrouve un fragment dans le texte d'origine, accents et
+    majuscules compris : « revision » y retrouve « Révision ». */
+function motifAccents(fragment) {
+  const equiv = { a: '[aàâä]', e: '[eéèêë]', i: '[iîï]', o: '[oôö]', u: '[uùûü]', c: '[cç]' };
+  return new RegExp(String(fragment).split('')
+    .map(ch => equiv[ch] || ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join(''), 'i');
+}
+
 /* Les écrans, avec les mots par lesquels on les appelle vraiment. Le premier
    de chaque liste sert d'exemple dans l'aide. */
 const ECRANS_VOIX = [
@@ -11275,29 +11503,125 @@ const COMMANDES = [
     faire() { S.modale = { type: 'appel' }; return 'Fiche d’appel ouverte'; }
   },
   {
-    groupe: 'Créer',
-    exemple: 'nouveau rendez-vous',
-    quoi: 'poser un créneau : la fenêtre s’ouvre sur aujourd’hui',
-    motif: /^(?:nouveau rendez-vous|nouveau creneau|poser un rendez-vous|ajoute un rendez-vous)$/,
-    faire() {
+    groupe: 'Poser un rendez-vous',
+    exemple: 'rendez-vous demain 14 h client Dupont prestation distribution',
+    quoi: 'la fenêtre s’ouvre déjà remplie — dites le jour, l’heure, et ce que vous savez',
+    motif: /^(?:rendez-vous|rdv|nouveau rendez-vous|nouveau creneau|prends? un rendez-vous|pose un rendez-vous|ajoute un rendez-vous|planifie)\b\s*(.*)$/,
+    brut: /^(?:rendez-vous|rdv|nouveau rendez-vous|nouveau cr[ée]neau|prends? un rendez-vous|pose un rendez-vous|ajoute un rendez-vous|planifie)\b\s*(.*)$/i,
+    faire(m, tel) {
+      const lu = lireRdv(m[1] || '', tel || '');
       S.vue = 'planning';
-      S.modale = { type: 'planif', jour: minuit(Date.now()), userId: S.planningQui || S.userId, devisId: '' };
-      return 'Nouveau rendez-vous';
-    }
+      S.modale = { type: 'planif', jour: lu.jour, userId: lu.userId || S.planningQui || S.userId,
+                   devisId: '', pose: lu };
+      rendre();                         // la fenêtre doit exister avant qu'on la remplisse
+      if (lu.heure) poserChamp('heure', lu.heure);
+      if (lu.duree) poserChamp('duree', lu.duree);
+      if (lu.emplacement) poserChamp('emplacement', lu.emplacement);
+      if (lu.client) poserChamp('client', lu.client);
+      if (lu.prestation) poserChamp('prestation', lu.prestation);
+      const manque = !lu.client ? 'client' : !lu.prestation ? 'prestation' : null;
+      if (manque) { const c = poserChamp(manque, ''); if (c) c.focus(); }
+      return 'Rendez-vous ' + resumeRdv(lu) + (manque ? ' — dites « ' + manque + ' … »' : ' — dites « valide »');
+    },
+    garderEcran: true
+  },
+  {
+    groupe: 'Poser un rendez-vous',
+    exemple: 'client Dupont',
+    quoi: 'remplir un champ de la fenêtre ouverte : client, prestation, jour, heure, durée, mécanicien, pont ou sol',
+    motif: /^(?:le\s+)?(client|prestation|travaux|jour|heure|duree|mecanicien)\s+(?:est\s+|de\s+|d'|a\s+|le\s+|la\s+)?(.+)$/,
+    /* Le motif d'origine ne capture que la valeur : le nom du champ, lui, est
+       déjà lu sur la phrase mise à plat. */
+    brut: /^(?:le\s+)?(?:client|prestation|travaux|jour|heure|dur[ée]e|m[ée]canicien)\s+(?:est\s+|de\s+|d'|[àa]\s+|le\s+|la\s+)?(.+)$/i,
+    faire(m, tel) {
+      if (!formulaireOuvert()) return null;
+      const quoi = m[1], dit = normaliserVoix(m[2]), brut = (tel || m[2]).trim();
+
+      if (quoi === 'client')  return poserChamp('client', brut) ? 'Client : ' + brut : null;
+      if (quoi === 'prestation' || quoi === 'travaux') {
+        return poserChamp('prestation', brut) || poserChamp('texte', brut) ? 'Prestation : ' + brut : null;
+      }
+      if (quoi === 'mecanicien') {
+        const u = quiVoix(brut);
+        return u && poserChamp('userId', u.id) ? 'Pour ' + u.nom : null;
+      }
+      if (quoi === 'jour') {
+        const d = dateVocale(dit); const nom = champJour();
+        if (!d || !nom) return null;
+        return poserChamp(nom, isoLocal(d.ts)) ? 'Le ' + dateCourte(d.ts) : null;
+      }
+      if (quoi === 'heure') {
+        const h = heureVocale(dit);
+        return h && poserChamp('heure', h.heure) ? 'À ' + h.heure : null;
+      }
+      const d = dureeVocale('pendant ' + dit);
+      return d && poserChamp('duree', d.duree) ? 'Durée ' + heuresFr(d.duree) : null;
+    },
+    garderEcran: true
+  },
+  {
+    groupe: 'Poser un rendez-vous',
+    exemple: 'au pont',
+    quoi: 'choisir l’emplacement de la fenêtre ouverte',
+    motif: /^(?:au|sur le|sur la|a la)?\s*(pont|sol|elevateur)$/,
+    faire(m) {
+      if (!formulaireOuvert()) return null;
+      const k = m[1] === 'sol' ? 'sol' : 'pont';
+      return poserChamp('emplacement', k) ? EMPLACEMENTS[k].nom : null;
+    },
+    garderEcran: true
+  },
+  {
+    groupe: 'Poser un rendez-vous',
+    exemple: 'pour Yoann',
+    quoi: 'confier le rendez-vous ouvert à quelqu’un',
+    motif: /^(?:pour|avec|c'est pour)\s+(.+)$/,
+    faire(m) {
+      if (!formulaireOuvert()) return null;
+      const u = quiVoix(m[1]);
+      if (!u) return null;
+      return poserChamp('userId', u.id) ? 'Pour ' + u.nom : null;
+    },
+    garderEcran: true
   },
   {
     groupe: 'Créer',
-    exemple: 'note rappeler Martin lundi',
-    quoi: 'déposer un pense-bête, dicté d’une traite',
-    motif: /^(?:note|notes|noter|rappelle-moi|rappel|ajoute un memo|nouveau memo)\s+(?:de\s+|que\s+)?(.+)$/,
-    brut: /^(?:notes?|noter|rappelle-moi|rappel|ajoute un m[ée]mo|nouveau m[ée]mo)\s+(?:de\s+|que\s+)?(.+)$/i,
+    exemple: 'note lundi commander les plaquettes de la 308',
+    quoi: 'déposer un pense-bête d’une traite — la date et le type sont compris au passage',
+    motif: /^(?:note|notes|noter|rappelle-moi|rappel|ajoute un memo|nouveau memo)\s+(?:de\s+|que\s+|d')?(.+)$/,
+    brut: /^(?:notes?|noter|rappelle-moi|rappel|ajoute un m[ée]mo|nouveau m[ée]mo)\s+(?:de\s+|que\s+|d')?(.+)$/i,
     faire(m, tel) {
-      const texte = (tel || m[1]).trim();
+      let dit = m[1].trim(), texte = (tel || m[1]).trim();
+      if (!dit) return null;
+
+      /* La date se dit dans la phrase, pas dans un champ : « note lundi
+         commander les plaquettes ». On la retire du texte, des deux côtés. */
+      let quand = null;
+      const d = dateVocale(dit);
+      if (d) {
+        quand = d.ts;
+        texte = texte.replace(motifAccents(dit.slice(0, dit.length - d.reste.length).trim()), ' ');
+        dit = d.reste;
+        // la liaison se retrouve en tête une fois la date retirée
+        const liaison = /^(?:de\s+|d'|que\s+|qu'|a\s+)/.exec(dit);
+        if (liaison) { dit = dit.slice(liaison[0].length); texte = texte.replace(motifAccents(liaison[0].trim()), ' '); }
+      }
+
+      /* « note appel Dupont » : le premier mot dit de quoi il s'agit. */
+      let type = 'note';
+      const tete = /^(appel|commande|devis|rendez-vous|rdv)\b\s*/.exec(dit);
+      if (tete) {
+        type = tete[1] === 'rdv' ? 'rdv' : tete[1] === 'rendez-vous' ? 'rdv' : tete[1];
+        texte = texte.replace(motifAccents(tete[0].trim()), ' ');
+        dit = dit.slice(tete[0].length);
+      }
+
+      texte = texte.replace(/\s+/g, ' ').trim();
       if (!texte) return null;
-      DB.etat.memos.unshift({ id: DB.nouvelId('m'), userId: S.userId, type: 'note',
-        texte, quand: null, fait: false, cree: Date.now() });
+      DB.etat.memos.unshift({ id: DB.nouvelId('m'), userId: S.userId, type,
+        texte, quand, fait: false, cree: Date.now() });
       DB.sauver();
-      return 'Noté : ' + texte;
+      return 'Noté' + (quand ? ' pour le ' + dateCourte(quand) : '') + ' : ' + texte;
     }
   },
   {
@@ -11425,9 +11749,22 @@ function executerVocal(phrase) {
        d'origine. Une fois écrit, « Martin » vaut mieux que « martin ». */
     const tel = c.brut ? (c.brut.exec(brut) || [])[1] : null;
     const reponse = c.faire(m, tel);
-    if (reponse) return reponse;   // une tournure comprise mais sans effet laisse sa chance aux suivantes
+    /* Une tournure comprise mais sans effet laisse sa chance aux suivantes. */
+    if (!reponse) continue;
+    /* Remplir un champ ne doit pas redessiner l'écran : la fenêtre serait
+       reconstruite depuis zéro et tout ce qui vient d'être dicté disparaîtrait. */
+    VOIX.garderEcran = c.garderEcran === true;
+    return reponse;
   }
+  VOIX.garderEcran = false;
   return null;
+}
+
+/** Remettre à jour le seul bandeau du micro, sans toucher au reste de l'écran. */
+function rafraichirVoix() {
+  const zone = document.getElementById('voix-barre');
+  if (!zone) { rendre(); return; }
+  zone.innerHTML = barreVocale();
 }
 
 /* ==========================================================================
@@ -11445,6 +11782,7 @@ const VOIX = {
   dernier: '',           // la dernière phrase complète
   reponse: '',           // ce que l'outil en a fait
   erreur: '',
+  garderEcran: false,    // la dernière commande remplissait-elle un formulaire ?
 
   dispo() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
 
@@ -11496,8 +11834,9 @@ const VOIX = {
         }
         this.dernier = dit.trim();
         this.reponse = fait || '';
-        if (fait) { this.parler(fait); rendre(); }
-        else { this.reponse = ''; toast('Pas compris : « ' + this.dernier +' »'); rendre(); }
+        if (fait) this.parler(fait);
+        else toast('Pas compris : « ' + this.dernier + ' »');
+        this.garderEcran ? rafraichirVoix() : rendre();
       }
     };
 
