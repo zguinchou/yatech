@@ -2311,6 +2311,24 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   .mobile-nav, .fab { display: none !important; }
 }
 
+/* --- les paramètres en volets --------------------------------------------- */
+/* Fermé, un volet ne montre que son nom : la liste des réglages tient d'un
+   seul coup d'œil, sur un téléphone comme sur l'écran de l'atelier. Une seule
+   colonne, sinon la liste se lit en zigzag. */
+.corps.volets { grid-template-columns: 1fr; }
+.volets > .carte[data-volet] > .carte-tete { cursor: pointer; user-select: none; }
+.volets > .carte[data-volet] > .carte-tete:hover { background: var(--plan-2); }
+.volets > .carte[data-volet] > .carte-tete:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+.volets > .carte[data-volet]:not(.ouvert) > .carte-tete { border-bottom: 0; }
+.volets > .carte[data-volet]:not(.ouvert) > *:not(.carte-tete) { display: none; }
+/* fermé, les boutons du titre ne commandent rien qu'on puisse voir */
+.volets > .carte[data-volet]:not(.ouvert) > .carte-tete .btn { display: none; }
+.volet-fleche { display: flex; color: var(--encre-3); transition: transform .15s ease; }
+.carte.ouvert > .carte-tete .volet-fleche { transform: rotate(90deg); color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .volet-fleche { transition: none; } }
+
 @media print {
   .commande, .tableau, .brief, .titre-page { display: none !important; }
 }
@@ -3692,6 +3710,7 @@ const S = {
   parcZoom: null,   // null = ajusté automatiquement à la largeur d'écran
   zoomManuel: false,
   modale: null,
+  volet: null,            // le seul réglage déplié, dans les paramètres
   clientToken: null,     // vue « espace client »
   grilleToken: null,     // vue « grille tarifaire » d'un client
   clientEtape: 'infos'
@@ -8197,7 +8216,10 @@ function blocReglagesEquipe(r) {
               ${ic('poubelle')}
             </button>
             <div class="acces-personne">
-              ${DB.mdpProvisoire(u.id)
+              ${SANS_CODE
+                ? `<span class="badge t-info">Entrée directe</span>
+                   <span class="mini">aucun code n'est demandé tant que la porte est ouverte</span>`
+                : DB.mdpProvisoire(u.id)
                 ? `<span class="badge t-attente">Code de 1<sup>re</sup> connexion</span>
                    <span class="mini">entre avec <b class="num">${esc(MDP_PROVISOIRE)}</b>, choisira le sien en entrant</span>`
                 : DB.aUnMdp(u.id)
@@ -8374,6 +8396,63 @@ function blocReglagesEbp(r) {
       </div>
     </section>`;
 }
+
+/* ==========================================================================
+   Les paramètres, en volets
+   --------------------------------------------------------------------------
+   Onze cartes dépliées d'un coup, c'est un mur : on cherche « l'équipe » en
+   faisant défiler. On ne montre donc que le nom de chaque réglage, et on ouvre
+   celui qu'on veut. Un seul à la fois — la liste reste sous les yeux, et on
+   passe de l'un à l'autre sans jamais remonter.
+
+   Le pliage se pose sur le rendu plutôt que dans chaque carte : les réglages
+   s'écrivent comme avant, et une carte ajoutée demain sera pliée sans qu'on y
+   pense. */
+function nomVolet(section) {
+  const h = section.querySelector('.carte-tete h2');
+  if (!h) return '';
+  return sansAccent(h.textContent).toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function plierReglages() {
+  if (S.vue !== 'reglages') return;
+  const zone = document.querySelector('.corps.grille');
+  if (!zone) return;
+
+  zone.classList.add('volets');
+  zone.querySelectorAll(':scope > .carte').forEach(section => {
+    const id = nomVolet(section);
+    const tete = section.querySelector('.carte-tete');
+    if (!id || !tete) return;             // une carte sans titre reste ouverte
+
+    const ouvert = S.volet === id;
+    section.dataset.volet = id;
+    section.classList.toggle('ouvert', ouvert);
+
+    tete.dataset.act = 'volet';
+    tete.dataset.id = id;
+    tete.setAttribute('role', 'button');
+    tete.setAttribute('tabindex', '0');
+    tete.setAttribute('aria-expanded', String(ouvert));
+
+    if (!tete.querySelector('.volet-fleche')) {
+      const f = document.createElement('span');
+      f.className = 'volet-fleche';
+      f.innerHTML = ic('fleche');
+      tete.insertBefore(f, tete.firstChild);
+    }
+  });
+}
+
+/* Au clavier, un titre de volet s'ouvre comme le bouton qu'il est devenu. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const tete = e.target.closest && e.target.closest('[data-act="volet"]');
+  if (!tete) return;
+  e.preventDefault();
+  tete.click();
+});
 
 function vueReglages() {
   const r = DB.etat.reglages;
@@ -10855,6 +10934,8 @@ function apresRendu() {
   // signature
   const cv = $('#signature');
   if (cv) brancherSignature(cv);
+
+  plierReglages();
 }
 
 let signatureVide = true;
@@ -11002,6 +11083,10 @@ document.addEventListener('click', (e) => {
       S.userId = null; S.connexionPour = null; S.modale = null;
       stock.effacer('atelier.qui'); rendre();
     },
+    /* Un volet ouvert en referme un autre : on ne se retrouve jamais avec
+       tous les réglages dépliés, c'est-à-dire au point de départ. */
+    volet() { S.volet = S.volet === id ? null : id; rendre(); },
+
     'menu-plus'() { S.modale = { type: 'plus' }; rendre(); },
     pdf() {
       toast('Dans la fenêtre d\'impression, choisissez « Enregistrer en PDF »');
