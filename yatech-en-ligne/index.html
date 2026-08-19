@@ -2514,6 +2514,19 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
 /* --- l'aperçu des textes ---------------------------------------------------
    Le modèle et son résultat côte à côte : on écrit à gauche, on lit à droite
    ce que le client recevra. */
+/* --- deux portes vers ce que voit l'autre bout ------------------------------ */
+.vue-porte {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 9px;
+  padding: 15px; border-radius: var(--r-l);
+  border: 1px solid var(--trait); background: var(--plan-2);
+}
+.vue-porte-tete {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--din); font-size: 14px; font-weight: 600;
+}
+.vue-porte .aide { margin: 0; }
+.vue-porte .mini { color: var(--encre-3); }
+
 .texte-paire {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px;
   padding: 14px; border-radius: var(--r-l);
@@ -3996,6 +4009,7 @@ const S = {
   volet: null,            // le seul réglage déplié, dans les paramètres
   planningQui: null,      // la personne dont on suit le planning, ou tout l'atelier
   apercuTexte: 'client',  // à qui on s'adresse dans l'aperçu des textes
+  apercuOuvert: false,    // on regarde une page client depuis les réglages
   clientToken: null,     // vue « espace client »
   grilleToken: null,     // vue « grille tarifaire » d'un client
   clientEtape: 'infos'
@@ -8918,6 +8932,101 @@ function apercuTexte(cle, mode) {
     : corps + `\n\n${r.nom || ''}${r.tel ? '\n' + r.tel : ''}`;
 }
 
+
+/* ==========================================================================
+   Regarder par-dessus l'épaule du client
+   --------------------------------------------------------------------------
+   La page d'informations et la grille tarifaire ne s'ouvrent d'habitude qu'au
+   bout d'un lien envoyé : on les règle donc à l'aveugle. On peut maintenant
+   les ouvrir depuis les paramètres — avec un vrai dossier quand l'atelier en a
+   un, c'est lui qui montre la page telle qu'elle sera ; avec un dossier
+   d'exemple sinon.
+
+   L'exemple porte une marque, et il est effacé en sortant de l'aperçu quoi
+   qu'il se soit passé entre-temps : la base ne garde rien.
+   ========================================================================== */
+const MARQUE_APERCU = 'apercu';
+
+/** Fabriquer de quoi regarder : un client, son véhicule, son dossier. */
+function poserExempleApercu(pro) {
+  const c = {
+    id: DB.nouvelId('c'), [MARQUE_APERCU]: true,
+    type: pro ? 'pro' : 'part', tarif: pro ? 'pro' : 'part',
+    nom: pro ? 'Garage Central (exemple)' : 'Marchand', prenom: pro ? '' : 'Julien',
+    tel: '06 12 34 56 78', email: pro ? 'contact@exemple.fr' : 'julien.marchand@exemple.fr',
+    adresse: '12 rue de l\'Atelier', cp: '13270', ville: 'Fos-sur-Mer',
+    note: '', cree: Date.now()
+  };
+  const v = {
+    id: DB.nouvelId('v'), [MARQUE_APERCU]: true, clientId: c.id,
+    marque: pro ? 'Renault' : 'Peugeot', modele: pro ? 'Master III L2H2' : '308 II 1.6 BlueHDi',
+    immat: pro ? 'CD-456-EF' : 'AB-123-CD', annee: 2019,
+    km: pro ? 214000 : 96500, energie: 'Diesel'
+  };
+  DB.etat.clients.push(c);
+  DB.etat.vehicules.push(v);
+
+  let d = null;
+  if (!pro) {
+    d = {
+      id: DB.nouvelId('d'), [MARQUE_APERCU]: true,
+      numero: 'APERÇU', clientId: c.id, vehiculeId: v.id, statut: 'attente',
+      creePar: S.userId, cree: Date.now(), maj: Date.now(),
+      panne: 'Bruit à froid côté distribution, voyant moteur allumé par intermittence.',
+      lignes: [], token: 'apercu' + Math.random().toString(36).slice(2, 7),
+      remise: 0, note: ''
+    };
+    DB.etat.devis.push(d);
+  }
+  return { client: c, devis: d };
+}
+
+/** Effacer tout ce que l'aperçu a posé — et ce qu'il aurait pu enregistrer. */
+function nettoyerApercu() {
+  const avant = DB.etat.clients.length + DB.etat.vehicules.length + DB.etat.devis.length;
+  DB.etat.clients = DB.etat.clients.filter(x => !x[MARQUE_APERCU]);
+  DB.etat.vehicules = DB.etat.vehicules.filter(x => !x[MARQUE_APERCU]);
+  DB.etat.devis = DB.etat.devis.filter(x => !x[MARQUE_APERCU]);
+  if (avant !== DB.etat.clients.length + DB.etat.vehicules.length + DB.etat.devis.length) DB.sauver();
+}
+
+/** Le bloc des paramètres : deux portes vers ce que voit l'autre bout. */
+function blocReglagesVues(r) {
+  const devisVrai = DB.etat.devis.find(d => d.token && DB.client(d.clientId));
+  const proVrai = DB.etat.clients.find(c => DB.estPro(c));
+
+  return `
+    <section class="carte" style="grid-column:1/-1">
+      <div class="carte-tete"><h2>Ce que voient vos clients</h2></div>
+      <div class="carte-corps grille g-2">
+        <div class="vue-porte">
+          <div class="vue-porte-tete">${ic('lien')} La page d'informations</div>
+          <p class="aide">Ce qui s'ouvre quand un client clique le lien du message
+          « demande d'informations » : sa fiche à compléter, son véhicule, la panne.</p>
+          <button class="btn plein" data-act="apercu-page" data-id="client">
+            ${ic('loupe')} L'ouvrir comme un client</button>
+          <span class="mini">${devisVrai
+            ? 'Ouvre le dossier ' + esc(devisVrai.numero) + ' — un vrai, tel que le client le voit.'
+            : 'Aucun dossier pour l\'instant : un exemple est monté puis effacé en sortant.'}</span>
+        </div>
+        <div class="vue-porte">
+          <div class="vue-porte-tete">${ic('catalogue')} La grille tarifaire</div>
+          <p class="aide">Ce qui s'ouvre quand un garage partenaire clique son lien :
+          ses prix à lui, et de quoi demander un créneau.</p>
+          <button class="btn plein" data-act="apercu-page" data-id="pro">
+            ${ic('loupe')} L'ouvrir comme un confrère</button>
+          <span class="mini">${proVrai
+            ? 'Ouvre la grille de ' + esc(proVrai.nom) + ' — la sienne, telle quelle.'
+            : 'Aucun garage partenaire : un exemple est monté puis effacé en sortant.'}</span>
+        </div>
+        <p class="aide" style="grid-column:1/-1;margin:0">Un bandeau rappelle qu'il s'agit d'un aperçu,
+        et « Quitter l'aperçu » vous ramène ici. Rien de ce que vous ferez dans ces pages
+        d'exemple n'est conservé.</p>
+      </div>
+    </section>
+`;
+}
+
 /** Le bloc « Vos textes » : le modèle à gauche, ce qu'il donne à droite. */
 function blocReglagesTextes(r) {
   const mode = S.apercuTexte === 'pro' ? 'pro' : 'client';
@@ -9140,6 +9249,8 @@ function vueReglages() {
         </div>
       </div>
     </section>
+
+    ${blocReglagesVues(r)}
 
     ${blocReglagesTextes(r)}
 
@@ -12840,6 +12951,24 @@ document.addEventListener('click', (e) => {
 
     'apercu-texte'() { S.apercuTexte = id; rendre(); },
 
+    /* Ouvrir la page telle que la voit l'autre bout. On repart d'une base
+       propre : un aperçu précédent mal refermé ne doit rien laisser traîner. */
+    'apercu-page'() {
+      nettoyerApercu();
+      const pro = id === 'pro';
+      if (pro) {
+        const c = DB.etat.clients.find(x => DB.estPro(x)) || poserExempleApercu(true).client;
+        S.grilleToken = DB.jetonClient(c);
+        poserAdresse('tarifs=' + S.grilleToken);
+      } else {
+        const d = DB.etat.devis.find(x => x.token && DB.client(x.clientId)) || poserExempleApercu(false).devis;
+        S.clientToken = d.token;
+        poserAdresse('client=' + d.token);
+      }
+      S.apercuOuvert = true;
+      rendre();
+    },
+
     /* Suivre une personne, ou rendre le planning à tout l'atelier. */
     'planif-qui'() { S.planningQui = id || null; rendre(); },
     'planif-nouveau'() {
@@ -12923,7 +13052,11 @@ document.addEventListener('click', (e) => {
       const d = DB.devis(id);
       S.clientToken = d.token; poserAdresse('client=' + d.token); rendre();
     },
-    'quitter-client'() { S.clientToken = null; poserAdresse(''); rendre(); },
+    'quitter-client'() {
+      S.clientToken = null; poserAdresse('');
+      if (S.apercuOuvert) { S.apercuOuvert = false; nettoyerApercu(); S.vue = 'reglages'; }
+      rendre();
+    },
     'voir-grille'() {
       const c = DB.client(id);
       if (!c) return;
@@ -12931,7 +13064,11 @@ document.addEventListener('click', (e) => {
       poserAdresse('tarifs=' + S.grilleToken);
       rendre();
     },
-    'quitter-grille'() { S.grilleToken = null; poserAdresse(''); rendre(); },
+    'quitter-grille'() {
+      S.grilleToken = null; poserAdresse('');
+      if (S.apercuOuvert) { S.apercuOuvert = false; nettoyerApercu(); S.vue = 'reglages'; }
+      rendre();
+    },
     'quitter-pro'() {
       S.proConnecte = null; S.grilleToken = null; S.modale = null; S.erreurCode = null;
       stock.effacer('atelier.pro'); poserAdresse(''); rendre();
