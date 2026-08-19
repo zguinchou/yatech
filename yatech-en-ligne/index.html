@@ -2254,6 +2254,9 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   /* en haut à droite il ne reste que la loupe : le libellé mangerait la place */
   .cherche-vite span { display: none; }
   .cherche-vite { padding: 8px 11px; min-height: 40px; }
+  /* Le micro se touche parfois avec le dos de la main : on lui donne de quoi. */
+  .btn.micro { min-width: 46px; min-height: 46px; }
+  .btn.micro svg { width: 22px; height: 22px; }
   .voile.haut { padding: 0; place-items: stretch; }
   .palette { max-height: 100dvh; height: 100dvh; border-radius: 0; width: 100%; max-width: none; }
   /* la recherche plein écran commence elle aussi sous la barre d'état */
@@ -2351,6 +2354,8 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   background: var(--plan-2); color: var(--encre-3); border: 1px solid var(--trait);
 }
 .voix-barre.ecoute .voix-pastille { background: var(--accent-voile); color: var(--accent); border-color: var(--accent); }
+.voix-barre.veille { opacity: .82; }
+.voix-barre.veille b { color: var(--encre-2); font-weight: 500; }
 .voix-barre.demande { border-color: var(--accent); }
 .voix-barre.demande .voix-pastille { background: var(--accent-voile); color: var(--accent); border-color: var(--accent); }
 .voix-barre.demande b { color: var(--accent); }
@@ -2371,6 +2376,17 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
 .voix-reglage b { display: block; font-size: 13.5px; font-weight: 600; }
 .voix-reglage .aide { display: block; margin-top: 2px; }
 .voix-reglage.eteint { opacity: .55; }
+.voix-reglage.sans-bas { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 0; }
+.voix-bloc { display: flex; flex-direction: column; }
+.voix-nom {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px 11px 40px;
+  border: 1px solid var(--trait-fin); border-top: 0;
+  border-radius: 0 0 var(--r) var(--r); background: var(--plan-2);
+}
+.voix-nom label { font-size: 12px; color: var(--encre-3); }
+.voix-nom .saisie { max-width: 170px; }
+.voix-nom.eteint { opacity: .55; }
 
 .voix-groupe { display: flex; flex-direction: column; gap: 7px; }
 .voix-ligne {
@@ -2573,7 +2589,9 @@ const REGLAGES = {
   voixAuto: false,        // le micro s'ouvre-t-il tout seul en arrivant ?
   voixParle: true,        // l'outil répond-il à voix haute ?
   voixDemande: true,      // pose-t-il les questions de ce qui manque ?
-  voixConfirme: true,     // relit-il avant d'enregistrer ?        // finesse des créneaux, en minutes
+  voixConfirme: true,     // relit-il avant d'enregistrer ?
+  voixVeille: true,       // faut-il l'appeler par son nom avant de parler ?
+  voixMot: 'Yatech',      // le nom qui le réveille        // finesse des créneaux, en minutes
   dureeDefaut: 1,         // durée proposée pour un nouveau rendez-vous, en heures
   joursReservables: 8,    // jusqu'où un confrère peut demander un créneau, en jours
   nomPont: 'Pont élévateur',
@@ -8928,6 +8946,22 @@ function vueReglages() {
         <p class="aide" style="margin:0">Les mains dans le moteur, on parle plutôt qu'on ne touche l'écran.
         Le micro s'ouvre par le bouton en haut à droite, et tout ce qui se fait au doigt se dit aussi.</p>
         <div class="pile" style="gap:11px">
+          ${/* Le champ du nom vit hors du <label> : dedans, taper dedans
+                décocherait la case. */ ''}
+          <div class="voix-bloc">
+            <label class="voix-reglage sans-bas">
+              <input type="checkbox" data-champ-voix="voixVeille" ${r.voixVeille ? 'checked' : ''}>
+              <div><b>L'appeler par son nom</b>
+                <span class="aide">Le micro peut rester ouvert toute la journée : rien n'est écouté tant qu'on n'a pas dit
+                son nom. Décoché, tout ce qui se dit devant l'écran est pris pour une commande.</span></div>
+            </label>
+            <div class="voix-nom ${r.voixVeille ? '' : 'eteint'}">
+              <label for="mot-appel">Son nom</label>
+              <input class="saisie" id="mot-appel" data-champ-reglage="voixMot"
+                     value="${esc(r.voixMot || 'Yatech')}" placeholder="Yatech">
+              <span class="aide">On dit « ${esc(r.voixMot || 'Yatech')}, ouvre le planning ».</span>
+            </div>
+          </div>
           <label class="voix-reglage">
             <input type="checkbox" data-champ-voix="voixAuto" ${r.voixAuto ? 'checked' : ''}>
             <div><b>Ouvrir le micro dès l'arrivée</b>
@@ -11303,7 +11337,9 @@ function heureVocale(t) {
   /* « 14 h », « 14h30 », « 14 heures et demie », « 9 h moins le quart ». Le
      « à » est facultatif : personne ne le dit toujours. */
   // « heures » avant « h » : sinon l'expression s'arrête au h et laisse « eures »
-  const re = /\b(?:a\s+|vers\s+)?(\d{1,2})\s*(?:heures?|h|:)\s*(\d{1,2})?\s*(et demie|et quart|moins le quart)?/;
+  /* Les minutes s'écrivent sur deux chiffres : sans ça « 14 h 2 heures » se
+     lisait 14 h 02, et la durée disparaissait dans l'heure. */
+  const re = /\b(?:a\s+|vers\s+)?(\d{1,2})\s*(?:heures?|h|:)\s*(\d{2})?\s*(et demie|et quart|moins le quart)?/;
   if ((m = re.exec(t))) {
     let h = +m[1], min = m[2] ? +m[2] : 0;
     if (m[3] === 'et demie') min = 30;
@@ -11386,6 +11422,13 @@ function lireRdv(dit, brut) {
   const d = dureeVocale(t); if (d) { lu.duree = d.duree; t = d.reste; }
   const j = dateVocale(t);  if (j) { lu.jour = j.ts; lu.jourDit = true; t = j.reste; }
   const h = heureVocale(t); if (h) { lu.heure = h.heure; t = h.reste; }
+
+  /* « demain 14 h 2 heures » : l'heure est prise, une seconde durée n'a plus
+     besoin d'être annoncée — il ne reste rien d'autre qu'elle puisse être. */
+  if (lu.heure && !lu.duree) {
+    const d2 = dureeVocale('pendant ' + t);
+    if (d2) { lu.duree = d2.duree; t = d2.reste.replace(/^pendant\s*/, ''); }
+  }
 
   let m;
   if ((m = /\b(?:au|sur le|sur la)\s+(pont|elevateur|sol)\b/.exec(t))) {
@@ -11967,6 +12010,13 @@ const COMMANDES = [
     }
   },
   {
+    groupe: 'Mains libres',
+    exemple: 'Yatech',
+    quoi: 'son nom réveille le micro, qui peut alors rester ouvert toute la journée sans qu’on y touche. Dites « Yatech, ouvre le planning », ou son nom seul et il attend la suite. Une fois réveillé il le reste une demi-minute.',
+    motif: /^$/,                        // le nom est retiré avant d'arriver ici
+    faire() { return null; }
+  },
+  {
     groupe: 'Répondre aux questions',
     exemple: 'oui',
     quoi: 'quand l’outil demande ce qui manque : répondez, ou dites « passe » pour laisser vide, « non » pour abandonner. Il relit tout avant d’enregistrer.',
@@ -12041,6 +12091,9 @@ function rafraichirVoix() {
   zone.innerHTML = barreVocale();
 }
 
+/* L'éveil retombe de lui-même : le bandeau le montre sans qu'on ait à parler. */
+setInterval(() => { if (VOIX.voulu && !VOIX.attente) rafraichirVoix(); }, 2000);
+
 /* ==========================================================================
    Le micro
    --------------------------------------------------------------------------
@@ -12057,6 +12110,7 @@ const VOIX = {
   reponse: '',           // ce que l'outil en a fait
   erreur: '',
   garderEcran: false,    // la dernière commande remplissait-elle un formulaire ?
+  eveilJusqua: 0,        // jusqu'à quand les phrases valent commandes sans l'appeler
   dialogue: null,        // le formulaire qu'on remplit à deux, question par question
   attente: null,         // la question posée, dont on attend la réponse
   questionPosee: false,  // une question vient-elle d'être posée dans ce tour ?
@@ -12100,19 +12154,34 @@ const VOIX = {
     r.onresult = (ev) => {
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const res = ev.results[i];
-        if (!res.isFinal) { this.entendu = res[0].transcript; rendre(); continue; }
+        if (!res.isFinal) { this.entendu = res[0].transcript; rafraichirVoix(); continue; }
         this.entendu = '';
+
+        /* Endormi, on n'écoute que son nom : le reste, c'est l'atelier qui
+           parle. Le nom seul suffit à réveiller — on répond, et on attend. */
+        const eveille = voixEveillee();
+        const appel = retirerMotAppel(res[0].transcript);
+        if (!eveille && !appel.trouve) { rafraichirVoix(); continue; }
+        if (appel.trouve) {
+          eveillerVoix();
+          if (!appel.reste.trim()) {
+            bip('eveil'); this.dernier = motAppel(); this.reponse = 'Je vous écoute';
+            this.parler('Je vous écoute'); rafraichirVoix(); continue;
+          }
+        }
+
         /* On essaie chaque proposition du navigateur : la première est souvent
            bonne, mais « ouvre le part » pour « ouvre le parc » arrive. */
-        let fait = null, dit = res[0].transcript;
+        let fait = null, dit = appel.reste;
         for (let k = 0; k < res.length && !fait; k++) {
-          fait = executerVocal(res[k].transcript);
-          if (fait) dit = res[k].transcript;
+          const phrase = retirerMotAppel(res[k].transcript).reste;
+          fait = executerVocal(phrase);
+          if (fait) dit = phrase;
         }
         this.dernier = dit.trim();
         this.reponse = fait || '';
-        if (fait) this.parler(fait);
-        else toast('Pas compris : « ' + this.dernier + ' »');
+        if (fait) { eveillerVoix(); bip('ok'); this.parler(fait); }
+        else { bip('non'); toast('Pas compris : « ' + this.dernier + ' »'); }
         this.garderEcran ? rafraichirVoix() : rendre();
       }
     };
@@ -12152,10 +12221,66 @@ const VOIX = {
   basculer() { this.voulu ? this.arreter() : this.demarrer(); }
 };
 
+/* ==========================================================================
+   Mains libres
+   --------------------------------------------------------------------------
+   Les mains dans un moteur, on ne touche pas l'écran — même pas pour lancer le
+   micro. Il reste donc ouvert, et c'est son nom qui le réveille : « Yatech,
+   rendez-vous demain 14 h ». Sans ce mot, ce qui se dit dans l'atelier passe
+   sans être écouté. Une fois réveillé il le reste un moment : la suite d'une
+   conversation n'a pas à le rappeler à chaque phrase.
+   ========================================================================== */
+const EVEIL_SECONDES = 30;
+
+function motAppel() { return String(DB.etat.reglages.voixMot || 'Yatech').trim() || 'Yatech'; }
+
+/** La phrase commence-t-elle par son nom ? Rend le reste, sans le nom. */
+function retirerMotAppel(phrase) {
+  const mot = motAppel().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('^\\s*(?:' + mot + ')\\s*[,.:!]?\\s*', 'i');
+  const sans = String(phrase).replace(re, '');
+  return { trouve: sans !== String(phrase), reste: sans };
+}
+
+function eveillerVoix() { VOIX.eveilJusqua = Date.now() + EVEIL_SECONDES * 1000; }
+
+/** Écoute-t-on vraiment, à cet instant ? */
+function voixEveillee() {
+  if (!DB.etat.reglages.voixVeille) return true;   // pas de mot d'appel : tout est commande
+  if (VOIX.attente) return true;                   // une question attend sa réponse
+  return Date.now() < (VOIX.eveilJusqua || 0);
+}
+
+/* Un son court dit plus vite qu'une phrase que c'est pris — ou que ça ne l'est
+   pas. On ne fait du bruit que si l'outil a le droit de parler. */
+let sonVoix = null;
+function bip(genre) {
+  if (!DB.etat.reglages.voixParle) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    sonVoix = sonVoix || new Ctx();
+    if (sonVoix.state === 'suspended') sonVoix.resume();
+    const notes = genre === 'eveil' ? [660, 880] : genre === 'non' ? [300, 200] : [880];
+    notes.forEach((f, i) => {
+      const o = sonVoix.createOscillator(), g = sonVoix.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      const t0 = sonVoix.currentTime + i * 0.09;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.11, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
+      o.connect(g); g.connect(sonVoix.destination);
+      o.start(t0); o.stop(t0 + 0.13);
+    });
+  } catch (e) { /* un outil muet n'est pas un outil cassé */ }
+}
+
 /** Le bandeau du bas : ce qu'on entend, ce qui vient d'être fait. */
 function barreVocale() {
   if (!VOIX.voulu && !VOIX.erreur) return '';
-  const etat = VOIX.erreur ? 'muet' : VOIX.attente ? 'demande' : VOIX.ecoute ? 'ecoute' : 'attente';
+  const endormi = !VOIX.erreur && !VOIX.attente && DB.etat.reglages.voixVeille && !voixEveillee();
+  const etat = VOIX.erreur ? 'muet' : VOIX.attente ? 'demande'
+             : endormi ? 'veille' : VOIX.ecoute ? 'ecoute' : 'attente';
   const dit = VOIX.entendu || VOIX.dernier;
   /* Une question posée passe devant tout : c'est la seule chose à lire quand
      on a les mains prises. Ce qu'on vient de dire tient la seconde ligne. */
@@ -12166,6 +12291,9 @@ function barreVocale() {
         : VOIX.attente
         ? `<b>${esc(VOIX.attente.question)}</b>
            <span class="mini">${dit ? '« ' + esc(dit) + ' »' : 'j’écoute votre réponse'}</span>`
+        : endormi
+        ? `<b>Dites « ${esc(motAppel())} » pour parler</b>
+           <span class="mini">${VOIX.reponse ? esc(VOIX.reponse) : 'le micro reste ouvert — rien à toucher'}</span>`
         : `<b>${dit ? esc(dit) : (VOIX.ecoute ? 'Je vous écoute…' : 'Un instant…')}</b>
            ${VOIX.reponse ? `<span class="mini">${esc(VOIX.reponse)}</span>` : ''}`}
     </div>
