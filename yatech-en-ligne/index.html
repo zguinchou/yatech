@@ -2351,6 +2351,9 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   background: var(--plan-2); color: var(--encre-3); border: 1px solid var(--trait);
 }
 .voix-barre.ecoute .voix-pastille { background: var(--accent-voile); color: var(--accent); border-color: var(--accent); }
+.voix-barre.demande { border-color: var(--accent); }
+.voix-barre.demande .voix-pastille { background: var(--accent-voile); color: var(--accent); border-color: var(--accent); }
+.voix-barre.demande b { color: var(--accent); }
 .voix-barre.muet { border-color: var(--occupe); }
 .voix-barre.muet .voix-pastille { background: var(--occupe-voile); color: var(--occupe); border-color: var(--occupe); }
 .voix-barre .btn { margin-left: 0; }
@@ -11447,6 +11450,170 @@ const ECRANS_VOIX = [
 const OUVRIR = '(?:ouvre|ouvrir|va|vas|aller|va a|va au|va aux|affiche|montre|montrer|donne|passe a|passe au)?'
   + '(?:[-\\s]moi)?\\s*';
 
+
+/* ==========================================================================
+   Le dialogue : quand il manque quelque chose, l'outil demande
+   --------------------------------------------------------------------------
+   Dicter un rendez-vous complet d'une traite, personne ne le fait. On pose
+   donc la question qui manque — « Pour quel client ? » — et la phrase
+   suivante vaut réponse. Une fois tout rempli, l'outil relit ce qu'il a
+   compris et attend un « oui » : rien ne part sans qu'on l'ait entendu.
+   ========================================================================== */
+const DIALOGUES = {
+  planif: {
+    nom: 'le rendez-vous',
+    poser: 'Je pose le rendez-vous ?',
+    champs: [
+      { champ: 'client',     question: 'Pour quel client ?' },
+      { champ: 'prestation', question: "Qu'est-ce qu'il y a à faire ?" },
+      /* L'heure a toujours une valeur dans la liste : ce n'est pas parce que
+         le champ n'est pas vide qu'elle a été dite. */
+      { champ: 'heure',      question: 'À quelle heure ?', jamaisVide: true, lire: heureVocale }
+    ]
+  },
+  appel: {
+    nom: 'la fiche',
+    poser: 'J\'enregistre la demande ?',
+    champs: [
+      { champ: 'nom',    question: 'Le nom du client ?' },
+      { champ: 'tel',    question: 'Son numéro de téléphone ?' },
+      { champ: 'immat',  question: "L'immatriculation du véhicule ?" },
+      { champ: 'panne',  question: "Qu'est-ce qui ne va pas ?" }
+    ]
+  },
+  memo: {
+    nom: 'le pense-bête',
+    poser: 'J’ajoute ce rappel ?',
+    champs: [
+      { champ: 'texte', question: 'Que faut-il noter ?' },
+      { champ: 'quand', question: 'Pour quand ?', jamaisVide: true, lire: dateVocale }
+    ]
+  }
+};
+
+/** Ouvrir un dialogue sur le formulaire qui vient de s'ouvrir. */
+function ouvrirDialogue(type, dits) {
+  VOIX.dialogue = { type, dits: new Set(dits || []), passes: new Set() };
+  return demanderSuite();
+}
+
+function finirDialogue() { VOIX.dialogue = null; VOIX.attente = null; }
+
+/** Ce qu'il reste à demander, dans l'ordre. */
+function manqueDialogue() {
+  const d = VOIX.dialogue;
+  if (!d) return [];
+  const f = formulaireOuvert();
+  if (!f && d.type !== 'memo') { finirDialogue(); return []; }
+  return DIALOGUES[d.type].champs.filter(c => {
+    if (d.dits.has(c.champ) || d.passes.has(c.champ)) return false;
+    if (c.jamaisVide) return true;
+    const el = f && f.querySelector('[name="' + c.champ + '"]');
+    return el ? !String(el.value || '').trim() : false;
+  });
+}
+
+/** Poser la question suivante, ou demander confirmation. Rend la phrase à dire. */
+function demanderSuite() {
+  const d = VOIX.dialogue;
+  if (!d) return '';
+  VOIX.questionPosee = true;      // pour ne pas la reposer deux fois dans la même phrase
+  const reste = manqueDialogue();
+  if (reste.length) {
+    VOIX.attente = { champ: reste[0].champ, question: reste[0].question, lire: reste[0].lire || null };
+    return reste[0].question;
+  }
+  const modele = DIALOGUES[d.type];
+  if (!modele.poser) { finirDialogue(); return ''; }
+  VOIX.attente = { champ: null, question: modele.poser };
+  return relireDialogue() + ' ' + modele.poser;
+}
+
+/** Relire ce qui est dans le formulaire, pour que l'accord se donne en connaissance. */
+function relireDialogue() {
+  const f = formulaireOuvert();
+  if (!f || !VOIX.dialogue) return '';
+  const v = (n) => { const el = f.querySelector('[name="' + n + '"]'); return el ? String(el.value || '').trim() : ''; };
+  if (VOIX.dialogue.type === 'appel') {
+    return [v('nom'), v('immat'), v('panne')].filter(Boolean).join(', ') + '.';
+  }
+  if (VOIX.dialogue.type === 'memo') {
+    return v('texte') + (v('quand') ? ', pour le ' + dateCourte(depuisInputDate(v('quand'))) : '') + '.';
+  }
+  const sel = f.querySelector('[name=userId]');
+  const qui = sel ? sel.options[sel.selectedIndex].text : '';
+  const jour = v('jourDate') ? dateCourte(depuisInputDate(v('jourDate'))) : '';
+  return [jour, v('heure'), v('client'), v('prestation'), qui ? 'pour ' + qui : '']
+    .filter(Boolean).join(', ') + '.';
+}
+
+/* Les mots qui pilotent le dialogue lui-même, et rien d'autre. */
+const MOTS_OUI = /^(?:oui|ouais|c'est bon|d'accord|ok|vas-y|valide|valider|enregistre|enregistrer|confirme|confirmer|pose-le|c'est ca)$/;
+const MOTS_NON = /^(?:non|pas encore|attends|attend|laisse|annule|annuler|laisse tomber|arrete)$/;
+const MOTS_PASSE = /^(?:passe|passer|sans|je ne sais pas|aucun|aucune|rien|plus tard|on verra)$/;
+
+/** La phrase répond-elle à la question posée ? Rend la confirmation, ou null. */
+function repondreAttente(dit, brut) {
+  const a = VOIX.attente;
+  if (!a) return null;
+
+  if (MOTS_NON.test(dit)) {
+    const surConfirmation = !a.champ;
+    finirDialogue();
+    if (surConfirmation) return 'Très bien, rien n’est posé — dites « valide » quand vous voulez';
+    S.modale = null;
+    VOIX.garderEcran = false;
+    return 'Abandonné';
+  }
+
+  if (!a.champ) {                       // on attendait un accord
+    if (!MOTS_OUI.test(dit)) return null;
+    const f = formulaireOuvert();
+    finirDialogue();
+    if (!f) return null;
+    /* Surtout ne pas redessiner : la fenêtre serait reconstruite et le
+       formulaire détaché avant même de s'enregistrer. */
+    VOIX.garderEcran = true;
+    setTimeout(() => f.requestSubmit(), 0);
+    return 'C’est posé';
+  }
+
+  /* « c'est bon », « valide » posés sur une question : on garde ce que le
+     champ contient déjà et on passe à la suite. Sur un champ vide, on le
+     redemande plutôt que d'enregistrer un rendez-vous sans client. */
+  if (MOTS_OUI.test(dit)) {
+    const f = formulaireOuvert();
+    const el = f && f.querySelector('[name="' + a.champ + '"]');
+    if (!el || !String(el.value || '').trim()) { VOIX.garderEcran = true; return 'Il me faut encore ça. ' + a.question; }
+    VOIX.dialogue.dits.add(a.champ);
+    VOIX.garderEcran = true;
+    return demanderSuite() || '';
+  }
+
+  if (MOTS_PASSE.test(dit)) {
+    VOIX.dialogue.passes.add(a.champ);
+    const suite = demanderSuite();
+    VOIX.garderEcran = true;
+    return 'Sans, alors. ' + suite;
+  }
+
+  /* Tout le reste est la réponse. Un champ qui se lit — l'heure, une date —
+     passe par son lecteur ; les autres prennent la phrase telle qu'elle est. */
+  let valeur = (brut || dit).trim(), echo = valeur;
+  if (a.lire) {
+    const lu = a.lire(dit);
+    if (!lu) { VOIX.garderEcran = true; return 'Je n’ai pas saisi. ' + a.question; }
+    if (lu.heure) { valeur = echo = lu.heure; }
+    else { valeur = isoLocal(lu.ts); echo = dateCourte(lu.ts); }   // une date se relit en clair
+  }
+  if (!poserChamp(a.champ, valeur)) return null;
+  VOIX.dialogue.dits.add(a.champ);
+
+  const suite = demanderSuite();
+  VOIX.garderEcran = true;
+  return echo + (suite ? ' — ' + suite : '');
+}
+
 /** Toutes les commandes. `motif` reçoit la phrase normalisée ; `faire` rend la
  *  phrase de confirmation, ou null si la commande n'a finalement rien fait. */
 const COMMANDES = [
@@ -11500,7 +11667,24 @@ const COMMANDES = [
     exemple: 'nouvelle demande',
     quoi: 'prendre un appel : la fiche s’ouvre, prête à remplir',
     motif: /^(?:nouvelle demande|nouvel appel|un appel|prendre un appel|noter un appel)$/,
-    faire() { S.modale = { type: 'appel' }; return 'Fiche d’appel ouverte'; }
+    faire() {
+      S.modale = { type: 'appel' };
+      rendre();                        // la fiche doit exister avant qu'on la questionne
+      return 'Fiche d’appel. ' + ouvrirDialogue('appel', []);
+    },
+    garderEcran: true
+  },
+  {
+    groupe: 'Créer',
+    exemple: 'nouveau mémo',
+    quoi: 'déposer un pense-bête sans savoir encore quoi : l’outil demande',
+    motif: /^(?:nouveau memo|un memo|ajoute un memo|note|noter|un rappel|nouveau rappel)$/,
+    faire() {
+      S.vue = 'memos'; S.modale = null;
+      rendre();
+      return ouvrirDialogue('memo', []);
+    },
+    garderEcran: true
   },
   {
     groupe: 'Poser un rendez-vous',
@@ -11519,9 +11703,9 @@ const COMMANDES = [
       if (lu.emplacement) poserChamp('emplacement', lu.emplacement);
       if (lu.client) poserChamp('client', lu.client);
       if (lu.prestation) poserChamp('prestation', lu.prestation);
-      const manque = !lu.client ? 'client' : !lu.prestation ? 'prestation' : null;
-      if (manque) { const c = poserChamp(manque, ''); if (c) c.focus(); }
-      return 'Rendez-vous ' + resumeRdv(lu) + (manque ? ' — dites « ' + manque + ' … »' : ' — dites « valide »');
+      const dits = ['client', 'prestation', 'heure'].filter(k => lu[k === 'heure' ? 'heure' : k]);
+      const question = ouvrirDialogue('planif', dits);
+      return 'Rendez-vous ' + resumeRdv(lu) + (question ? ' — ' + question : '');
     },
     garderEcran: true
   },
@@ -11662,7 +11846,9 @@ const COMMANDES = [
     quoi: 'refermer la fenêtre en cours',
     motif: /^(?:ferme|fermer|annule|annuler|retour|echap)$/,
     faire() {
-      if (!S.modale) return 'Rien à fermer';
+      const parlait = !!VOIX.dialogue;
+      finirDialogue();
+      if (!S.modale) return parlait ? 'Très bien, j’arrête là' : 'Rien à fermer';
       S.modale = null;
       return 'Fenêtre fermée';
     }
@@ -11673,12 +11859,14 @@ const COMMANDES = [
     quoi: 'enregistrer ce qui est à l’écran',
     motif: /^(?:valide|valider|enregistre|enregistrer|confirme|confirmer|c'est bon)$/,
     faire() {
-      const f = document.querySelector('.voile form');
+      const f = formulaireOuvert();
       if (!f) return null;
+      finirDialogue();
       // le formulaire s'occupe du reste, y compris de refuser ce qui manque
       setTimeout(() => f.requestSubmit(), 0);
       return 'Enregistré';
-    }
+    },
+    garderEcran: true
   },
   {
     groupe: 'La fenêtre ouverte',
@@ -11722,6 +11910,13 @@ const COMMANDES = [
     }
   },
   {
+    groupe: 'Répondre aux questions',
+    exemple: 'oui',
+    quoi: 'quand l’outil demande ce qui manque : répondez, ou dites « passe » pour laisser vide, « non » pour abandonner. Il relit tout avant d’enregistrer.',
+    motif: /^$/,                        // ces mots-là sont lus avant les commandes
+    faire() { return null; }
+  },
+  {
     groupe: 'La voix',
     exemple: 'que puis-je dire',
     quoi: 'afficher la liste de tout ce que l’outil comprend',
@@ -11742,6 +11937,15 @@ function executerVocal(phrase) {
   const brut = String(phrase || '').trim();
   const p = normaliserVoix(brut);
   if (!p) return null;
+  VOIX.questionPosee = false;
+
+  /* Un « oui », un « non », un « passe » ne veulent rien dire hors d'une
+     question posée : on ne les regarde que si une question est en l'air. */
+  if (VOIX.attente && (MOTS_OUI.test(p) || MOTS_NON.test(p) || MOTS_PASSE.test(p))) {
+    const r = repondreAttente(p, brut);
+    if (r) return r;
+  }
+
   for (const c of COMMANDES) {
     const m = c.motif.exec(p);
     if (!m) continue;
@@ -11754,8 +11958,21 @@ function executerVocal(phrase) {
     /* Remplir un champ ne doit pas redessiner l'écran : la fenêtre serait
        reconstruite depuis zéro et tout ce qui vient d'être dicté disparaîtrait. */
     VOIX.garderEcran = c.garderEcran === true;
+    /* Une commande a rempli un champ pendant la conversation : on enchaîne sur
+       ce qui manque encore, plutôt que de laisser la question en suspens. */
+    if (VOIX.dialogue && c.garderEcran && !VOIX.questionPosee) {
+      const suite = demanderSuite();
+      return suite ? reponse + ' — ' + suite : reponse;
+    }
     return reponse;
   }
+
+  /* Rien de connu, mais une question attend sa réponse : c'en est une. */
+  if (VOIX.attente) {
+    const r = repondreAttente(p, brut);
+    if (r) return r;
+  }
+
   VOIX.garderEcran = false;
   return null;
 }
@@ -11783,6 +12000,9 @@ const VOIX = {
   reponse: '',           // ce que l'outil en a fait
   erreur: '',
   garderEcran: false,    // la dernière commande remplissait-elle un formulaire ?
+  dialogue: null,        // le formulaire qu'on remplit à deux, question par question
+  attente: null,         // la question posée, dont on attend la réponse
+  questionPosee: false,  // une question vient-elle d'être posée dans ce tour ?
 
   dispo() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
 
@@ -11878,13 +12098,17 @@ const VOIX = {
 /** Le bandeau du bas : ce qu'on entend, ce qui vient d'être fait. */
 function barreVocale() {
   if (!VOIX.voulu && !VOIX.erreur) return '';
-  const etat = VOIX.erreur ? 'muet' : VOIX.ecoute ? 'ecoute' : 'attente';
+  const etat = VOIX.erreur ? 'muet' : VOIX.attente ? 'demande' : VOIX.ecoute ? 'ecoute' : 'attente';
   const dit = VOIX.entendu || VOIX.dernier;
+  /* Une question posée passe devant tout : c'est la seule chose à lire quand
+     on a les mains prises. Ce qu'on vient de dire tient la seconde ligne. */
   return `<div class="voix-barre ${etat}">
-    <span class="voix-pastille">${ic('micro')}</span>
+    <span class="voix-pastille">${ic(VOIX.attente ? 'question' : 'micro')}</span>
     <div class="voix-texte">
-      ${VOIX.erreur
-        ? `<b>${esc(VOIX.erreur)}</b>`
+      ${VOIX.erreur ? `<b>${esc(VOIX.erreur)}</b>`
+        : VOIX.attente
+        ? `<b>${esc(VOIX.attente.question)}</b>
+           <span class="mini">${dit ? '« ' + esc(dit) + ' »' : 'j’écoute votre réponse'}</span>`
         : `<b>${dit ? esc(dit) : (VOIX.ecoute ? 'Je vous écoute…' : 'Un instant…')}</b>
            ${VOIX.reponse ? `<span class="mini">${esc(VOIX.reponse)}</span>` : ''}`}
     </div>
