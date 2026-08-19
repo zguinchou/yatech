@@ -2317,8 +2317,63 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
 .carte.ouvert > .carte-tete .volet-fleche { transform: rotate(90deg); color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .volet-fleche { transition: none; } }
 
+/* --- la commande vocale --------------------------------------------------- */
+/* Le micro se voit : allumé, il bat doucement, comme un témoin au tableau. */
+.btn.micro.ecoute { color: var(--accent); border-color: var(--accent); }
+.btn.micro.ecoute::after {
+  content: ''; position: absolute; inset: -3px; border-radius: inherit;
+  border: 1px solid var(--accent); opacity: .55; animation: souffle 1.9s ease-out infinite;
+}
+.btn.micro { position: relative; }
+@keyframes souffle {
+  0% { transform: scale(1); opacity: .55; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* Le bandeau : ce qu'on entend, et ce qui vient d'être fait. Il se pose
+   au-dessus de la barre du bas sur téléphone, jamais dessous. */
+.voix-barre {
+  position: fixed; z-index: 70;
+  left: max(12px, var(--sur-gauche)); right: max(12px, var(--sur-droite));
+  bottom: calc(12px + var(--sur-bas));
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 12px; border-radius: var(--r-l);
+  background: var(--plan); border: 1px solid var(--trait);
+  box-shadow: var(--ombre-fort);
+}
+.voix-barre .voix-texte { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.voix-barre b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voix-barre .mini { color: var(--libre); }
+.voix-pastille {
+  flex: none; width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--plan-2); color: var(--encre-3); border: 1px solid var(--trait);
+}
+.voix-barre.ecoute .voix-pastille { background: var(--accent-voile); color: var(--accent); border-color: var(--accent); }
+.voix-barre.muet { border-color: var(--occupe); }
+.voix-barre.muet .voix-pastille { background: var(--occupe-voile); color: var(--occupe); border-color: var(--occupe); }
+.voix-barre .btn { margin-left: 0; }
+.voix-barre .btn:last-child { margin-left: auto; }
+
+.voix-groupe { display: flex; flex-direction: column; gap: 7px; }
+.voix-ligne {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  padding: 8px 10px; border-radius: var(--r);
+  background: var(--plan-2); border: 1px solid var(--trait-fin);
+}
+.voix-ligne b { font-size: 13px; }
+.voix-ligne span { font-size: 12.5px; color: var(--encre-2); }
+
+@media (max-width: 900px) {
+  .voix-barre { bottom: calc(74px + var(--sur-bas)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn.micro.ecoute::after { animation: none; }
+}
+
 @media print {
-  .commande, .tableau, .brief, .titre-page { display: none !important; }
+  .commande, .tableau, .brief, .titre-page, .voix-barre { display: none !important; }
 }
 
 </style>
@@ -2498,7 +2553,9 @@ const REGLAGES = {
   heureFin: '18:00',
   pauseDebut: '12:00',    // la coupure du midi : on ne propose rien entre les deux
   pauseFin: '14:00',
-  pasPlanning: 30,        // finesse des créneaux, en minutes
+  pasPlanning: 30,
+  voixAuto: false,        // le micro s'ouvre-t-il tout seul en arrivant ?
+  voixParle: true,        // l'outil répond-il à voix haute ?        // finesse des créneaux, en minutes
   dureeDefaut: 1,         // durée proposée pour un nouveau rendez-vous, en heures
   joursReservables: 8,    // jusqu'où un confrère peut demander un créneau, en jours
   nomPont: 'Pont élévateur',
@@ -3699,7 +3756,9 @@ const ICO = {
   'plus-menu': '<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>',
   carre:    '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/>',
   coche:    '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/><path d="M8 12.3l2.7 2.7L16 9.6"/>',
-  cadenas:  '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/>'
+  cadenas:  '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/>',
+  micro:    '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0"/><path d="M12 18v3"/>',
+  question: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 114 2.3c-.9.6-1.6 1-1.6 2.1"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/>'
 };
 /* Les dimensions sont écrites dans la balise : un SVG sans taille ni règle CSS
    se déploie à 300 × 150 px et fait exploser la mise en page. La feuille de
@@ -8843,6 +8902,28 @@ function vueReglages() {
       </div>
     </section>
 
+    <section class="carte">
+      <div class="carte-tete"><h2>La voix</h2>
+        <span class="badge t-${VOIX.dispo() ? 'info' : 'mort'}">${VOIX.dispo() ? 'Ce navigateur sait écouter' : 'Pas sur ce navigateur'}</span>
+      </div>
+      <div class="carte-corps pile">
+        <p class="aide" style="margin:0">Les mains dans le moteur, on parle plutôt qu'on ne touche l'écran.
+        Le micro s'ouvre par le bouton en haut à droite, et tout ce qui se fait au doigt se dit aussi.</p>
+        <label class="rangee" style="gap:9px;cursor:pointer">
+          <input type="checkbox" data-champ-voix="voixAuto" ${r.voixAuto ? 'checked' : ''}>
+          Ouvrir le micro dès l'arrivée
+        </label>
+        <label class="rangee" style="gap:9px;cursor:pointer">
+          <input type="checkbox" data-champ-voix="voixParle" ${r.voixParle ? 'checked' : ''}>
+          Répondre à voix haute
+        </label>
+        <div class="rangee">
+          <button class="btn" data-act="voix-aide">${ic('question')} Ce que je comprends</button>
+          <button class="btn plein" data-act="voix">${VOIX.voulu ? 'Couper le micro' : 'Écouter maintenant'}</button>
+        </div>
+      </div>
+    </section>
+
     ${blocReglagesNotifs(r)}
 
     <section class="carte" style="grid-column:1/-1">
@@ -10495,6 +10576,7 @@ function apresRendu() {
             : S.modale.type === 'tour' ? modaleTour()
             : S.modale.type === 'prevenir' ? modalePrevenir(S.modale)
             : S.modale.type === 'alertes' ? modaleAlertes()
+            : S.modale.type === 'voix' ? modaleVoix()
             : S.modale.type === 'code' ? modaleCode(S.modale.id)
             : S.modale.type === 'code-pro' ? modaleCodePro(S.modale.id)
             : S.modale.type === 'nouveau-pro' ? modaleNouveauPro()
@@ -11013,6 +11095,18 @@ function apresRendu() {
   if (cv) brancherSignature(cv);
 
   plierReglages();
+
+  /* Le bandeau du micro vit à côté de l'écran, pas dedans : il doit rester
+     visible quel que soit ce qu'on regarde, et survivre à chaque redessin. */
+  const ancien = document.getElementById('voix-barre');
+  if (ancien) ancien.remove();
+  const h = (S.userId && !S.clientToken && !S.grilleToken) ? barreVocale() : '';
+  if (h) {
+    const d = document.createElement('div');
+    d.id = 'voix-barre';
+    d.innerHTML = h;
+    document.body.appendChild(d);
+  }
 }
 
 let signatureVide = true;
@@ -11073,6 +11167,433 @@ document.addEventListener('click', (e) => {
   const doux = !matchMedia('(prefers-reduced-motion: reduce)').matches;
   section.scrollIntoView({ block: 'start', behavior: doux ? 'smooth' : 'auto' });
 });
+
+/* ==========================================================================
+   LA COMMANDE VOCALE
+   --------------------------------------------------------------------------
+   Un mécanicien a les mains dans le moteur : demander « ouvre le planning »
+   vaut mieux que d'essuyer ses doigts pour toucher l'écran. Tout ce qui se
+   fait au doigt se dit aussi.
+
+   Le principe : une table de commandes, chacune avec ses tournures, son
+   exemple et ce qu'elle fait. La liste d'aide se construit à partir de cette
+   même table — elle ne peut donc pas mentir sur ce que l'outil comprend.
+   ========================================================================== */
+
+/* Ce qui sort d'une reconnaissance vocale n'est jamais propre : majuscules,
+   accents, ponctuation, « s'il te plaît » collé au bout. On ramène tout à une
+   forme plate avant de comparer. */
+function normaliserVoix(t) {
+  return String(t || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[.,;!?]/g, ' ')
+    .replace(/\b(s'il te plait|s'il vous plait|steuplait|merci)\b/g, ' ')
+    .replace(/[\u2019\u02bc\u00b4`]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Retrouver quelqu'un de l'équipe par son prénom, tel qu'il a été entendu. */
+function quiVoix(mot) {
+  const m = normaliserVoix(mot);
+  if (!m) return null;
+  return DB.etat.utilisateurs.find(u => normaliserVoix(u.nom) === m)
+      || DB.etat.utilisateurs.find(u => normaliserVoix(u.nom).startsWith(m))
+      || null;
+}
+
+/* Les écrans, avec les mots par lesquels on les appelle vraiment. Le premier
+   de chaque liste sert d'exemple dans l'aide. */
+const ECRANS_VOIX = [
+  { vue: 'atelier',   nom: "L'atelier",     mots: ["l'atelier", 'atelier', "aujourd'hui", 'le tableau', 'tableau', 'accueil'] },
+  { vue: 'planning',  nom: 'Le planning',   mots: ['le planning', 'planning', 'agenda', 'les rendez-vous', 'rendez-vous'] },
+  { vue: 'parking',   nom: 'Le parc',       mots: ['le parc', 'parc', 'parking', 'les voitures'] },
+  { vue: 'memos',     nom: 'Le pense-bête', mots: ['les memos', 'memos', 'le pense-bete', 'pense-bete', 'les rappels'] },
+  { vue: 'clients',   nom: 'Les clients',   mots: ['les clients', 'clients', 'la clientele'] },
+  { vue: 'catalogue', nom: 'Les tarifs',    mots: ['les tarifs', 'tarifs', 'le catalogue', 'catalogue', 'les prix'] },
+  { vue: 'reglages',  nom: 'Les paramètres',mots: ['les parametres', 'parametres', 'les reglages', 'reglages'] }
+];
+
+/* Les verbes qui ouvrent quelque chose. Optionnels : dire « planning » suffit. */
+const OUVRIR = '(?:ouvre|ouvrir|va|vas|aller|va a|va au|va aux|affiche|montre|montrer|donne|passe a|passe au)?'
+  + '(?:[-\\s]moi)?\\s*';
+
+/** Toutes les commandes. `motif` reçoit la phrase normalisée ; `faire` rend la
+ *  phrase de confirmation, ou null si la commande n'a finalement rien fait. */
+const COMMANDES = [
+  {
+    groupe: 'Se déplacer',
+    exemple: 'ouvre le planning',
+    quoi: "aller sur un écran : l'atelier, le planning, le parc, les mémos, les clients, les tarifs, les paramètres",
+    motif: new RegExp('^' + OUVRIR + '(' + ECRANS_VOIX.flatMap(e => e.mots).join('|') + ')$'),
+    faire(m) {
+      const cible = ECRANS_VOIX.find(e => e.mots.includes(m[1]));
+      if (!cible) return null;
+      S.vue = cible.vue; S.modale = null; S.recherche = '';
+      return cible.nom;
+    }
+  },
+  {
+    groupe: 'Le planning',
+    exemple: 'semaine prochaine',
+    quoi: 'avancer ou reculer d’une semaine, ou revenir sur celle du jour',
+    motif: /^(?:la )?semaine (prochaine|suivante|derniere|precedente|d'avant|en cours|actuelle|de cette semaine)$|^cette semaine$/,
+    faire(m) {
+      S.vue = 'planning';
+      const q = m[1] || 'en cours';
+      if (['prochaine', 'suivante'].includes(q)) { glisserSemaine(1); return 'Semaine suivante'; }
+      if (['derniere', 'precedente', "d'avant"].includes(q)) { glisserSemaine(-1); return 'Semaine précédente'; }
+      S.moisPlanning = 0; S.semaineDuMois = null;
+      return 'Semaine en cours';
+    }
+  },
+  {
+    groupe: 'Le planning',
+    exemple: 'planning de Yoann',
+    quoi: 'ne garder que les rendez-vous de quelqu’un',
+    motif: /^(?:le )?planning (?:de |d')(.+)$|^(?:montre |affiche )?(?:les rendez-vous|la journee) (?:de |d')(.+)$/,
+    faire(m) {
+      const u = quiVoix(m[1] || m[2]);
+      if (!u) return null;
+      S.vue = 'planning'; S.planningQui = u.id;
+      return 'Planning de ' + u.nom;
+    }
+  },
+  {
+    groupe: 'Le planning',
+    exemple: "tout l'atelier",
+    quoi: 'rendre le planning à toute l’équipe',
+    motif: /^(?:tout l'atelier|toute l'equipe|tout le monde)$/,
+    faire() { S.vue = 'planning'; S.planningQui = null; return "Planning de tout l'atelier"; }
+  },
+  {
+    groupe: 'Créer',
+    exemple: 'nouvelle demande',
+    quoi: 'prendre un appel : la fiche s’ouvre, prête à remplir',
+    motif: /^(?:nouvelle demande|nouvel appel|un appel|prendre un appel|noter un appel)$/,
+    faire() { S.modale = { type: 'appel' }; return 'Fiche d’appel ouverte'; }
+  },
+  {
+    groupe: 'Créer',
+    exemple: 'nouveau rendez-vous',
+    quoi: 'poser un créneau : la fenêtre s’ouvre sur aujourd’hui',
+    motif: /^(?:nouveau rendez-vous|nouveau creneau|poser un rendez-vous|ajoute un rendez-vous)$/,
+    faire() {
+      S.vue = 'planning';
+      S.modale = { type: 'planif', jour: minuit(Date.now()), userId: S.planningQui || S.userId, devisId: '' };
+      return 'Nouveau rendez-vous';
+    }
+  },
+  {
+    groupe: 'Créer',
+    exemple: 'note rappeler Martin lundi',
+    quoi: 'déposer un pense-bête, dicté d’une traite',
+    motif: /^(?:note|notes|noter|rappelle-moi|rappel|ajoute un memo|nouveau memo)\s+(?:de\s+|que\s+)?(.+)$/,
+    brut: /^(?:notes?|noter|rappelle-moi|rappel|ajoute un m[ée]mo|nouveau m[ée]mo)\s+(?:de\s+|que\s+)?(.+)$/i,
+    faire(m, tel) {
+      const texte = (tel || m[1]).trim();
+      if (!texte) return null;
+      DB.etat.memos.unshift({ id: DB.nouvelId('m'), userId: S.userId, type: 'note',
+        texte, quand: null, fait: false, cree: Date.now() });
+      DB.sauver();
+      return 'Noté : ' + texte;
+    }
+  },
+  {
+    groupe: 'Chercher',
+    exemple: 'cherche Dupont',
+    quoi: 'lancer la recherche générale sur un nom, une plaque, un numéro',
+    motif: /^(?:cherche|chercher|recherche|rechercher|trouve|trouver)\s+(.+)$/,
+    brut: /^(?:cherche[rz]?|recherche[rz]?|trouve[rz]?)\s+(.+)$/i,
+    faire(m, tel) {
+      const quoi = (tel || m[1]).trim();
+      S.rechAccueil = quoi; S.modale = { type: 'recherche' };
+      return 'Recherche : ' + quoi;
+    }
+  },
+  {
+    groupe: 'Le parc',
+    exemple: 'tour du parc',
+    quoi: 'lancer le tour du parc',
+    motif: /^(?:tour du parc|faire le tour|le tour du parc)$/,
+    faire() { S.vue = 'parking'; S.modale = { type: 'tour' }; return 'Tour du parc'; }
+  },
+  {
+    groupe: 'L’écran',
+    exemple: 'mode sombre',
+    quoi: 'passer en sombre, en clair, ou laisser l’appareil décider',
+    motif: /^(?:mode |theme |passe en |passer en )?(sombre|nuit|clair|jour|automatique|auto)$/,
+    faire(m) {
+      const v = ['sombre', 'nuit'].includes(m[1]) ? 'dark'
+              : ['clair', 'jour'].includes(m[1]) ? 'light' : 'auto';
+      if (v === 'auto') { document.documentElement.removeAttribute('data-theme'); stock.effacer('atelier.theme'); }
+      else { document.documentElement.setAttribute('data-theme', v); stock.ecrire('atelier.theme', v); }
+      return v === 'dark' ? 'Mode sombre' : v === 'light' ? 'Mode clair' : 'Thème automatique';
+    }
+  },
+  {
+    groupe: 'La fenêtre ouverte',
+    exemple: 'ferme',
+    quoi: 'refermer la fenêtre en cours',
+    motif: /^(?:ferme|fermer|annule|annuler|retour|echap)$/,
+    faire() {
+      if (!S.modale) return 'Rien à fermer';
+      S.modale = null;
+      return 'Fenêtre fermée';
+    }
+  },
+  {
+    groupe: 'La fenêtre ouverte',
+    exemple: 'valide',
+    quoi: 'enregistrer ce qui est à l’écran',
+    motif: /^(?:valide|valider|enregistre|enregistrer|confirme|confirmer|c'est bon)$/,
+    faire() {
+      const f = document.querySelector('.voile form');
+      if (!f) return null;
+      // le formulaire s'occupe du reste, y compris de refuser ce qui manque
+      setTimeout(() => f.requestSubmit(), 0);
+      return 'Enregistré';
+    }
+  },
+  {
+    groupe: 'La fenêtre ouverte',
+    exemple: 'écris Peugeot 208',
+    quoi: 'dicter dans le champ où se trouve le curseur',
+    motif: /^(?:ecris|ecrire|saisis|tape|dicte|dicter)\s+(.+)$/,
+    brut: /^(?:[ée]cris|[ée]crire|saisis|tape|dicte|dicter)\s+(.+)$/i,
+    faire(m, tel) {
+      const actif = document.activeElement;
+      const champ = (actif && /^(INPUT|TEXTAREA)$/.test(actif.tagName)) ? actif
+                  : document.querySelector('.voile input:not([type=hidden]), .voile textarea');
+      if (!champ) return null;
+      champ.value = (tel || m[1]).trim();
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+      champ.focus();
+      return 'Écrit : ' + champ.value;
+    }
+  },
+  {
+    groupe: 'Les paramètres',
+    exemple: "ouvre le réglage de l'équipe",
+    quoi: 'déplier un réglage par son nom — l’équipe, le parc, le planning, vos textes…',
+    /* Le verbe est obligatoire ici : sans lui, cette commande avalerait toutes
+       les phrases avant que les suivantes aient leur chance. */
+    motif: /^(?:ouvre|ouvrir|affiche|montre|deplie|deplier)\s+(?:le |la |les |l')?(?:reglage |reglages |parametre |parametres )?(?:de |d'|du |des )?(.+)$/,
+    faire(m) {
+      const cherche = normaliserVoix(m[1]);
+      const avant = { vue: S.vue, volet: S.volet };
+      // les volets n'existent dans la page qu'une fois les paramètres dessinés
+      S.vue = 'reglages'; S.volet = null;
+      rendre();
+      const volets = [...document.querySelectorAll('.volets > .carte[data-volet]')].map(c => ({
+        id: c.dataset.volet,
+        nom: (c.querySelector('.carte-tete h2') || {}).textContent || ''
+      }));
+      const t = volets.find(v => normaliserVoix(v.nom) === cherche)
+             || volets.find(v => normaliserVoix(v.nom).includes(cherche));
+      if (!t) { S.vue = avant.vue; S.volet = avant.volet; return null; }
+      S.volet = t.id;
+      return 'Réglage ' + t.nom.trim();
+    }
+  },
+  {
+    groupe: 'La voix',
+    exemple: 'que puis-je dire',
+    quoi: 'afficher la liste de tout ce que l’outil comprend',
+    motif: /^(?:que puis-je dire|qu'est-ce que je peux dire|aide|les commandes|commandes vocales)$/,
+    faire() { S.modale = { type: 'voix' }; return 'Voici tout ce que je comprends'; }
+  },
+  {
+    groupe: 'La voix',
+    exemple: "arrête d'écouter",
+    quoi: 'couper le micro',
+    motif: /^(?:arrete d'ecouter|arrete|stop|silence|coupe le micro)$/,
+    faire() { setTimeout(() => VOIX.arreter(), 0); return "J'arrête d'écouter"; }
+  }
+];
+
+/** Exécuter une phrase. Rend la confirmation, ou null si rien n'a été compris. */
+function executerVocal(phrase) {
+  const brut = String(phrase || '').trim();
+  const p = normaliserVoix(brut);
+  if (!p) return null;
+  for (const c of COMMANDES) {
+    const m = c.motif.exec(p);
+    if (!m) continue;
+    /* Un mémo, une recherche, une dictée : le texte se reprend sur la phrase
+       d'origine. Une fois écrit, « Martin » vaut mieux que « martin ». */
+    const tel = c.brut ? (c.brut.exec(brut) || [])[1] : null;
+    const reponse = c.faire(m, tel);
+    if (reponse) return reponse;   // une tournure comprise mais sans effet laisse sa chance aux suivantes
+  }
+  return null;
+}
+
+/* ==========================================================================
+   Le micro
+   --------------------------------------------------------------------------
+   La reconnaissance du navigateur s'arrête toute seule au bout d'un silence :
+   tant qu'on veut écouter, on la relance. Elle n'existe pas partout — on le
+   dit, plutôt que de laisser un bouton mort.
+   ========================================================================== */
+const VOIX = {
+  reco: null,
+  ecoute: false,
+  voulu: false,          // l'utilisateur veut écouter, même pendant une relance
+  entendu: '',           // ce qui est en train d'être dit
+  dernier: '',           // la dernière phrase complète
+  reponse: '',           // ce que l'outil en a fait
+  erreur: '',
+
+  dispo() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
+
+  parler(texte) {
+    if (!DB.etat.reglages.voixParle) return;
+    try {
+      const s = window.speechSynthesis;
+      if (!s) return;
+      s.cancel();
+      const d = new SpeechSynthesisUtterance(texte);
+      d.lang = 'fr-FR';
+      s.speak(d);
+    } catch (e) { /* une voix muette n'empêche rien */ }
+  },
+
+  demarrer() {
+    if (!this.dispo()) {
+      this.erreur = "Ce navigateur ne sait pas écouter. Chrome, Edge ou Safari le savent.";
+      rendre(); return;
+    }
+    this.voulu = true;
+    this.erreur = '';
+    /* Le bandeau apparaît tout de suite : entre l'appui et le premier mot
+       entendu il peut s'écouler une seconde, et un bouton qui ne répond pas
+       donne envie d'appuyer une deuxième fois. */
+    rendre();
+    if (this.reco) { try { this.reco.start(); } catch (e) { /* déjà lancée */ } return; }
+
+    const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const r = new Reco();
+    r.lang = 'fr-FR';
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 3;
+
+    r.onstart = () => { this.ecoute = true; this.erreur = ''; rendre(); };
+
+    r.onresult = (ev) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const res = ev.results[i];
+        if (!res.isFinal) { this.entendu = res[0].transcript; rendre(); continue; }
+        this.entendu = '';
+        /* On essaie chaque proposition du navigateur : la première est souvent
+           bonne, mais « ouvre le part » pour « ouvre le parc » arrive. */
+        let fait = null, dit = res[0].transcript;
+        for (let k = 0; k < res.length && !fait; k++) {
+          fait = executerVocal(res[k].transcript);
+          if (fait) dit = res[k].transcript;
+        }
+        this.dernier = dit.trim();
+        this.reponse = fait || '';
+        if (fait) { this.parler(fait); rendre(); }
+        else { this.reponse = ''; toast('Pas compris : « ' + this.dernier +' »'); rendre(); }
+      }
+    };
+
+    r.onerror = (ev) => {
+      const c = ev.error;
+      this.erreur = c === 'not-allowed' || c === 'service-not-allowed'
+          ? "Le micro est refusé. Autorisez-le dans le navigateur, puis réessayez."
+        : c === 'audio-capture' ? "Aucun micro trouvé sur cet appareil."
+        : c === 'network' ? "La reconnaissance a besoin du réseau."
+        : c === 'no-speech' ? '' : "Le micro s'est arrêté (" + c + ').';
+      if (c === 'not-allowed' || c === 'service-not-allowed' || c === 'audio-capture') this.voulu = false;
+      rendre();
+    };
+
+    /* Un silence coupe la reconnaissance : tant qu'on veut écouter, on relance.
+       Le petit délai évite la boucle folle quand le navigateur refuse. */
+    r.onend = () => {
+      this.ecoute = false;
+      if (this.voulu) setTimeout(() => { if (this.voulu) { try { r.start(); } catch (e) { /* rien */ } } }, 350);
+      rendre();
+    };
+
+    this.reco = r;
+    try { r.start(); } catch (e) { this.erreur = "Le micro n'a pas démarré."; }
+    rendre();
+  },
+
+  arreter() {
+    this.voulu = false;
+    this.entendu = '';
+    if (this.reco) { try { this.reco.stop(); } catch (e) { /* rien */ } }
+    this.ecoute = false;
+    rendre();
+  },
+
+  basculer() { this.voulu ? this.arreter() : this.demarrer(); }
+};
+
+/** Le bandeau du bas : ce qu'on entend, ce qui vient d'être fait. */
+function barreVocale() {
+  if (!VOIX.voulu && !VOIX.erreur) return '';
+  const etat = VOIX.erreur ? 'muet' : VOIX.ecoute ? 'ecoute' : 'attente';
+  const dit = VOIX.entendu || VOIX.dernier;
+  return `<div class="voix-barre ${etat}">
+    <span class="voix-pastille">${ic('micro')}</span>
+    <div class="voix-texte">
+      ${VOIX.erreur
+        ? `<b>${esc(VOIX.erreur)}</b>`
+        : `<b>${dit ? esc(dit) : (VOIX.ecoute ? 'Je vous écoute…' : 'Un instant…')}</b>
+           ${VOIX.reponse ? `<span class="mini">${esc(VOIX.reponse)}</span>` : ''}`}
+    </div>
+    <button class="btn nu" data-act="voix-aide" title="Ce que je comprends">${ic('question')}</button>
+    <button class="btn nu" data-act="voix" title="Couper le micro">${ic('croix')}</button>
+  </div>`;
+}
+
+/** L'aide : elle se construit à partir de la table, donc elle est toujours juste. */
+function modaleVoix() {
+  const groupes = [];
+  COMMANDES.forEach(c => {
+    const g = groupes.find(x => x.nom === c.groupe) || (groupes.push({ nom: c.groupe, lignes: [] }), groupes[groupes.length - 1]);
+    g.lignes.push(c);
+  });
+  const noms = DB.etat.utilisateurs.map(u => u.nom).join(', ');
+
+  return `<div class="voile" data-voile><div class="modale">
+    <div class="modale-tete">
+      <div><h2 style="font-size:18px">Ce que je comprends</h2>
+        <div class="mini">Dites-le simplement : « ouvre le planning » ou juste « planning ».</div></div>
+      <button class="btn nu" style="margin-left:auto" data-act="fermer-modale">${ic('croix')}</button>
+    </div>
+    <div class="modale-corps pile">
+      ${VOIX.dispo() ? '' : `<div class="encart alerte">
+        <b>Ce navigateur ne sait pas écouter.</b> La commande vocale demande Chrome, Edge ou Safari.
+        Tout reste faisable au doigt.</div>`}
+      ${groupes.map(g => `<div class="voix-groupe">
+        <div class="etiq">${esc(g.nom)}</div>
+        <div class="pile" style="gap:7px">
+          ${g.lignes.map(c => `<div class="voix-ligne">
+            <b>« ${esc(c.exemple)} »</b>
+            <span>${c.quoi}</span>
+          </div>`).join('')}
+        </div>
+      </div>`).join('')}
+      <p class="aide" style="margin:0">Les prénoms reconnus sont ceux de l'équipe : ${esc(noms)}.
+      Ajoutez quelqu'un dans les paramètres et son prénom marche aussitôt.</p>
+    </div>
+    <div class="modale-pied">
+      <label class="rangee" style="gap:8px;margin-right:auto;cursor:pointer">
+        <input type="checkbox" data-champ-voix="voixParle" ${DB.etat.reglages.voixParle ? 'checked' : ''}>
+        Répondre à voix haute
+      </label>
+      <button class="btn plein" data-act="voix">${ic('micro')} ${VOIX.voulu ? 'Couper le micro' : 'Écouter'}</button>
+    </div>
+  </div></div>`;
+}
 
 /* --- délégation des clics --------------------------------------------------- */
 document.addEventListener('click', (e) => {
@@ -11163,6 +11684,10 @@ document.addEventListener('click', (e) => {
     /* Un volet ouvert en referme un autre : on ne se retrouve jamais avec
        tous les réglages dépliés, c'est-à-dire au point de départ. */
     volet() { S.volet = S.volet === id ? null : id; rendre(); },
+
+    /* Le micro : un bouton pour l'ouvrir, un autre pour savoir quoi lui dire. */
+    voix() { VOIX.basculer(); },
+    'voix-aide'() { S.modale = { type: 'voix' }; rendre(); },
 
     'menu-plus'() { S.modale = { type: 'plus' }; rendre(); },
     pdf() {
@@ -12779,6 +13304,11 @@ document.addEventListener('input', (e) => {
 
   /* Ces réglages redessinent le parc ou le planning : on applique et on
      redessine, en gardant le curseur dans le champ en cours de saisie. */
+  if (t.dataset.champVoix) {
+    DB.etat.reglages[t.dataset.champVoix] = t.checked;
+    DB.sauver(); rendre();
+    return;
+  }
   if (t.dataset.champParc) {
     const cle = t.dataset.champParc;
     DB.etat.reglages[cle] = t.type === 'number' ? Number(t.value) : t.value;
@@ -13607,6 +14137,9 @@ rendre = function rendreV2() {
           <button class="btn cherche-vite" data-act="recherche" title="Rechercher">
             ${ic('loupe')}<span>Rechercher</span>
           </button>
+          <button class="btn nu micro ${VOIX.voulu ? 'ecoute' : ''}" data-act="voix"
+                  title="${VOIX.voulu ? 'Couper le micro' : 'Commander à la voix'}"
+                  aria-pressed="${VOIX.voulu ? 'true' : 'false'}">${ic('micro', 1.9)}</button>
           ${(() => {
             // dès qu'il y a quelque chose à voir, la cloche bat en rouge
             const n = alertesAtelier().length;
@@ -13850,6 +14383,11 @@ document.addEventListener('click', (e) => {
 
     S.vue = 'atelier';
     rendre();
+
+    /* Le micro ne s'ouvre de lui-même que si on l'a demandé : un navigateur
+       qui réclame l'autorisation dès l'ouverture, sans qu'on ait rien fait,
+       est une mauvaise surprise. */
+    if (S.userId && DB.etat.reglages.voixAuto && VOIX.dispo()) VOIX.demarrer();
   } catch (e) {
     console.error(e);
     document.getElementById('app').innerHTML =
