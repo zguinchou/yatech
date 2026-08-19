@@ -2359,6 +2359,19 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
 .voix-barre .btn { margin-left: 0; }
 .voix-barre .btn:last-child { margin-left: auto; }
 
+/* Un réglage de voix se lit comme une phrase : la case, le titre, puis ce que
+   ça change vraiment. */
+.voix-reglage {
+  display: flex; align-items: flex-start; gap: 11px; cursor: pointer;
+  padding: 10px 12px; border-radius: var(--r);
+  border: 1px solid var(--trait-fin); background: var(--plan-2);
+}
+.voix-reglage:hover { border-color: var(--trait); }
+.voix-reglage input { margin-top: 2px; flex: none; }
+.voix-reglage b { display: block; font-size: 13.5px; font-weight: 600; }
+.voix-reglage .aide { display: block; margin-top: 2px; }
+.voix-reglage.eteint { opacity: .55; }
+
 .voix-groupe { display: flex; flex-direction: column; gap: 7px; }
 .voix-ligne {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
@@ -2558,7 +2571,9 @@ const REGLAGES = {
   pauseFin: '14:00',
   pasPlanning: 30,
   voixAuto: false,        // le micro s'ouvre-t-il tout seul en arrivant ?
-  voixParle: true,        // l'outil répond-il à voix haute ?        // finesse des créneaux, en minutes
+  voixParle: true,        // l'outil répond-il à voix haute ?
+  voixDemande: true,      // pose-t-il les questions de ce qui manque ?
+  voixConfirme: true,     // relit-il avant d'enregistrer ?        // finesse des créneaux, en minutes
   dureeDefaut: 1,         // durée proposée pour un nouveau rendez-vous, en heures
   joursReservables: 8,    // jusqu'où un confrère peut demander un créneau, en jours
   nomPont: 'Pont élévateur',
@@ -8912,14 +8927,29 @@ function vueReglages() {
       <div class="carte-corps pile">
         <p class="aide" style="margin:0">Les mains dans le moteur, on parle plutôt qu'on ne touche l'écran.
         Le micro s'ouvre par le bouton en haut à droite, et tout ce qui se fait au doigt se dit aussi.</p>
-        <label class="rangee" style="gap:9px;cursor:pointer">
-          <input type="checkbox" data-champ-voix="voixAuto" ${r.voixAuto ? 'checked' : ''}>
-          Ouvrir le micro dès l'arrivée
-        </label>
-        <label class="rangee" style="gap:9px;cursor:pointer">
-          <input type="checkbox" data-champ-voix="voixParle" ${r.voixParle ? 'checked' : ''}>
-          Répondre à voix haute
-        </label>
+        <div class="pile" style="gap:11px">
+          <label class="voix-reglage">
+            <input type="checkbox" data-champ-voix="voixAuto" ${r.voixAuto ? 'checked' : ''}>
+            <div><b>Ouvrir le micro dès l'arrivée</b>
+              <span class="aide">Sinon il attend le bouton. Le navigateur demande l'autorisation la première fois.</span></div>
+          </label>
+          <label class="voix-reglage">
+            <input type="checkbox" data-champ-voix="voixParle" ${r.voixParle ? 'checked' : ''}>
+            <div><b>Répondre à voix haute</b>
+              <span class="aide">Les réponses et les questions sont dites, pas seulement écrites dans le bandeau.</span></div>
+          </label>
+          <label class="voix-reglage">
+            <input type="checkbox" data-champ-voix="voixDemande" ${r.voixDemande ? 'checked' : ''}>
+            <div><b>Demander ce qui manque</b>
+              <span class="aide">« Pour quel client ? », puis la réponse suivante remplit le champ.
+              Décoché, l'outil annonce une fois ce qui manque et vous laisse la main.</span></div>
+          </label>
+          <label class="voix-reglage ${r.voixDemande ? '' : 'eteint'}">
+            <input type="checkbox" data-champ-voix="voixConfirme" ${r.voixConfirme ? 'checked' : ''}>
+            <div><b>Relire avant d'enregistrer</b>
+              <span class="aide">Tout est relu et attend un « oui ». Décoché, ce qui est complet part directement.</span></div>
+          </label>
+        </div>
         <div class="rangee">
           <button class="btn" data-act="voix-aide">${ic('question')} Ce que je comprends</button>
           <button class="btn plein" data-act="voix">${VOIX.voulu ? 'Couper le micro' : 'Écouter maintenant'}</button>
@@ -11464,36 +11494,56 @@ const DIALOGUES = {
     nom: 'le rendez-vous',
     poser: 'Je pose le rendez-vous ?',
     champs: [
-      { champ: 'client',     question: 'Pour quel client ?' },
-      { champ: 'prestation', question: "Qu'est-ce qu'il y a à faire ?" },
+      { champ: 'client',     dit: 'le client',     question: 'Pour quel client ?' },
+      { champ: 'prestation', dit: 'la prestation',  question: "Qu'est-ce qu'il y a à faire ?" },
       /* L'heure a toujours une valeur dans la liste : ce n'est pas parce que
          le champ n'est pas vide qu'elle a été dite. */
-      { champ: 'heure',      question: 'À quelle heure ?', jamaisVide: true, lire: heureVocale }
+      { champ: 'heure',      dit: "l'heure",       question: 'À quelle heure ?', jamaisVide: true, lire: heureVocale }
     ]
   },
   appel: {
     nom: 'la fiche',
     poser: 'J\'enregistre la demande ?',
     champs: [
-      { champ: 'nom',    question: 'Le nom du client ?' },
-      { champ: 'tel',    question: 'Son numéro de téléphone ?' },
-      { champ: 'immat',  question: "L'immatriculation du véhicule ?" },
-      { champ: 'panne',  question: "Qu'est-ce qui ne va pas ?" }
+      { champ: 'nom',    dit: 'le nom',              question: 'Le nom du client ?' },
+      { champ: 'tel',    dit: 'le numéro',           question: 'Son numéro de téléphone ?' },
+      { champ: 'immat',  dit: "l'immatriculation",   question: "L'immatriculation du véhicule ?" },
+      { champ: 'panne',  dit: 'la panne',            question: "Qu'est-ce qui ne va pas ?" }
     ]
   },
   memo: {
     nom: 'le pense-bête',
     poser: 'J’ajoute ce rappel ?',
     champs: [
-      { champ: 'texte', question: 'Que faut-il noter ?' },
-      { champ: 'quand', question: 'Pour quand ?', jamaisVide: true, lire: dateVocale }
+      { champ: 'texte', dit: 'le texte', question: 'Que faut-il noter ?' },
+      { champ: 'quand', dit: 'la date',   question: 'Pour quand ?', jamaisVide: true, lire: dateVocale }
     ]
   }
 };
 
-/** Ouvrir un dialogue sur le formulaire qui vient de s'ouvrir. */
+/** Ce qui n'est pas encore renseigné, dans l'ordre où on le demanderait. */
+function champsManquants(type, dits, passes) {
+  const f = formulaireOuvert();
+  return DIALOGUES[type].champs.filter(c => {
+    if (dits.has(c.champ) || (passes && passes.has(c.champ))) return false;
+    if (c.jamaisVide) return true;      // l'heure a toujours une valeur : ce n'est pas une réponse
+    const el = f && f.querySelector('[name="' + c.champ + '"]');
+    return el ? !String(el.value || '').trim() : false;
+  });
+}
+
+/** Ouvrir un dialogue sur le formulaire qui vient de s'ouvrir.
+ *  Questions coupées dans les réglages : on dit ce qui manque, une fois, et on
+ *  laisse la main — celui qui préfère taper n'est pas interrogé. */
 function ouvrirDialogue(type, dits) {
-  VOIX.dialogue = { type, dits: new Set(dits || []), passes: new Set() };
+  const vus = new Set(dits || []);
+  if (!DB.etat.reglages.voixDemande) {
+    finirDialogue();
+    const reste = champsManquants(type, vus, null);
+    if (!reste.length) return 'dites « valide » pour enregistrer';
+    return 'il manque ' + reste.map(c => c.dit || c.champ).join(' et ');
+  }
+  VOIX.dialogue = { type, dits: vus, passes: new Set() };
   return demanderSuite();
 }
 
@@ -11505,12 +11555,7 @@ function manqueDialogue() {
   if (!d) return [];
   const f = formulaireOuvert();
   if (!f && d.type !== 'memo') { finirDialogue(); return []; }
-  return DIALOGUES[d.type].champs.filter(c => {
-    if (d.dits.has(c.champ) || d.passes.has(c.champ)) return false;
-    if (c.jamaisVide) return true;
-    const el = f && f.querySelector('[name="' + c.champ + '"]');
-    return el ? !String(el.value || '').trim() : false;
-  });
+  return champsManquants(d.type, d.dits, d.passes);
 }
 
 /** Poser la question suivante, ou demander confirmation. Rend la phrase à dire. */
@@ -11525,6 +11570,18 @@ function demanderSuite() {
   }
   const modele = DIALOGUES[d.type];
   if (!modele.poser) { finirDialogue(); return ''; }
+
+  /* Relecture coupée dans les réglages : tout est rempli, on enregistre. Sans
+     redessiner — la fenêtre serait détruite avant que le formulaire ne parte. */
+  if (!DB.etat.reglages.voixConfirme) {
+    const f = formulaireOuvert();
+    finirDialogue();
+    if (!f) return '';
+    VOIX.garderEcran = true;
+    setTimeout(() => f.requestSubmit(), 0);
+    return 'c’est enregistré';
+  }
+
   VOIX.attente = { champ: null, question: modele.poser };
   return relireDialogue() + ' ' + modele.poser;
 }
