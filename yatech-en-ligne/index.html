@@ -568,6 +568,9 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 .pl-bloc:active { transform: translateY(1px); }
 .pl-bloc.pont { border-top: 1px solid hsl(var(--teinte, 220) 55% 45%); }
 .pl-bloc.fini { opacity: .5; }
+/* Posé hors des heures ouvertes : la boîte n'a pas de place sur la frise, on
+   la borde en pointillé pour que l'anomalie se voie. */
+.pl-bloc.hors { border: 1px dashed var(--occupe); border-left-width: 3px; }
 .pl-bloc.fini .pl-bloc-t { text-decoration: line-through; }
 .pl-bloc-tete { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .pl-bloc-h {
@@ -1430,8 +1433,6 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   max-height: 88vh; display: flex; flex-direction: column;
   animation: monte .2s cubic-bezier(.2,.8,.3,1);
 }
-/* Le menu montre huit destinations : il lui faut un peu plus de large. */
-.modale.large { width: min(680px, 100%); }
 @keyframes monte { from { transform: translateY(14px) scale(.99); opacity: 0; } }
 .modale.xl { width: min(880px, 100%); }
 /* Les fenêtres à formulaire enveloppent corps + pied dans un <form> : sans
@@ -2352,6 +2353,19 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   .sur-grand { display: none !important; }
 
   .plateau { padding: 14px calc(12px + var(--sur-droite)) calc(96px + var(--sur-bas)) calc(12px + var(--sur-gauche)); }
+  /* Sur un écran très étroit, les boutons du titre ne tiennent plus à côté de
+     lui : ils passent à la ligne plutôt que de sortir de l'écran. */
+  .titre-page .fin { min-width: 0; }
+  /* Très étroit : la barre du haut se resserre et le nom de l'écran se coupe
+     plutôt que de pousser les outils hors de l'écran. */
+  @media (max-width: 400px) {
+    .titre-page .fin { margin-left: 0; width: 100%; }
+    .titre-page .segments { width: 100%; }
+    .commande { gap: 6px; padding-left: calc(8px + var(--sur-gauche)); padding-right: calc(8px + var(--sur-droite)); }
+    .commande .fin { gap: 2px; }
+    .btn.tout { min-width: 0; padding: 8px 9px; }
+    .btn.tout span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
   .titre-page { margin-bottom: 14px; }
   .titre-page h1 { font-size: 23px; }
 
@@ -3949,7 +3963,11 @@ const S = {
   clientEtape: 'infos'
 };
 
-const moi = () => DB.utilisateur(S.userId) || DB.etat.utilisateurs[0];
+const PERSONNE = { id: '', nom: '—', init: '?', fonction: '', teinte: 220, role: '' };
+/* Toujours quelqu'un à afficher : une équipe vide — import bancal, dernier
+   compte supprimé — ne doit pas faire tomber l'écran entier avant que
+   sessionValide() n'ait eu le temps de refermer la session. */
+const moi = () => DB.utilisateur(S.userId) || DB.etat.utilisateurs[0] || PERSONNE;
 
 /* Une session dont le compte n'existe plus — profil supprimé, données
    réimportées, appareil resté sur un ancien jeu de comptes — ne doit surtout
@@ -6851,7 +6869,11 @@ function lignesFrise(rdv, tranches, total) {
     let ligne = lignes.findIndex(f => x >= f - 0.01);
     if (ligne < 0) { ligne = lignes.length; }
     lignes[ligne] = x2;
-    return { p, x, largeur: x2 - x, ligne };
+    /* Rien à montrer sur la frise : le rendez-vous tombe hors des heures
+       ouvertes — la coupure du midi, ou des horaires resserrés depuis. Il se
+       réduirait à un trait sans qu'on sache pourquoi ; on le dit. */
+    const largeur = x2 - x;
+    return { p, x, largeur, ligne, hors: largeur <= 3.01 };
   });
 }
 
@@ -6914,7 +6936,7 @@ function vuePlanning() {
       ${marquesFrise(tranches, totalMin).filter(m => !m.bord)
         .map(m => `<span class="pl-trait" style="--x:${m.pos}%"></span>`).join('')}
       ${maintenant !== null ? `<span class="pl-maintenant" style="--x:${maintenant}%"></span>` : ''}
-      ${poses.map(({ p, x, largeur, ligne }) => boiteRdv(p, x, largeur, ligne)).join('')}
+      ${poses.map(({ p, x, largeur, ligne, hors }) => boiteRdv(p, x, largeur, ligne, hors)).join('')}
       ${passe ? '' : `<button class="pl-plus" data-act="planif-nouveau"
         data-jour="${jour.ts}" data-user="${S.planningQui || S.userId}"
         title="Ajouter un rendez-vous">${ic('plus')}</button>`}
@@ -6923,16 +6945,17 @@ function vuePlanning() {
 
   /* Une boîte porte la couleur de la personne, son heure et son client. Trop
      étroite pour tout dire, elle garde l'essentiel — le survol dit le reste. */
-  const boiteRdv = (p, x, largeur, ligne) => {
+  const boiteRdv = (p, x, largeur, ligne, hors) => {
     const u = DB.utilisateur(p.userId);
     const e = EMPLACEMENTS[p.emplacement] || EMPLACEMENTS.sol;
     const immat = immatRdv(p);
-    return `<button class="pl-bloc ${p.fait ? 'fini' : ''} ${p.emplacement === 'pont' ? 'pont' : ''}"
+    return `<button class="pl-bloc ${p.fait ? 'fini' : ''} ${p.emplacement === 'pont' ? 'pont' : ''} ${hors ? 'hors' : ''}"
               style="--teinte:${u ? u.teinte : 220};--x:${x}%;--w:${largeur}%;--l:${ligne}"
               data-act="planif-ouvrir" data-id="${p.id}"
               title="${esc(p.heure)} · ${heuresFr(p.duree)} · ${esc(libelleRdv(p))}${
                 p.client ? ' · ' + esc(p.client) : ''}${u ? ' · ' + esc(u.nom) : ''}${
-                immat ? ' · ' + esc(immat) : ''} · ${esc(e.nom)}">
+                immat ? ' · ' + esc(immat) : ''} · ${esc(e.nom)}${
+                hors ? ' — hors des heures ouvertes' : ''}">
       <span class="pl-bloc-tete">
         <span class="pl-bloc-h">${esc(p.heure)}</span>
         <span class="pl-bloc-t">${esc(p.client || libelleRdv(p))}</span>
@@ -15061,8 +15084,7 @@ rendre = function rendreV2() {
             qu'à ce qui doit rester sous la main — chercher, parler, être averti. */ ''}
       <header class="commande">
         <button class="btn tout" data-act="menu-plus" title="Tous les écrans">
-          ${ic('plus-menu', 2)}<span>${esc(MENU2.find(m => m.id === vue)
-            ? MENU2.find(m => m.id === vue).nom : 'Menu')}</span>
+          ${ic('plus-menu', 2)}<span>${esc(nomEcran(vue))}</span>
           ${(() => {
             const n = Object.values(badges).reduce((s, x) => s + (x || 0), 0);
             return n ? `<span class="pastille">${n}</span>` : '';
@@ -15133,6 +15155,14 @@ rendre = function rendreV2() {
     if (rapide) { rapide.focus(); rapide.setSelectionRange(rapide.value.length, rapide.value.length); }
   }
 };
+
+/** Le nom de l'écran où l'on est. Les fiches n'ont pas d'entrée au menu :
+ *  elles portent le nom de l'écran dont elles viennent. */
+function nomEcran(vue) {
+  const m = MENU2.find(x => x.id === vue);
+  if (m) return m.nom;
+  return { devis: 'Tous les devis', 'devis-fiche': 'Devis', 'client-fiche': 'Clients' }[vue] || 'Menu';
+}
 
 /** Les boutons propres à chaque écran, remontés dans le titre. */
 function actionsEcran(vue) {
