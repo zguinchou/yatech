@@ -1899,21 +1899,22 @@ body {
   background-image:
     /* les bords, à peine rabattus */
     radial-gradient(125% 105% at 50% 42%, transparent 52%,
-      color-mix(in srgb, var(--encre) 8%, transparent) 100%),
+      color-mix(in srgb, var(--encre) 9%, transparent) 100%),
     /* l'écrou de la marque, presque effacé */
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%237d8a97' stroke-opacity='.11' stroke-width='1.05' stroke-linejoin='round'%3E%3Cpath d='M16 4.9 25.6 10.4v11.2L16 27.1 6.4 21.6V10.4z'/%3E%3Ccircle cx='16' cy='16' r='4.3'/%3E%3C/g%3E%3C/svg%3E"),
-    /* la lueur d'une baladeuse au-dessus du plan */
-    radial-gradient(115% 65% at 50% -12%,
-      color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%),
-    /* les lignes fortes, tous les cinq carreaux */
-    linear-gradient(color-mix(in srgb, var(--encre) 6%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--encre) 6%, transparent) 1px, transparent 1px),
-    /* le quadrillage fin */
-    linear-gradient(color-mix(in srgb, var(--encre) 3.5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--encre) 3.5%, transparent) 1px, transparent 1px);
-  background-size: auto, 340px 340px, auto, 130px 130px, 130px 130px, 26px 26px, 26px 26px;
-  background-position: center, right -70px bottom -80px, center, 0 0, 0 0, 0 0, 0 0;
-  background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, repeat, repeat;
+    /* le grain d'une tôle brossée : une seule direction, jamais une grille */
+    repeating-linear-gradient(112deg,
+      color-mix(in srgb, var(--encre) 2.6%, transparent) 0 1px,
+      transparent 1px 9px),
+    /* la lueur d'une baladeuse, au-dessus du plan */
+    radial-gradient(120% 68% at 50% -14%,
+      color-mix(in srgb, var(--accent) 9%, transparent), transparent 64%),
+    /* et son reflet froid, qui remonte du sol */
+    radial-gradient(95% 55% at 12% 108%,
+      color-mix(in srgb, var(--actif) 8%, transparent), transparent 60%);
+  background-size: auto, 340px 340px, auto, auto, auto;
+  background-position: center, right -70px bottom -80px, center, center, center;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat, no-repeat;
   background-attachment: fixed;
   font-size: 14.5px;
 }
@@ -2141,10 +2142,10 @@ body {
 }
 
 /* — la bande du haut : ce qui réclame une décision aujourd'hui — */
-.brief { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.brief { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .brief-item {
-  display: flex; align-items: center; gap: 11px;
-  padding: 11px 15px 11px 13px; border-radius: var(--r-l);
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px 8px 10px; border-radius: var(--r-l);
   background: var(--plan); border: 1px solid var(--trait);
   border-left: 3px solid var(--ton, var(--encre-3));
   box-shadow: var(--ombre); text-align: left;
@@ -2152,10 +2153,13 @@ body {
 }
 button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--ton) 50%, transparent); }
 .brief-item .val {
-  font-family: var(--din); font-size: 26px; font-weight: 700; line-height: 1;
+  font-family: var(--din); font-size: 21px; font-weight: 700; line-height: 1;
   letter-spacing: -.015em; font-variant-numeric: tabular-nums; color: var(--ton, var(--encre));
 }
-.brief-item .leg { font-size: 12.5px; color: var(--encre-2); line-height: 1.25; max-width: 15ch; }
+.brief-item .val small { font-size: .62em; }
+/* Deux lignes suffisent : à 14ch, « places électronique libres » en prenait
+   trois et le compteur grandissait pour rien. */
+.brief-item .leg { font-size: 11.5px; color: var(--encre-2); line-height: 1.25; max-width: 17ch; }
 .brief-item.calme .val { color: var(--encre-3); }
 
 /* --- l'équipe, dans les paramètres ---------------------------------------- */
