@@ -482,8 +482,11 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
    PLANNING
    Une grille : une colonne par personne, une bande par jour.
    ========================================================================== */
+/* `align-content: start` : sans lui, une grille plus haute que son contenu
+   étire ses rangées à parts égales, et une journée vide devenait aussi haute
+   qu'une journée pleine. */
 .planning {
-  display: grid;
+  display: grid; align-content: start;
   grid-template-columns: 108px minmax(0, 1fr);
   gap: 1px;
   background: var(--trait);
@@ -493,35 +496,115 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
   box-shadow: var(--ombre);
 }
 .pl-jour {
-  background: var(--plan-2); padding: 12px 13px;
-  display: flex; flex-direction: column; gap: 2px;
+  background: var(--plan-2); padding: 9px 12px;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
 }
-.pl-jour b { font-family: var(--din); font-size: 14px; font-weight: 600; }
-.pl-jour span { font-size: 11.5px; color: var(--encre-3); }
+.pl-jour b { font-family: var(--din); font-size: 13.5px; font-weight: 600; line-height: 1.2; }
+.pl-jour span { font-size: 11px; color: var(--encre-3); line-height: 1.2; }
 .pl-jour.jour-j { background: var(--accent-voile); }
 .pl-jour.jour-j b { color: var(--accent); }
 
-.pl-case {
-  background: var(--plan); padding: 8px;
-  display: flex; flex-direction: column; gap: 6px; min-height: 92px;
+/* --- la frise d'une journée ------------------------------------------------
+   L'ouverture à gauche, la fermeture à droite, la coupure du midi repliée en
+   un trait. Une boîte prend sa vraie place : voir les trous devient immédiat. */
+.pl-coin { background: var(--plan-2); }
+.pl-echelle {
+  position: relative; height: 26px; background: var(--plan-2);
 }
-.pl-case.jour-j { background: color-mix(in srgb, var(--accent) 4%, var(--plan)); }
+.pl-h {
+  position: absolute; left: var(--x); top: 6px; transform: translateX(-50%);
+  font-family: var(--chiffre); font-size: 10.5px; color: var(--encre-3);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.pl-h.bord { color: var(--encre-2); font-weight: 700; }
+.pl-h.debut { transform: none; margin-left: 4px; }
+.pl-h.fin { transform: translateX(-100%); margin-left: -4px; }
+
+/* `min-height` et non `height` : une hauteur fixe ne s'étire pas avec sa
+   rangée, et la colonne des jours — plus haute — laissait un vide sous la
+   frise. */
+.pl-piste {
+  position: relative; background: var(--plan);
+  min-height: calc(var(--lignes) * 44px + 12px);
+  overflow: hidden;
+}
+.pl-piste.jour-j { background: color-mix(in srgb, var(--accent) 4%, var(--plan)); }
 /* Ce qui est derrière nous se relit, mais ne se planifie plus. */
-.pl-jour.passe, .pl-case.passe { opacity: .62; }
+.pl-jour.passe, .pl-piste.passe { opacity: .62; }
+
+/* les heures pleines, en fond : des repères, pas un quadrillage */
+.pl-trait {
+  position: absolute; left: var(--x); top: 0; bottom: 0; width: 1px;
+  background: var(--trait-fin);
+}
+/* la coupure du midi : deux heures qui n'existent pas sur la frise */
+.pl-coupure {
+  position: absolute; left: var(--x); top: 0; bottom: 0; width: 3px;
+  transform: translateX(-1px);
+  background: repeating-linear-gradient(45deg, var(--trait) 0 2px, transparent 2px 4px);
+}
+/* l'instant présent */
+.pl-maintenant {
+  position: absolute; left: var(--x); top: 0; bottom: 0; width: 2px;
+  background: var(--occupe); z-index: 3;
+}
+.pl-maintenant::before {
+  content: ''; position: absolute; left: 50%; top: 0; transform: translate(-50%, -2px);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--occupe);
+}
+
+.pl-bloc {
+  position: absolute; left: var(--x); width: var(--w); min-width: 54px;
+  top: calc(var(--l) * 44px + 6px); height: 38px;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  padding: 4px 7px; text-align: left; overflow: hidden;
+  border-radius: var(--r); border: 1px solid transparent;
+  border-left: 3px solid hsl(var(--teinte, 220) 55% 45%);
+  background: color-mix(in srgb, hsl(var(--teinte, 220) 55% 45%) 13%, var(--plan));
+  cursor: pointer; transition: transform .06s, box-shadow .12s;
+  z-index: 2;
+}
+.pl-bloc:hover { box-shadow: var(--ombre); z-index: 4; }
+.pl-bloc:active { transform: translateY(1px); }
+.pl-bloc.pont { border-top: 1px solid hsl(var(--teinte, 220) 55% 45%); }
+.pl-bloc.fini { opacity: .5; }
+.pl-bloc.fini .pl-bloc-t { text-decoration: line-through; }
+.pl-bloc-tete { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.pl-bloc-h {
+  font-family: var(--chiffre); font-size: 10.5px; font-weight: 700; flex: none;
+  color: hsl(var(--teinte, 220) 55% 38%); line-height: 1.2;
+}
+.pl-bloc-t {
+  font-size: 12px; font-weight: 600; color: var(--encre); line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pl-bloc-s {
+  font-size: 10.5px; color: var(--encre-2); line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Étroite, une boîte laisse tomber ce qui ne tient pas : d'abord la
+   prestation, puis le nom. L'heure reste toujours. */
+.pl-bloc { container-type: inline-size; }
+@container (max-width: 118px) { .pl-bloc-s { display: none; } }
+@container (max-width: 74px) { .pl-bloc-t { display: none; } }
+
 .pl-charge {
-  margin-left: auto; font-family: var(--chiffre); font-size: 11px;
+  margin-top: 2px; font-family: var(--chiffre); font-size: 10.5px;
   color: var(--encre-3); font-variant-numeric: tabular-nums;
 }
 .pl-charge.plein { color: var(--occupe); font-weight: 700; }
+.pl-charge.libre { color: var(--libre); font-family: var(--din); font-size: 10.5px;
+  letter-spacing: .08em; text-transform: uppercase; }
 .pl-plus {
-  border: 1px dashed var(--trait); border-radius: var(--r);
-  padding: 5px; font-size: 11.5px; color: var(--encre-3);
-  display: flex; align-items: center; justify-content: center; gap: 5px;
+  position: absolute; right: 6px; top: 6px; z-index: 5;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px dashed var(--trait); color: var(--encre-3);
+  display: grid; place-items: center;
   opacity: 0; transition: opacity .12s, border-color .12s, color .12s;
 }
-.pl-plus svg { width: 13px; height: 13px; }
-.pl-case:hover .pl-plus, .pl-plus:focus-visible { opacity: 1; }
-.pl-plus:hover { border-color: var(--accent); color: var(--accent); }
+.pl-plus svg { width: 14px; height: 14px; }
+.pl-piste:hover .pl-plus, .pl-plus:focus-visible { opacity: 1; }
+.pl-plus:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
 
 /* Qui porte quelle couleur. Le nom reste écrit : deux teintes voisines, un
    écran d'atelier mal réglé, un daltonien — la couleur seule ne dit rien. */
@@ -535,35 +618,6 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 .pl-leg:first-child { padding-left: 11px; }
 .pl-leg:hover { border-color: var(--encre-3); color: var(--encre); }
 .pl-leg.on { border-color: var(--accent); color: var(--encre); box-shadow: var(--ombre); }
-/* La largeur libérée par les colonnes revient aux rendez-vous : ceux d'une
-   même journée se rangent côte à côte, dans l'ordre des heures, et la semaine
-   entière tient sous les yeux. */
-.pl-case { flex-direction: row; flex-wrap: wrap; align-content: flex-start; }
-.pl-case > .rdv { flex: 1 1 220px; width: auto; max-width: 330px; }
-.pl-case > .pl-plus { flex: 0 0 auto; align-self: flex-start; padding: 5px 10px; }
-
-/* La barre de gauche du rendez-vous prend la couleur de la personne : c'est
-   elle qui remplace la colonne où il se tenait avant. */
-.planning .rdv { border-left-color: hsl(var(--teinte, 220) 55% 45%); }
-.planning .rdv .num { color: var(--encre); }
-.rdv-h .jeton-mini { width: 18px; height: 18px; font-size: 9.5px; }
-
-.rdv {
-  border-left: 3px solid currentColor; border-radius: 0 var(--r) var(--r) 0;
-  padding: 6px 9px; cursor: pointer; text-align: left;
-  background: var(--plan-2); display: block; width: 100%;
-  transition: transform .06s, background .12s;
-}
-.rdv:hover { background: var(--relief); }
-.rdv:active { transform: translateY(1px); }
-.rdv.fini { opacity: .5; }
-.rdv.fini .rdv-t { text-decoration: line-through; }
-.rdv-h { display: flex; align-items: baseline; gap: 7px; }
-.rdv-h .num { font-size: 12px; font-weight: 700; }
-.rdv-duree { font-family: var(--din); font-size: 10.5px; letter-spacing: .04em; opacity: .75; margin-left: auto; }
-.rdv-c { color: var(--encre); font-size: 12.5px; font-weight: 600; margin-top: 3px; }
-.rdv-t { color: var(--encre-2); font-size: 12px; line-height: 1.3; margin-top: 1px; }
-.rdv-s { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
 .emplacement {
   font-family: var(--din); font-size: 9px; letter-spacing: .1em;
   padding: 1px 5px; border-radius: 2px;
@@ -1376,6 +1430,8 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   max-height: 88vh; display: flex; flex-direction: column;
   animation: monte .2s cubic-bezier(.2,.8,.3,1);
 }
+/* Le menu montre huit destinations : il lui faut un peu plus de large. */
+.modale.large { width: min(680px, 100%); }
 @keyframes monte { from { transform: translateY(14px) scale(.99); opacity: 0; } }
 .modale.xl { width: min(880px, 100%); }
 /* Les fenêtres à formulaire enveloppent corps + pied dans un <form> : sans
@@ -1615,15 +1671,18 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   .pl-plus { min-height: 40px; min-width: 40px; font-size: 12.5px; }
   /* renommer une section se fait au doigt dans le catalogue */
   .titre-famille { min-height: 40px; }
-  .rdv { padding: 9px 11px; }
   .a-poser { padding: 11px 13px; }
 
   .planning { grid-template-columns: 1fr; }
-  /* Au doigt, la journée se lit de haut en bas : une carte par ligne, pleine
-     largeur. Sans `nowrap`, l'empilement se remettrait en colonnes. */
-  .pl-case { min-height: 0; flex-direction: column; flex-wrap: nowrap; }
-  .pl-case > .rdv { flex: 0 0 auto; width: 100%; max-width: none; }
-  .pl-plus { opacity: 1; }
+  /* Au doigt, la frise reste lisible : les boîtes s'empilent, une par ligne,
+     et l'échelle des heures disparaît — on ne vise pas un créneau au doigt. */
+  .pl-echelle, .pl-coin { display: none; }
+  .pl-piste { height: auto; min-height: 0; padding: 8px; display: flex;
+    flex-direction: column; gap: 6px; }
+  .pl-bloc { position: static; width: auto; min-width: 0; height: auto; }
+  .pl-trait, .pl-coupure, .pl-maintenant { display: none; }
+  .pl-plus { position: static; opacity: 1; width: auto; height: 36px;
+    border-radius: var(--r); align-self: flex-start; padding: 0 12px; }
   .a-poser { max-width: none; width: 100%; }
   .mobile-nav button.on { color: var(--accent); }
   .mobile-nav .pastille {
@@ -1861,49 +1920,7 @@ body {
   padding: var(--sur-haut) calc(20px + var(--sur-droite)) 0 calc(20px + var(--sur-gauche));
   height: auto; min-height: calc(var(--tete) + var(--sur-haut));
 }
-.commande .logo { width: 32px; height: 32px; border-radius: 8px; padding: 4px; }
-.commande-nom { font-family: var(--din); font-size: 16px; font-weight: 700; letter-spacing: .01em; }
-
-.onglets { display: flex; gap: 2px; margin-left: 8px; overflow-x: auto; scrollbar-width: none; }
-.onglets::-webkit-scrollbar { display: none; }
-.onglet {
-  position: relative; white-space: nowrap;
-  padding: 0 13px; height: var(--tete);
-  display: inline-flex; align-items: center; gap: 7px;
-  color: var(--encre-2); font-size: 13.5px; font-weight: 500;
-  border-bottom: 2px solid transparent;
-  transition: color .12s, border-color .12s;
-}
-.onglet svg { width: 16px; height: 16px; opacity: .7; }
-.onglet:hover { color: var(--encre); }
-.onglet.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-.onglet.on svg { opacity: 1; }
-.onglet .pastille {
-  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  background: var(--occupe); color: #fff;
-  font-family: var(--chiffre); font-size: 10.5px; font-weight: 700;
-  display: grid; place-items: center;
-}
-
 .commande .fin { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.puce-user {
-  display: flex; align-items: center; gap: 8px;
-  padding: 5px 10px 5px 5px; border-radius: 20px; border: 1px solid var(--trait);
-  background: var(--plan);
-}
-.puce-user:hover { border-color: var(--encre-3); }
-.puce-user .jeton { width: 26px; height: 26px; font-size: 12px; }
-.puce-user b { font-size: 13px; font-weight: 600; }
-
-/* Sur téléphone, le jeton d'initiale suffit : le prénom écrit prend une place
-   qui manque aux deux cloches, et on sait qui on est sans se le lire. */
-@media (max-width: 560px) {
-  /* le jeton reste rond, mais la zone touchée fait la taille d'un doigt */
-  .puce-user { gap: 0; padding: 6px; border-radius: 50%; min-height: 42px; min-width: 42px;
-               justify-content: center; }
-  .puce-user b { display: none; }
-  .puce-user .jeton { width: 30px; height: 30px; font-size: 13px; }
-}
 
 /* la zone de travail */
 .plateau { flex: 1; padding: 20px; }
@@ -2247,9 +2264,8 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
     padding: var(--sur-haut) calc(12px + var(--sur-droite)) 0 calc(12px + var(--sur-gauche));
     gap: 10px;
   }
-  /* une seule navigation sur téléphone : celle du bas, sous le pouce */
-  .onglets { display: none; }
-  .commande-nom { font-size: 15px; }
+  /* le bouton du menu garde son nom d'écran : c'est le seul repère du haut */
+  .btn.tout { font-size: 13.5px; padding: 8px 12px 8px 10px; min-height: 42px; }
   .commande .fin { margin-left: auto; gap: 4px; }
   /* en haut à droite il ne reste que la loupe : le libellé mangerait la place */
   .cherche-vite span { display: none; }
@@ -2387,6 +2403,29 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
 .voix-nom label { font-size: 12px; color: var(--encre-3); }
 .voix-nom .saisie { max-width: 170px; }
 .voix-nom.eteint { opacity: .55; }
+
+/* Le bouton qui ouvre tout : il porte le nom de l'écran où l'on est, et le
+   compte de ce qui attend ailleurs. C'est la seule chose à viser. */
+.btn.tout {
+  gap: 9px; padding: 8px 14px 8px 11px; font-size: 14px; font-weight: 600;
+  border-color: var(--trait); position: relative;
+}
+.btn.tout:hover { border-color: var(--accent); color: var(--accent); }
+.btn.tout .pastille { position: static; margin-left: 2px; }
+
+.tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); gap: 8px; }
+.tuile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 9px;
+  padding: 14px 13px 13px; border-radius: var(--r-l);
+  border: 1px solid var(--trait); background: var(--plan-2); color: var(--encre-2);
+  min-height: 84px; transition: border-color .12s, color .12s, transform .06s;
+}
+.tuile svg { width: 22px; height: 22px; }
+.tuile b { font-size: 13.5px; font-weight: 600; color: var(--encre); }
+.tuile:hover { border-color: var(--accent); color: var(--accent); }
+.tuile:active { transform: translateY(1px); }
+.tuile.on { border-color: var(--accent); background: var(--accent-voile); color: var(--accent); }
+.tuile .pastille { position: absolute; top: 9px; right: 9px; }
 
 .voix-groupe { display: flex; flex-direction: column; gap: 7px; }
 .voix-ligne {
@@ -6707,6 +6746,58 @@ function aPlanifier() {
 
 const heuresFr = (h) => (h % 1 === 0 ? h + ' h' : Math.floor(h) + ' h ' + Math.round((h % 1) * 60));
 
+/* ==========================================================================
+   La frise du planning
+   --------------------------------------------------------------------------
+   Une liste de cartes ne dit pas ce qu'un planning doit dire d'abord : où sont
+   les trous. On déroule donc la journée de l'ouverture à la fermeture : chaque
+   rendez-vous prend sa vraie place et sa vraie largeur, et un coup d'œil suffit
+   pour voir qu'il reste deux heures libres le jeudi après-midi.
+
+   La coupure du midi est repliée — elle ne prend pas de place, un trait la
+   marque — et les rendez-vous qui se chevauchent descendent d'une ligne,
+   comme dans un agenda.
+   ========================================================================== */
+
+/** Où tombe une minute de la journée, en pourcentage de la frise. */
+function positionFrise(minutes, tranches, total) {
+  let passe = 0;
+  for (const [a, b] of tranches) {
+    if (minutes <= a) return (passe / total) * 100;
+    if (minutes <= b) return ((passe + (minutes - a)) / total) * 100;
+    passe += b - a;
+  }
+  return 100;
+}
+
+/** Empiler ce qui se chevauche : chaque rendez-vous reçoit sa ligne. */
+function lignesFrise(rdv, tranches, total) {
+  const lignes = [];       // fin (en %) de la dernière boîte de chaque ligne
+  return rdv.map(p => {
+    const debut = enMinutes(p.heure, tranches[0][0]);
+    const fin = debut + (Number(p.duree) || 1) * 60;
+    const x = positionFrise(debut, tranches, total);
+    const x2 = Math.max(positionFrise(fin, tranches, total), x + 3);
+    let ligne = lignes.findIndex(f => x >= f - 0.01);
+    if (ligne < 0) { ligne = lignes.length; }
+    lignes[ligne] = x2;
+    return { p, x, largeur: x2 - x, ligne };
+  });
+}
+
+/** Les heures qu'on écrit au-dessus de la frise : pleines, et les bords. */
+function marquesFrise(tranches, total) {
+  const marques = [];
+  tranches.forEach(([a, b]) => {
+    for (let m = Math.ceil(a / 60) * 60; m <= b; m += 60) {
+      marques.push({ m, bord: m === a || m === b, cote: m === a ? 'debut' : m === b ? 'fin' : '' });
+    }
+  });
+  /* Deux marques tombent au même endroit à la coupure : la fin du matin et le
+     début de l'après-midi. On les range de part et d'autre du trait. */
+  return marques.map(x => ({ ...x, pos: positionFrise(x.m, tranches, total), texte: enHeure(x.m) }));
+}
+
 function vuePlanning() {
   const mois = semainesDuMois(S.moisPlanning || 0);
   // à l'ouverture on se pose sur la semaine en cours, si elle est dans ce mois
@@ -6734,35 +6825,51 @@ function vuePlanning() {
   const capaciteJour = heuresOuvertes(DB.etat.reglages)
     * (suivi ? 1 : Math.max(1, DB.etat.utilisateurs.length));
 
-  const carteRdv = (p) => {
-    const e = EMPLACEMENTS[p.emplacement] || EMPLACEMENTS.sol;
-    const immat = immatRdv(p);
-    const u = DB.utilisateur(p.userId);
-    return `<button class="rdv ${p.fait ? 'fini' : ''}" style="--teinte:${u ? u.teinte : 220}"
-                    data-act="planif-ouvrir" data-id="${p.id}">
-      <div class="rdv-h">
-        <span class="jeton-mini" title="${u ? esc(u.nom) : 'Personne'}">${u ? esc(u.init) : '?'}</span>
-        <span class="num">${esc(p.heure)}</span>
-        <span class="rdv-duree">${heuresFr(p.duree)}</span>
-      </div>
-      ${p.client ? `<div class="rdv-c">${esc(p.client)}</div>` : ''}
-      <div class="rdv-t">${esc(libelleRdv(p))}</div>
-      <div class="rdv-s">
-        <span class="emplacement ${p.emplacement === 'pont' ? 'pont' : ''}">${esc(e.court)}</span>
-        ${immat ? `<span class="plaque">${esc(immat)}</span>` : ''}
-      </div>
-    </button>`;
+  const tranches = tranchesOuverture(DB.etat.reglages);
+  const totalMin = tranches.reduce((s, [a, b]) => s + (b - a), 0);
+
+  /* La piste d'une journée : la frise, ce qui y est posé, et le trait du
+     moment présent — c'est lui qui dit d'un coup d'œil où on en est. */
+  const piste = (jour) => {
+    const poses = lignesFrise(rdvVus(jour.ts), tranches, totalMin);
+    const lignes = Math.max(1, ...poses.map(x => x.ligne + 1));
+    const passe = jour.ts < aujourdhui;
+    const maintenant = jour.ts === aujourdhui
+      ? positionFrise(new Date().getHours() * 60 + new Date().getMinutes(), tranches, totalMin) : null;
+
+    return `<div class="pl-piste ${jour.ts === aujourdhui ? 'jour-j' : ''} ${passe ? 'passe' : ''}"
+                 style="--lignes:${lignes}">
+      ${tranches.slice(1).map(([a]) => `<span class="pl-coupure" style="--x:${positionFrise(a, tranches, totalMin)}%"
+              title="Coupure du midi"></span>`).join('')}
+      ${marquesFrise(tranches, totalMin).filter(m => !m.bord)
+        .map(m => `<span class="pl-trait" style="--x:${m.pos}%"></span>`).join('')}
+      ${maintenant !== null ? `<span class="pl-maintenant" style="--x:${maintenant}%"></span>` : ''}
+      ${poses.map(({ p, x, largeur, ligne }) => boiteRdv(p, x, largeur, ligne)).join('')}
+      ${passe ? '' : `<button class="pl-plus" data-act="planif-nouveau"
+        data-jour="${jour.ts}" data-user="${S.planningQui || S.userId}"
+        title="Ajouter un rendez-vous">${ic('plus')}</button>`}
+    </div>`;
   };
 
-  /* Une seule case par jour : tous les rendez-vous de l'atelier y sont, dans
-     l'ordre des heures. C'est la couleur qui dit de qui il s'agit — une
-     colonne par personne coûtait toute la largeur de l'écran, et il en
-     faudrait une de plus à chaque embauche. */
-  const cellule = (jour) => `<div class="pl-case ${jour.ts === aujourdhui ? 'jour-j' : ''} ${jour.ts < aujourdhui ? 'passe' : ''}">
-      ${rdvVus(jour.ts).map(carteRdv).join('')}
-      ${jour.ts < aujourdhui ? '' : `<button class="pl-plus" data-act="planif-nouveau"
-        data-jour="${jour.ts}" data-user="${S.planningQui || S.userId}">${ic('plus')} Ajouter</button>`}
-    </div>`;
+  /* Une boîte porte la couleur de la personne, son heure et son client. Trop
+     étroite pour tout dire, elle garde l'essentiel — le survol dit le reste. */
+  const boiteRdv = (p, x, largeur, ligne) => {
+    const u = DB.utilisateur(p.userId);
+    const e = EMPLACEMENTS[p.emplacement] || EMPLACEMENTS.sol;
+    const immat = immatRdv(p);
+    return `<button class="pl-bloc ${p.fait ? 'fini' : ''} ${p.emplacement === 'pont' ? 'pont' : ''}"
+              style="--teinte:${u ? u.teinte : 220};--x:${x}%;--w:${largeur}%;--l:${ligne}"
+              data-act="planif-ouvrir" data-id="${p.id}"
+              title="${esc(p.heure)} · ${heuresFr(p.duree)} · ${esc(libelleRdv(p))}${
+                p.client ? ' · ' + esc(p.client) : ''}${u ? ' · ' + esc(u.nom) : ''}${
+                immat ? ' · ' + esc(immat) : ''} · ${esc(e.nom)}">
+      <span class="pl-bloc-tete">
+        <span class="pl-bloc-h">${esc(p.heure)}</span>
+        <span class="pl-bloc-t">${esc(p.client || libelleRdv(p))}</span>
+      </span>
+      <span class="pl-bloc-s">${esc(libelleRdv(p))}${immat ? ' · ' + esc(immat) : ''}</span>
+    </button>`;
+  };
 
   const fin = lundi + (jours.length - 1) * JOUR;
 
@@ -6822,16 +6929,25 @@ function vuePlanning() {
     </div>
 
     <div class="planning" id="planning-glisse">
+      ${/* L'échelle des heures, une fois pour toute la semaine. */ ''}
+      <div class="pl-coin"></div>
+      <div class="pl-echelle">
+        ${marquesFrise(tranches, totalMin).map(m =>
+          `<span class="pl-h ${m.bord ? 'bord' : ''} ${m.cote}" style="--x:${m.pos}%">${esc(m.texte)}</span>`).join('')}
+      </div>
+
       ${jours.map(j => {
-        const charge = rdvVus(j.ts).reduce((s, p) => s + p.duree, 0);
+        const liste = rdvVus(j.ts);
+        const charge = liste.reduce((s, p) => s + p.duree, 0);
         const plein = charge > capaciteJour;
         return `
-        <div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''}">
+        <div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''} ${j.ts < aujourdhui ? 'passe' : ''}">
           <b>${esc(j.nom)}</b>
           <span class="num">${dateCourte(j.ts)}</span>
-          ${charge ? `<span class="pl-charge ${plein ? 'plein' : ''}">${heuresFr(charge)}</span>` : ''}
+          ${charge ? `<span class="pl-charge ${plein ? 'plein' : ''}">${heuresFr(charge)}</span>`
+                   : '<span class="pl-charge libre">libre</span>'}
         </div>
-        ${cellule(j)}`;
+        ${piste(j)}`;
       }).join('')}
     </div>
   </div>`;
@@ -14869,18 +14985,17 @@ rendre = function rendreV2() {
 
   app.innerHTML = `
     <div class="coque2">
+      ${/* Une seule porte vers tous les écrans : la barre du haut ne sert plus
+            qu'à ce qui doit rester sous la main — chercher, parler, être averti. */ ''}
       <header class="commande">
-        ${marque()}
-        <span class="commande-nom">${esc(DB.etat.reglages.nomOutil || 'Atelier')}</span>
-        <nav class="onglets">
-          ${MENU2.map(m => {
-            const n = badges[m.id] || 0;
-            const actif = vue === m.id || (retour && retour.vers === m.id);
-            return `<button class="onglet ${actif ? 'on' : ''}" data-act="aller" data-vue="${m.id}">
-              ${ic(m.ico)}<span>${esc(m.nom)}</span>${n ? `<span class="pastille">${n}</span>` : ''}
-            </button>`;
-          }).join('')}
-        </nav>
+        <button class="btn tout" data-act="menu-plus" title="Tous les écrans">
+          ${ic('plus-menu', 2)}<span>${esc(MENU2.find(m => m.id === vue)
+            ? MENU2.find(m => m.id === vue).nom : 'Menu')}</span>
+          ${(() => {
+            const n = Object.values(badges).reduce((s, x) => s + (x || 0), 0);
+            return n ? `<span class="pastille">${n}</span>` : '';
+          })()}
+        </button>
         <div class="fin">
           <button class="btn cherche-vite" data-act="recherche" title="Rechercher">
             ${ic('loupe')}<span>Rechercher</span>
@@ -14907,10 +15022,6 @@ rendre = function rendreV2() {
               ${ic('agenda', 1.9)}${n ? `<span class="pastille">${n}</span>` : ''}
             </button>`;
           })()}
-          <button class="puce-user" data-act="menu-plus">
-            <span class="jeton" style="--teinte:${moi().teinte}">${esc(moi().init)}</span>
-            <b>${esc(moi().nom)}</b>
-          </button>
         </div>
       </header>
 
@@ -15012,40 +15123,43 @@ function navMobile2(badges) {
 /* Le menu « Plus » de la v1 pointe vers MENU.slice(5) : on le refait ici pour
    qu'il propose les écrans absents de la barre du bas. */
 modalePlus = function modalePlusV2() {
-  const ligne = (ico, teinte, titre, sous, attrs, marqueur) =>
-    `<button class="profil" ${attrs}>
-      <span class="jeton" style="--teinte:${teinte}">${ico}</span>
-      <div><b>${esc(titre)}</b>${sous ? `<small>${esc(sous)}</small>` : ''}</div>
-      ${marqueur || `<span class="fleche">${ic('fleche')}</span>`}
-    </button>`;
+  const badges = {
+    atelier:  appelsATraiter().length + aRelancer().length,
+    parking:  pretsARendre().length,
+    memos:    mesMemos(false).length,
+    planning: demandesPro().length,
+    reglages: devisATransferer().length
+  };
 
-  return `<div class="voile" data-voile><div class="modale">
+  const tuile = (id, nom, ico, n) => `<button class="tuile ${S.vue === id ? 'on' : ''}"
+      data-act="aller" data-vue="${id}">
+    ${ic(ico, 1.6)}<b>${esc(nom)}</b>
+    ${n ? `<span class="pastille">${n}</span>` : ''}
+  </button>`;
+
+  const u = moi();
+  return `<div class="voile" data-voile><div class="modale large">
     <div class="modale-tete">
-      <h2 style="font-size:18px">Menu</h2>
+      <div><h2 style="font-size:18px">Où allez-vous ?</h2>
+        <div class="mini">Tout l'outil tient ici — ou dites « ${esc(motAppel())}, ouvre le planning ».</div></div>
       <button class="btn nu" style="margin-left:auto" data-act="fermer-modale">${ic('croix')}</button>
     </div>
-    <div class="modale-corps">
-      <div class="etiq">Autres écrans</div>
-      <div class="pile" style="gap:6px">
-        ${MENU2.slice(4).map(m => {
-          // les demandes en attente de transfert se voient depuis le menu
-          const n = m.id === 'reglages' ? devisATransferer().length : 0;
-          return ligne(ic(m.ico), 220, m.nom, n ? `${n} demande${n > 1 ? 's' : ''} à passer dans EBP` : '',
-            `data-act="aller" data-vue="${m.id}"`,
-            n ? `<span class="badge t-attente" style="margin-left:auto">${n}</span>` : null);
-        }).join('')}
-        ${ligne(ic('devis'), 220, 'Tous les devis', 'Y compris facturés et refusés', 'data-act="aller" data-vue="devis"')}
+    <div class="modale-corps pile">
+      <div class="tuiles">
+        ${MENU2.map(m => tuile(m.id, m.nom, m.ico, badges[m.id])).join('')}
+        ${tuile('devis', 'Tous les devis', 'devis', 0)}
       </div>
-      <div class="etiq" style="margin-top:8px">Qui travaille</div>
-      <div class="pile" style="gap:6px">
-        ${DB.etat.utilisateurs.map(u => ligne(
-          esc(u.init), u.teinte, u.nom, u.fonction,
-          `data-act="connexion" data-id="${u.id}"`,
-          u.id === S.userId ? '<span class="badge t-ok" style="margin-left:auto">Vous</span>' : null
-        )).join('')}
+
+      <div class="etiq">Qui travaille</div>
+      <div class="rangee" style="flex-wrap:wrap;gap:7px">
+        ${DB.etat.utilisateurs.map(x => `<button class="pl-leg ${x.id === S.userId ? 'on' : ''}"
+            data-act="connexion" data-id="${x.id}">
+          <span class="jeton-mini" style="--teinte:${x.teinte}">${esc(x.init)}</span>${esc(x.nom)}
+        </button>`).join('')}
       </div>
     </div>
     <div class="modale-pied">
+      <span class="mini" style="margin-right:auto">Connecté : <b>${esc(u.nom)}</b> · ${esc(u.fonction)}</span>
       <button class="btn" data-act="verrouiller">${ic('cadenas')} Verrouiller</button>
     </div>
   </div></div>`;
