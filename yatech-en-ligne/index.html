@@ -6446,11 +6446,25 @@ function semaineDuJour(semaines) {
   return semaines.findIndex(s => j >= s.lundi && j <= s.dimanche);
 }
 
+/* La semaine qu'on regarde : celle qu'on a choisie tant qu'elle existe dans ce
+   mois, sinon celle du jour. Tout ce qui a besoin de la connaître passe par
+   ici — le titre de l'écran est calculé avant la grille, et s'il se posait la
+   question dans son coin il annoncerait la semaine 1 pendant que la grille
+   affiche déjà la semaine en cours. */
+function semaineAffichee(mois) {
+  if (S.semaineDuMois === undefined || S.semaineDuMois === null
+      || S.semaineDuMois < 0 || S.semaineDuMois >= mois.semaines.length) {
+    const i = semaineDuJour(mois.semaines);
+    S.semaineDuMois = i >= 0 ? i : 0;
+  }
+  return S.semaineDuMois;
+}
+
 /* Passer à la semaine voisine. Au bout du mois, on continue naturellement sur
    le mois suivant ou précédent : sinon le geste s'arrêterait sur un mur. */
 function glisserSemaine(sens) {
   const mois = semainesDuMois(S.moisPlanning || 0);
-  const i = (S.semaineDuMois || 0) + sens;
+  const i = semaineAffichee(mois) + sens;
   if (i < 0) {
     S.moisPlanning = (S.moisPlanning || 0) - 1;
     S.semaineDuMois = Math.max(0, semainesDuMois(S.moisPlanning).semaines.length - 1);
@@ -6505,12 +6519,7 @@ const heuresFr = (h) => (h % 1 === 0 ? h + ' h' : Math.floor(h) + ' h ' + Math.r
 function vuePlanning() {
   const mois = semainesDuMois(S.moisPlanning || 0);
   // à l'ouverture on se pose sur la semaine en cours, si elle est dans ce mois
-  if (S.semaineDuMois === undefined || S.semaineDuMois === null
-      || S.semaineDuMois >= mois.semaines.length) {
-    const i = semaineDuJour(mois.semaines);
-    S.semaineDuMois = i >= 0 ? i : 0;
-  }
-  const sem = mois.semaines[S.semaineDuMois] || mois.semaines[0];
+  const sem = mois.semaines[semaineAffichee(mois)] || mois.semaines[0];
   const lundi = sem.lundi;
   const jours = JOURS_SEMAINE.slice(0, DB.etat.reglages.joursOuvres || 6)
     /* On avance de jour en jour par le calendrier, jamais en ajoutant 24 h :
@@ -13364,8 +13373,8 @@ function titreEcran(vue) {
   }
   if (vue === 'planning') {
     const m = semainesDuMois(S.moisPlanning || 0);
-    const i = Math.min(Math.max(S.semaineDuMois || 0, 0), m.semaines.length - 1);
-    const s = m.semaines[i];
+    const i = semaineAffichee(m);
+    const s = m.semaines[i] || m.semaines[0];
     const nom = new Date(m.debut).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
     return ['Planning', nom.charAt(0).toUpperCase() + nom.slice(1)
             + ` · semaine ${i + 1} sur ${m.semaines.length}, du ${dateCourte(s.lundi)} au ${dateCourte(s.dimanche)}`];
