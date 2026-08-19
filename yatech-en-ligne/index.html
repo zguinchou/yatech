@@ -506,6 +506,8 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
   display: flex; flex-direction: column; gap: 6px; min-height: 92px;
 }
 .pl-case.jour-j { background: color-mix(in srgb, var(--accent) 4%, var(--plan)); }
+/* Ce qui est derrière nous se relit, mais ne se planifie plus. */
+.pl-jour.passe, .pl-case.passe { opacity: .62; }
 .pl-charge {
   margin-left: auto; font-family: var(--chiffre); font-size: 11px;
   color: var(--encre-3); font-variant-numeric: tabular-nums;
@@ -523,11 +525,16 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 
 /* Qui porte quelle couleur. Le nom reste écrit : deux teintes voisines, un
    écran d'atelier mal réglé, un daltonien — la couleur seule ne dit rien. */
-.pl-legende { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 16px; }
+.pl-legende { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .pl-leg {
   display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 11px 5px 6px; border-radius: 999px;
+  border: 1px solid var(--trait); background: var(--plan);
   font-size: 12.5px; color: var(--encre-2);
 }
+.pl-leg:first-child { padding-left: 11px; }
+.pl-leg:hover { border-color: var(--encre-3); color: var(--encre); }
+.pl-leg.on { border-color: var(--accent); color: var(--encre); box-shadow: var(--ombre); }
 /* La largeur libérée par les colonnes revient aux rendez-vous : ceux d'une
    même journée se rangent côte à côte, dans l'ordre des heures, et la semaine
    entière tient sous les yeux. */
@@ -972,33 +979,6 @@ body.avertie .commande, body.avertie .barre { top: var(--haut-avert, 62px); }
 }
 
 /* les semaines du mois, en onglets — on glisse le planning pour en changer */
-.semaines-mois { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-.semaines-mois::-webkit-scrollbar { display: none; }
-.sem-onglet {
-  position: relative; flex: 1; min-width: 74px;
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 8px 10px; border-radius: var(--r);
-  border: 1px solid var(--trait); background: var(--plan); color: var(--encre-2);
-}
-.sem-onglet b { font-family: var(--din); font-size: 13px; }
-.sem-onglet span { font-size: 11px; color: var(--encre-3); }
-.sem-onglet.on { border-color: var(--accent); color: var(--encre); box-shadow: var(--ombre); }
-.sem-onglet.on b { color: var(--accent); }
-.sem-onglet.sem-jour::after {
-  content: ''; position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
-  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
-}
-.sem-n {
-  position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px;
-  border-radius: 9px; background: var(--relief); color: var(--encre-2);
-  font-family: var(--chiffre); font-size: 10.5px; font-style: normal; font-weight: 700;
-  display: grid; place-items: center; box-shadow: 0 0 0 2px var(--fond);
-}
-.sem-onglet.on .sem-n { background: var(--accent); color: var(--accent-sur); }
-@media (max-width: 900px) {
-  .sem-onglet { min-width: 68px; min-height: 52px; }
-}
-
 /* les trois états d'une intervention, et sa corbeille */
 .etat-interv { padding: 2px; gap: 1px; }
 .etat-interv button { padding: 5px 8px; font-size: 11.5px; white-space: nowrap; }
@@ -2514,8 +2494,10 @@ const REGLAGES = {
 
   // le planning
   joursOuvres: 6,         // 5 = lundi-vendredi, 6 = jusqu'au samedi
-  heureDebut: '08:00',
+  heureDebut: '09:00',
   heureFin: '18:00',
+  pauseDebut: '12:00',    // la coupure du midi : on ne propose rien entre les deux
+  pauseFin: '14:00',
   pasPlanning: 30,        // finesse des créneaux, en minutes
   dureeDefaut: 1,         // durée proposée pour un nouveau rendez-vous, en heures
   joursReservables: 8,    // jusqu'où un confrère peut demander un créneau, en jours
@@ -2621,17 +2603,39 @@ const UTILISATEURS = [
 /* --- planning ------------------------------------------------------------ */
 const JOURS_SEMAINE = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
-/* Créneaux d'une demi-heure, entre l'ouverture et la fermeture réglées.
-   Le tableau est reconstruit sur place : tout ce qui le référence suit. */
+/** '09:30' → 570. Une heure illisible vaut l'ouverture plutôt qu'un NaN. */
+const enMinutes = (h, defaut) => {
+  const [a, b] = String(h || '').split(':');
+  const m = (+a) * 60 + (+b || 0);
+  return Number.isFinite(m) ? m : defaut;
+};
+const enHeure = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+
+/** Les deux tranches d'ouverture : le matin, puis l'après-midi. Un garage
+ *  ferme le midi — proposer 12 h 30 à un client ne mène qu'à un malentendu. */
+function tranchesOuverture(r) {
+  const debut = enMinutes(r && r.heureDebut, 540);
+  const fin = Math.max(enMinutes(r && r.heureFin, 1080), debut + 60);
+  let p1 = enMinutes(r && r.pauseDebut, 0), p2 = enMinutes(r && r.pauseFin, 0);
+  // une coupure hors des heures d'ouverture, ou à l'envers, n'en est pas une
+  if (!(p1 > debut && p2 > p1 && p2 < fin)) return [[debut, fin]];
+  return [[debut, p1], [p2, fin]];
+}
+
+/** Le total d'heures réellement ouvertes dans une journée. */
+function heuresOuvertes(r) {
+  return tranchesOuverture(r).reduce((s, [a, b]) => s + (b - a) / 60, 0);
+}
+
+/* Les créneaux proposés : de l'ouverture à la fermeture, la coupure du midi en
+   moins. Le tableau est reconstruit sur place : tout ce qui le référence suit. */
 const HEURES = [];
 function construireHeures(r) {
-  const min = (h) => { const [a, b] = String(h || '08:00').split(':'); return (+a || 8) * 60 + (+b || 0); };
-  const debut = min(r && r.heureDebut), fin = Math.max(min(r && r.heureFin), min(r && r.heureDebut) + 60);
   const pas = [15, 30, 60].includes(Math.round(r && r.pasPlanning)) ? Math.round(r.pasPlanning) : 30;
   HEURES.length = 0;
-  for (let m = debut; m <= fin; m += pas) {
-    HEURES.push(String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'));
-  }
+  tranchesOuverture(r).forEach(([debut, fin]) => {
+    for (let m = debut; m <= fin; m += pas) HEURES.push(enHeure(m));
+  });
   return HEURES;
 }
 construireHeures(REGLAGES);
@@ -3076,7 +3080,12 @@ const DB = {
     if (!e.reglages) e.reglages = neuf();
     else {
       const d = neuf();
+      /* La coupure du midi n'existait pas : les horaires enregistrés avant elle
+         couraient d'une traite. On pose la coupure, et l'ouverture suit — sauf
+         si elle avait été changée à la main, auquel cas elle est un choix. */
+      const avantPause = e.reglages.pauseDebut === undefined;
       Object.keys(d).forEach(k => { if (e.reglages[k] === undefined) e.reglages[k] = d[k]; });
+      if (avantPause && e.reglages.heureDebut === '08:00') e.reglages.heureDebut = d.heureDebut;
     }
     if (!e.reglages.nomsRangees) e.reglages.nomsRangees = {};
     if (!e.reglages.typesPlaces) e.reglages.typesPlaces = {};
@@ -3719,6 +3728,7 @@ const S = {
   zoomManuel: false,
   modale: null,
   volet: null,            // le seul réglage déplié, dans les paramètres
+  planningQui: null,      // la personne dont on suit le planning, ou tout l'atelier
   clientToken: null,     // vue « espace client »
   grilleToken: null,     // vue « grille tarifaire » d'un client
   clientEtape: 'infos'
@@ -5412,7 +5422,7 @@ function messagePret(o) {
     montant: d && d.lignes.length ? eur(totaux(d).ttc) : '',
     numero: d ? d.numero : '',
     garage: r.nom,
-    horaires: `${r.heureDebut} à ${r.heureFin}`
+    horaires: tranchesOuverture(r).map(([a, b]) => `${enHeure(a)} à ${enHeure(b)}`).join(' et ')
   }) + signature;
 }
 
@@ -5626,13 +5636,17 @@ function modalePlanif(ctx) {
           </datalist>
         </div>
 
+        ${/* On ne prend pas rendez-vous hier : le calendrier s'arrête à
+              aujourd'hui. Un rendez-vous déjà passé qu'on rouvre garde
+              pourtant son jour — sinon on ne pourrait plus le corriger. */ ''}
         <div class="champ-duo">
           <div class="champ"><label>Jour</label>
-            <input class="saisie" type="date" name="jourDate" value="${isoLocal(jour)}">
+            <input class="saisie" type="date" name="jourDate" value="${isoLocal(jour)}"
+                   min="${isoLocal(Math.min(minuit(Date.now()), minuit(jour)))}">
           </div>
           <div class="champ"><label>Heure d'arrivée</label>
             <select class="saisie" name="heure">
-              ${HEURES.map(h => `<option value="${h}" ${(p ? p.heure : '08:00') === h ? 'selected' : ''}>${h}</option>`).join('')}
+              ${HEURES.map(h => `<option value="${h}" ${(p ? p.heure : HEURES[0]) === h ? 'selected' : ''}>${h}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -6507,6 +6521,23 @@ function semaineAffichee(mois) {
   return S.semaineDuMois;
 }
 
+/** Est-on posé sur la semaine où tombe aujourd'hui ? */
+function surLaSemaineDuJour() {
+  const mois = semainesDuMois(S.moisPlanning || 0);
+  return semaineDuJour(mois.semaines) === semaineAffichee(mois);
+}
+
+/** « Semaine du 17 au 22 août » — et le mois des deux bouts s'il change. */
+function libelleSemaine(lundi, fin) {
+  const mois = (t) => new Date(t).toLocaleDateString('fr-FR', { month: 'long' });
+  const jour = (t) => new Date(t).getDate();
+  const an = new Date(fin).getFullYear() === new Date().getFullYear()
+    ? '' : ' ' + new Date(fin).getFullYear();
+  return mois(lundi) === mois(fin)
+    ? `Semaine du ${jour(lundi)} au ${jour(fin)} ${mois(fin)}${an}`
+    : `Semaine du ${jour(lundi)} ${mois(lundi)} au ${jour(fin)} ${mois(fin)}${an}`;
+}
+
 /* Passer à la semaine voisine. Au bout du mois, on continue naturellement sur
    le mois suivant ou précédent : sinon le geste s'arrêterait sur un mur. */
 function glisserSemaine(sens) {
@@ -6582,6 +6613,11 @@ function vuePlanning() {
   const aujourdhui = minuit(Date.now());
   const attente = aPlanifier();
 
+  /* Suivre une personne ne change pas la forme du planning : on retire
+     simplement les rendez-vous des autres. Le jour reste le jour. */
+  const suivi = S.planningQui && DB.utilisateur(S.planningQui) ? S.planningQui : null;
+  const rdvVus = (ts) => rdvDu(ts, suivi || undefined);
+
   const carteRdv = (p) => {
     const e = EMPLACEMENTS[p.emplacement] || EMPLACEMENTS.sol;
     const immat = immatRdv(p);
@@ -6606,36 +6642,21 @@ function vuePlanning() {
      l'ordre des heures. C'est la couleur qui dit de qui il s'agit — une
      colonne par personne coûtait toute la largeur de l'écran, et il en
      faudrait une de plus à chaque embauche. */
-  const cellule = (jour) => `<div class="pl-case ${jour.ts === aujourdhui ? 'jour-j' : ''}">
-      ${rdvDu(jour.ts).map(carteRdv).join('')}
-      <button class="pl-plus" data-act="planif-nouveau" data-jour="${jour.ts}" data-user="${S.userId}">${ic('plus')} Ajouter</button>
+  const cellule = (jour) => `<div class="pl-case ${jour.ts === aujourdhui ? 'jour-j' : ''} ${jour.ts < aujourdhui ? 'passe' : ''}">
+      ${rdvVus(jour.ts).map(carteRdv).join('')}
+      ${jour.ts < aujourdhui ? '' : `<button class="pl-plus" data-act="planif-nouveau"
+        data-jour="${jour.ts}" data-user="${S.planningQui || S.userId}">${ic('plus')} Ajouter</button>`}
     </div>`;
 
   const fin = lundi + (jours.length - 1) * JOUR;
-  const nomMois = new Date(mois.debut).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  const ceJour = semaineDuJour(mois.semaines);
 
-  return entete('Planning', `${nomMois} · semaine du ${dateCourte(lundi)} au ${dateCourte(fin)}`,
+  return entete('Planning', libelleSemaine(lundi, fin),
     `<div class="segments">
-       <button data-act="planif-mois" data-id="-1" title="Mois précédent">${ic('retour')}</button>
-       <button data-act="planif-mois" data-id="0" class="${(S.moisPlanning || 0) === 0 ? 'on' : ''}">Ce mois-ci</button>
-       <button data-act="planif-mois" data-id="1" title="Mois suivant">${ic('fleche')}</button>
+       <button data-act="planif-semaine" data-id="-1" title="Semaine précédente">${ic('retour')}</button>
+       <button data-act="planif-semaine" data-id="0" class="${surLaSemaineDuJour() ? 'on' : ''}">Cette semaine</button>
+       <button data-act="planif-semaine" data-id="1" title="Semaine suivante">${ic('fleche')}</button>
      </div>`
   ) + `<div class="corps pile">
-
-    ${/* Les semaines du mois, en onglets. Sur téléphone on glisse le planning
-          du doigt pour passer de l'une à l'autre — les onglets suivent. */ ''}
-    <div class="semaines-mois">
-      ${mois.semaines.map((s, i) => {
-        const n = DB.etat.planning.filter(p => p.jour >= s.lundi && p.jour <= s.dimanche).length;
-        return `<button class="sem-onglet ${i === S.semaineDuMois ? 'on' : ''} ${i === ceJour ? 'sem-jour' : ''}"
-                  data-act="planif-sem-mois" data-id="${i}">
-          <b>S${i + 1}</b>
-          <span>${new Date(s.lundi).getDate()}–${new Date(s.dimanche).getDate()}</span>
-          ${n ? `<i class="sem-n">${n}</i>` : ''}
-        </button>`;
-      }).join('')}
-    </div>
 
     ${attente.length ? `<section class="carte">
       <div class="carte-tete">
@@ -6672,19 +6693,22 @@ function vuePlanning() {
       </div>`;
     })()}
 
-    ${/* La couleur remplace la colonne : on rappelle donc qui porte laquelle,
-          juste au-dessus du planning. */ ''}
+    ${/* La couleur remplace la colonne : on rappelle qui porte laquelle, et le
+          rappel sert de filtre — un clic sur quelqu'un ne garde que sa
+          journée, un second rend le planning à tout l'atelier. */ ''}
     <div class="pl-legende">
-      <span class="etiq">Qui</span>
-      ${DB.etat.utilisateurs.map(u => `<span class="pl-leg">
+      <button class="pl-leg ${suivi ? '' : 'on'}" data-act="planif-qui" data-id="">Tout l'atelier</button>
+      ${DB.etat.utilisateurs.map(u => `<button class="pl-leg ${suivi === u.id ? 'on' : ''}"
+          data-act="planif-qui" data-id="${u.id}">
         <span class="jeton-mini" style="--teinte:${u.teinte}">${esc(u.init)}</span>${esc(u.nom)}
-      </span>`).join('')}
+      </button>`).join('')}
     </div>
 
     <div class="planning" id="planning-glisse">
       ${jours.map(j => {
-        const charge = rdvDu(j.ts).reduce((s, p) => s + p.duree, 0);
-        const plein = charge > 8 * Math.max(1, DB.etat.utilisateurs.length);
+        const charge = rdvVus(j.ts).reduce((s, p) => s + p.duree, 0);
+        const parJour = heuresOuvertes(DB.etat.reglages);
+        const plein = charge > parJour * (suivi ? 1 : Math.max(1, DB.etat.utilisateurs.length));
         return `
         <div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''}">
           <b>${esc(j.nom)}</b>
@@ -8767,6 +8791,12 @@ function vueReglages() {
             <input class="saisie num" type="time" step="1800" data-champ-parc="heureFin" value="${esc(r.heureFin)}"></div>
         </div>
         <div class="champ-duo">
+          <div class="champ"><label>Coupure du midi — début</label>
+            <input class="saisie num" type="time" step="1800" data-champ-parc="pauseDebut" value="${esc(r.pauseDebut)}"></div>
+          <div class="champ"><label>Coupure du midi — reprise</label>
+            <input class="saisie num" type="time" step="1800" data-champ-parc="pauseFin" value="${esc(r.pauseFin)}"></div>
+        </div>
+        <div class="champ-duo">
           <div class="champ">
             <label>Finesse des créneaux</label>
             <select class="saisie" data-champ-parc="pasPlanning">
@@ -8786,8 +8816,10 @@ function vueReglages() {
           <div class="champ"><label>Nom de la ressource « sol »</label>
             <input class="saisie" data-champ-parc="nomSol" value="${esc(r.nomSol)}" placeholder="Au sol"></div>
         </div>
-        <p class="aide">Les créneaux proposés vont de l'ouverture à la fermeture.
-        Actuellement ${HEURES.length} créneaux, de ${esc(HEURES[0])} à ${esc(HEURES[HEURES.length - 1])}.</p>
+        <p class="aide">Les créneaux proposés suivent ces horaires, coupure du midi comprise.
+        Actuellement ${HEURES.length} créneaux —
+        ${tranchesOuverture(r).map(([a, b]) => `de <b>${esc(enHeure(a))}</b> à <b>${esc(enHeure(b))}</b>`).join(' et ')},
+        soit ${heuresFr(heuresOuvertes(r))} d'atelier par jour.</p>
       </div>
     </section>
 
@@ -9042,7 +9074,7 @@ function listeInterventions(c, pourLePro) {
 function chargeDuJour(jour) {
   const j = minuit(jour);
   const rdv = DB.etat.planning.filter(p => minuit(p.jour) === j);
-  const heuresOuvrees = HEURES.length ? (HEURES.length - 1) * (DB.etat.reglages.pasPlanning / 60) : 9;
+  const heuresOuvrees = heuresOuvertes(DB.etat.reglages);
   const capacite = heuresOuvrees * DB.etat.utilisateurs.filter(u => u.role !== 'secretariat').length;
   const pris = rdv.reduce((s, p) => s + (Number(p.duree) || 1), 0);
   return { pris, capacite, libre: Math.max(0, capacite - pris) };
@@ -10848,6 +10880,16 @@ function apresRendu() {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(fp).entries());
     const existant = fp.dataset.id ? DB.rdv(fp.dataset.id) : null;
+
+    /* L'attribut `min` du calendrier n'arrête qu'un clic : une date tapée à la
+       main passe au travers. On refuse ici pour de bon — sauf le jour que le
+       rendez-vous avait déjà, qu'on doit pouvoir corriger. */
+    const vise = minuit(depuisInputDate(f.jourDate));
+    if (vise < minuit(Date.now()) && !(existant && vise === minuit(existant.jour))) {
+      toast('Ce jour est déjà passé — choisissez aujourd\'hui ou plus tard');
+      return;
+    }
+
     const donnees = {
       userId: f.userId,
       jour: depuisInputDate(f.jourDate),
@@ -11173,15 +11215,16 @@ document.addEventListener('click', (e) => {
       rendre();
     },
 
-    /* Changer de mois : on retombe sur la semaine du jour si elle s'y trouve,
-       sinon sur la première — jamais sur un onglet qui n'existe pas. */
-    'planif-mois'() {
-      S.moisPlanning = id === '0' ? 0 : (S.moisPlanning || 0) + Number(id);
-      S.semaineDuMois = null;
-      rendre();
+    /* Le planning défile de semaine en semaine, sans se soucier des mois :
+       glisserSemaine() passe au mois voisin quand il faut. « Cette semaine »
+       ramène sur aujourd'hui, d'où qu'on vienne. */
+    'planif-semaine'() {
+      if (id === '0') { S.moisPlanning = 0; S.semaineDuMois = null; rendre(); return; }
+      glisserSemaine(Number(id));
     },
 
-    'planif-sem-mois'() { S.semaineDuMois = Number(id); rendre(); },
+    /* Suivre une personne, ou rendre le planning à tout l'atelier. */
+    'planif-qui'() { S.planningQui = id || null; rendre(); },
     'planif-nouveau'() {
       S.modale = { type: 'planif', jour: cible.dataset.jour, userId: cible.dataset.user, devisId: cible.dataset.devis || '' };
       rendre();
@@ -13497,11 +13540,11 @@ function titreEcran(vue) {
   }
   if (vue === 'planning') {
     const m = semainesDuMois(S.moisPlanning || 0);
-    const i = semaineAffichee(m);
-    const s = m.semaines[i] || m.semaines[0];
-    const nom = new Date(m.debut).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-    return ['Planning', nom.charAt(0).toUpperCase() + nom.slice(1)
-            + ` · semaine ${i + 1} sur ${m.semaines.length}, du ${dateCourte(s.lundi)} au ${dateCourte(s.dimanche)}`];
+    const s = m.semaines[semaineAffichee(m)] || m.semaines[0];
+    const ouvres = (DB.etat.reglages.joursOuvres || 6) - 1;
+    const qui = S.planningQui ? DB.utilisateur(S.planningQui) : null;
+    return ['Planning', libelleSemaine(s.lundi, s.lundi + ouvres * JOUR)
+            + (qui ? ` · ${qui.nom} seulement` : '')];
   }
   return TITRES2[vue] || null;
 }
@@ -13622,11 +13665,11 @@ function actionsEcran(vue) {
     return `<button class="btn plein" data-act="tour-parc">${ic('check')} Tour du parc</button>`;
   }
   if (vue === 'planning') {
-    // on navigue au mois ; les semaines se choisissent dans l'écran
+    // le planning défile de semaine en semaine, les mois s'enchaînent tout seuls
     return `<div class="segments">
-        <button data-act="planif-mois" data-id="-1" title="Mois précédent">${ic('retour')}</button>
-        <button data-act="planif-mois" data-id="0" class="${(S.moisPlanning || 0) === 0 ? 'on' : ''}">Ce mois-ci</button>
-        <button data-act="planif-mois" data-id="1" title="Mois suivant">${ic('fleche')}</button>
+        <button data-act="planif-semaine" data-id="-1" title="Semaine précédente">${ic('retour')}</button>
+        <button data-act="planif-semaine" data-id="0" class="${surLaSemaineDuJour() ? 'on' : ''}">Cette semaine</button>
+        <button data-act="planif-semaine" data-id="1" title="Semaine suivante">${ic('fleche')}</button>
       </div>`;
   }
   if (vue === 'memos') {
