@@ -938,7 +938,7 @@ body.avertie { padding-top: var(--haut-avert, 62px); }
 body.avertie .commande, body.avertie .barre { top: var(--haut-avert, 62px); }
 .temoin.alerte .btn { margin-left: auto; flex: none; }
 @media (max-width: 900px) {
-  .temoin.ok { bottom: calc(76px + var(--sur-bas)); font-size: 11.5px; padding: 5px 9px; }
+  .temoin.ok { bottom: calc(16px + var(--sur-bas)); font-size: 11.5px; padding: 5px 9px; }
   .temoin.ok { left: calc(12px + var(--sur-gauche)); }
   .temoin.alerte { flex-wrap: wrap; }
   .temoin.alerte .btn { margin-left: 0; width: 100%; justify-content: center; }
@@ -1547,7 +1547,6 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
 }
 
 /* --- barre mobile ---------------------------------------------------------- */
-.mobile-nav { display: none; }
 .fab { display: none; }
 .jeton svg { width: 18px; height: 18px; }
 
@@ -1556,7 +1555,7 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   .rail { display: none; }
   .barre { padding: 12px 16px; }
   .barre h1 { font-size: 18px; }
-  .corps { padding: 16px calc(16px + var(--sur-droite)) calc(92px + var(--sur-bas)) calc(16px + var(--sur-gauche)); }
+  .corps { padding: 16px calc(16px + var(--sur-droite)) calc(84px + var(--sur-bas)) calc(16px + var(--sur-gauche)); }
   .devis-grille { grid-template-columns: 1fr; }
   .champ-duo { grid-template-columns: 1fr; }
   .parc-bloc { padding: 10px; gap: 9px; }
@@ -1644,24 +1643,6 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   .saisie-couleur { height: 42px; width: 56px; }
   /* cocher une tâche faite, geste du quotidien */
   .item [data-act="memo-fait"] { min-width: 40px; min-height: 40px; }
-  .mobile-nav {
-    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-    background: color-mix(in srgb, var(--plan) 96%, transparent);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid var(--trait);
-    padding: 6px calc(4px + var(--sur-droite)) calc(6px + var(--sur-bas)) calc(4px + var(--sur-gauche));
-    /* un appui long sur un onglet ne doit pas sélectionner son libellé */
-    user-select: none; -webkit-user-select: none;
-  }
-  .mobile-nav button {
-    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 6px 1px; border-radius: var(--r); color: var(--encre-3);
-    font-family: var(--din); font-size: 9px; letter-spacing: .02em; text-transform: uppercase;
-    position: relative;
-  }
-  .mobile-nav button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mobile-nav button svg { width: 19px; height: 19px; }
-
   /* le planning se déplie : un jour après l'autre, tout l'atelier dans la journée */
   /* Au doigt, dans un atelier : rien en dessous de 40 px de haut. */
   .piece-l .segments { flex-wrap: wrap; }
@@ -1685,17 +1666,10 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   .pl-plus { position: static; opacity: 1; width: auto; height: 36px;
     border-radius: var(--r); align-self: flex-start; padding: 0 12px; }
   .a-poser { max-width: none; width: 100%; }
-  .mobile-nav button.on { color: var(--accent); }
-  .mobile-nav .pastille {
-    position: absolute; top: 2px; right: 22%; min-width: 15px; height: 15px; padding: 0 4px;
-    background: var(--occupe); color: #fff; border-radius: 8px;
-    font-family: var(--chiffre); font-size: 9px; font-weight: 700; display: grid; place-items: center;
-  }
-
   /* l'action la plus utilisée mérite d'être sous le pouce */
   .fab {
     display: inline-flex; align-items: center; gap: 8px;
-    position: fixed; right: calc(14px + var(--sur-droite)); bottom: calc(76px + var(--sur-bas));
+    position: fixed; right: calc(14px + var(--sur-droite)); bottom: calc(16px + var(--sur-bas));
     z-index: 55; padding: 13px 19px; border-radius: 30px;
     background: var(--accent); color: var(--accent-sur);
     font-family: var(--din); font-weight: 700; font-size: 14.5px; letter-spacing: .02em;
@@ -1718,7 +1692,7 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
 @media print {
   @page { size: A4; margin: 14mm 14mm 12mm; }
 
-  .coque, .coque2, .mobile-nav, .fab, .toasts, .voile, .tiroir { display: none !important; }
+  .coque, .coque2, .fab, .toasts, .voile, .tiroir { display: none !important; }
 
   /* la grille tarifaire s'imprime telle quelle, pour être remise en main propre */
   .grille-page { background: #fff !important; }
@@ -2352,7 +2326,7 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   .palette-champ .saisie { font-size: 16px; }
   .sur-grand { display: none !important; }
 
-  .plateau { padding: 14px calc(12px + var(--sur-droite)) calc(96px + var(--sur-bas)) calc(12px + var(--sur-gauche)); }
+  .plateau { padding: 14px calc(12px + var(--sur-droite)) calc(88px + var(--sur-bas)) calc(12px + var(--sur-gauche)); }
   /* Sur un écran très étroit, les boutons du titre ne tiennent plus à côté de
      lui : ils passent à la ligne plutôt que de sortir de l'écran. */
   .titre-page .fin { min-width: 0; }
@@ -2395,11 +2369,13 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   .rampe-seule { max-width: none; margin-bottom: 14px; }
   .duo-prix { gap: 10px; }
   .duo-prix b { font-size: 13px; }
-  .bande-jour { grid-template-columns: 1fr; margin-top: 14px; }
+  /* Aujourd'hui et demain se lisent ensemble ou pas du tout : les empiler
+     obligeait à faire défiler pour comparer deux journées. */
+  .bande-jour { grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 }
 
 @media (min-width: 901px) {
-  .mobile-nav, .fab { display: none !important; }
+  .fab { display: none !important; }
 }
 
 /* --- les paramètres en volets --------------------------------------------- */
@@ -5820,7 +5796,6 @@ function rendre() {
       </aside>
       <main class="vue">${contenu()}</main>
     </div>
-    ${navMobile(badges)}
     ${S.vue === 'devis-fiche' && DB.devis(S.devisId) ? blocImpression(DB.devis(S.devisId)) : ''}
   `;
   apresRendu();
@@ -5837,21 +5812,6 @@ function lienMenu(m, badges) {
 /* La barre du bas ne tient que 5 boutons. Les quatre écrans du quotidien, puis
    « Plus » qui ouvre TOUT le reste : sans ça, Clients, Tarifs, Réglages et le
    changement d'utilisateur deviennent inaccessibles sur téléphone. */
-function navMobile(badges) {
-  const items = MENU.slice(0, 5);   // Aujourd'hui · Devis · Planning · Parc · Pense-bête
-  const ailleurs = MENU.slice(5).some(m => S.vue === m.id || S.vue.startsWith(m.id + '-'));
-  return `<nav class="mobile-nav">
-    ${items.map(m => {
-      const n = badges[m.id] || 0;
-      return `<button class="${S.vue === m.id || S.vue.startsWith(m.id + '-') ? 'on' : ''}" data-act="aller" data-vue="${m.id}">
-        ${ic(m.ico)}<span>${esc(m.court || m.nom)}</span>${n ? `<span class="pastille">${n}</span>` : ''}
-      </button>`;
-    }).join('')}
-    <button class="${ailleurs ? 'on' : ''}" data-act="menu-plus">${ic('plus-menu')}<span>Plus</span></button>
-  </nav>
-  <button class="fab" data-act="appel">${ic('tel')} Nouvelle demande</button>`;
-}
-
 /** Tout ce qui ne tient pas dans la barre du bas. */
 /** Poser ou modifier un rendez-vous. */
 function modalePlanif(ctx) {
@@ -15388,7 +15348,9 @@ rendre = function rendreV2() {
         ${VUES2[vue]()}
       </main>
     </div>
-    ${navMobile2(badges)}
+    ${/* Le bouton flottant vivait dans la barre du bas : elle est partie, lui
+          reste — sur téléphone, « Nouvelle demande » n'a pas d'autre porte. */ ''}
+    <button class="fab" data-act="appel">${ic('tel')} Nouvelle demande</button>
     ${S.vue === 'devis-fiche' && DB.devis(S.devisId) ? blocImpression(DB.devis(S.devisId)) : ''}
   `;
   apresRendu();
@@ -15463,22 +15425,6 @@ function actionsEcran(vue) {
                  title="Supprimer ce client et tout ce qui s'y rattache">${ic('poubelle')}</button>`;
   }
   return '';
-}
-
-function navMobile2(badges) {
-  const items = MENU2.slice(0, 4);
-  const ailleurs = MENU2.slice(4).some(m => S.vue === m.id);
-  return `<nav class="mobile-nav">
-    ${items.map(m => {
-      const n = badges[m.id] || 0;
-      const actif = S.vue === m.id || (m.id === 'atelier' && S.vue === 'devis-fiche');
-      return `<button class="${actif ? 'on' : ''}" data-act="aller" data-vue="${m.id}">
-        ${ic(m.ico)}<span>${esc(m.nom)}</span>${n ? `<span class="pastille">${n}</span>` : ''}
-      </button>`;
-    }).join('')}
-    <button class="${ailleurs ? 'on' : ''}" data-act="menu-plus">${ic('plus-menu')}<span>Plus</span></button>
-  </nav>
-  <button class="fab" data-act="appel">${ic('tel')} Nouvelle demande</button>`;
 }
 
 /* Le menu « Plus » de la v1 pointe vers MENU.slice(5) : on le refait ici pour
