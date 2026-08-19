@@ -2552,6 +2552,26 @@ const REGLAGES = {
    de connexion, et la première chose demandée est de le remplacer. */
 const MDP_PROVISOIRE = '2023';
 
+/* PORTE OUVERTE — pendant qu'on travaille sur l'outil, on entre directement
+   dans l'atelier : ni e-mail, ni code, ni choix de code à la première
+   connexion. Changer de personne reste possible, en un clic, par « Qui
+   travaille ».
+
+   Repasser cette valeur à false rétablit la connexion normale. C'est le seul
+   geste à faire avant de laisser l'outil au garage : tant qu'elle est à true,
+   qui tombe sur l'adresse est dans l'atelier. Les accès des garages
+   partenaires, eux, ne passent pas par là et restent demandés. */
+const SANS_CODE = true;
+
+/* Le compte qu'on ouvre tout seul quand la porte est ouverte : celui du
+   dernier passage, sinon le premier de l'équipe. */
+function compteParDefaut() {
+  const qui = stock.lire('atelier.qui');
+  if (qui && DB.utilisateur(qui)) return qui;
+  const u = DB.etat.utilisateurs[0];
+  return u ? u.id : null;
+}
+
 /* Un e-mail ne supporte ni accent ni espace. */
 const sansAccentsSimple = (s) => String(s || 'compte').normalize('NFD')
   .replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '') || 'compte';
@@ -5430,7 +5450,7 @@ function rendre() {
   sessionValide();
   if (S.grilleToken) { app.innerHTML = vueGrilleTarifs(); apresRendu(); return; }
   if (S.clientToken) { app.innerHTML = vueClient(); apresRendu(); return; }
-  if (!S.userId)     { app.innerHTML = vueConnexion(); apresRendu(); return; }
+  if (!S.userId)     { app.innerHTML = SANS_CODE ? vueConnexionProfils() : vueConnexion(); apresRendu(); return; }
 
   const contenu = {
     tableau:    vueTableau,
@@ -5904,7 +5924,7 @@ function vueConnexionProfils() {
       ${marque()}
       <h1>${esc(nom)}</h1>
       <div class="rayures"></div>
-      <p>Devis, planning et parc véhicules — accès réservé à l'équipe</p>
+      <p>Devis, planning et parc véhicules${SANS_CODE ? ' — qui travaille ?' : " — accès réservé à l'équipe"}</p>
     </div>
     <div class="profils">
       ${DB.etat.utilisateurs.map(x => `
@@ -5914,13 +5934,13 @@ function vueConnexionProfils() {
             <b>${esc(x.nom)}</b>
             <small>${esc(x.fonction)}</small>
           </div>
-          ${DB.mdpProvisoire(x.id)
+          ${SANS_CODE ? '' : DB.mdpProvisoire(x.id)
             ? '<span class="badge t-attente">1<sup>re</sup> connexion</span>'
             : `<span class="cadenas" title="Protégé par un code">${ic('cadenas')}</span>`}
           <span class="fleche">${ic('fleche')}</span>
         </button>`).join('')}
     </div>
-    ${DB.etat.utilisateurs.some(x => DB.mdpProvisoire(x.id)) ? `<div class="encart">
+    ${!SANS_CODE && DB.etat.utilisateurs.some(x => DB.mdpProvisoire(x.id)) ? `<div class="encart">
       <b>Première connexion : le code est <span class="num">${esc(MDP_PROVISOIRE)}</span>.</b>
       Chacun le tape une fois, puis choisit le sien — l'outil le demande aussitôt.
     </div>` : ''}
@@ -10186,7 +10206,7 @@ function ouvrirSession(userId) {
   /* Entré avec le code de première connexion : on ne va pas plus loin sans
      qu'il choisisse le sien. Tant qu'il ne l'a pas fait, tout le garage
      partage le même code. */
-  S.modale = DB.mdpProvisoire(userId) ? { type: 'code', id: userId, oblige: true } : null;
+  S.modale = (!SANS_CODE && DB.mdpProvisoire(userId)) ? { type: 'code', id: userId, oblige: true } : null;
   rendre();
 }
 
@@ -10215,6 +10235,7 @@ const toucherActivite = () => { derniereActivite = Date.now(); };
 
 function verifierVerrou() {
   if (!DB.etat) return;
+  if (SANS_CODE) return;   // porte ouverte : verrouiller ne ferait que gêner
   // l'espace client d'un particulier n'a pas de session : rien à verrouiller
   if (S.clientToken && !S.proConnecte) return;
   if (!S.userId && !S.proConnecte) return;
@@ -10974,7 +10995,7 @@ document.addEventListener('click', (e) => {
 
     connexion() {
       // un code posé : on le demande avant d'ouvrir quoi que ce soit
-      if (DB.aUnMdp(id)) { S.connexionPour = id; S.erreurCode = null; rendre(); return; }
+      if (!SANS_CODE && DB.aUnMdp(id)) { S.connexionPour = id; S.erreurCode = null; rendre(); return; }
       ouvrirSession(id);
     },
     deconnexion() {
@@ -12832,6 +12853,9 @@ setInterval(() => { try { verifierVerrou(); } catch (e) { /* jamais bloquant */ 
     const qui = stock.lire('atelier.qui');
     if (qui && DB.utilisateur(qui)) S.userId = qui;
 
+    // porte ouverte : on n'attend personne devant l'écran de connexion
+    if (SANS_CODE && !S.userId && !S.clientToken && !S.grilleToken) S.userId = compteParDefaut();
+
     rendre();
   } catch (e) {
     // plutôt qu'une page blanche : dire ce qui ne va pas
@@ -13388,7 +13412,7 @@ rendre = function rendreV2() {
   sessionValide();   // jamais afficher le nom de quelqu'un d'autre
   if (S.grilleToken) { app.innerHTML = vueGrilleTarifs(); apresRendu(); return; }
   if (S.clientToken) { app.innerHTML = vueClient(); apresRendu(); return; }
-  if (!S.userId) { app.innerHTML = vueConnexion(); apresRendu(); return; }
+  if (!S.userId) { app.innerHTML = SANS_CODE ? vueConnexionProfils() : vueConnexion(); apresRendu(); return; }
 
   // la veille tourne avant l'affichage : la cloche est juste dès l'ouverture
   if (S.userId && !S.clientToken && !S.grilleToken) {
@@ -13662,6 +13686,11 @@ document.addEventListener('click', (e) => {
       S.grilleToken = DB.jetonClient(cPro);
     } else if (pro) {
       stock.effacer('atelier.pro');
+    }
+
+    // porte ouverte : on n'attend personne devant l'écran de connexion
+    if (SANS_CODE && !S.userId && !S.proConnecte && !S.clientToken && !S.grilleToken) {
+      S.userId = compteParDefaut();
     }
 
     S.vue = 'atelier';
