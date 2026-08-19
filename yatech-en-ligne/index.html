@@ -2511,6 +2511,43 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
 .tuile.on { border-color: var(--accent); background: var(--accent-voile); color: var(--accent); }
 .tuile .pastille { position: absolute; top: 9px; right: 9px; }
 
+/* --- l'aperçu des textes ---------------------------------------------------
+   Le modèle et son résultat côte à côte : on écrit à gauche, on lit à droite
+   ce que le client recevra. */
+.texte-paire {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px;
+  padding: 14px; border-radius: var(--r-l);
+  border: 1px solid var(--trait-fin); background: var(--plan-2);
+}
+.texte-paire .champ label { display: flex; align-items: center; gap: 8px; }
+.texte-paire textarea { background: var(--plan); }
+.texte-apercu { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.texte-apercu-tete {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--din); font-size: 10.5px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--encre-3);
+}
+.texte-apercu-tete svg { width: 14px; height: 14px; }
+/* la bulle d'un message reçu : bord arrondi côté destinataire */
+.texte-bulle {
+  flex: 1; white-space: pre-wrap; word-break: break-word;
+  padding: 12px 14px; border-radius: var(--r-l) var(--r-l) var(--r-l) 3px;
+  background: var(--plan); border: 1px solid var(--trait);
+  font-size: 13px; line-height: 1.5; color: var(--encre);
+  box-shadow: var(--ombre);
+}
+/* une mention légale ne s'envoie pas : elle s'imprime */
+.texte-bulle.papier {
+  border-radius: var(--r); border-style: dashed;
+  font-size: 11.5px; color: var(--encre-2); box-shadow: none; background: var(--plan-2);
+}
+/* ce modèle ne part pas à ce destinataire-là : on le laisse en retrait */
+.texte-paire.hors-vue { opacity: .55; }
+.texte-paire.hors-vue:focus-within, .texte-paire.hors-vue:hover { opacity: 1; }
+@media (max-width: 900px) {
+  .texte-paire { grid-template-columns: 1fr; }
+}
+
 .voix-groupe { display: flex; flex-direction: column; gap: 7px; }
 .voix-ligne {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
@@ -3958,6 +3995,7 @@ const S = {
   modale: null,
   volet: null,            // le seul réglage déplié, dans les paramètres
   planningQui: null,      // la personne dont on suit le planning, ou tout l'atelier
+  apercuTexte: 'client',  // à qui on s'adresse dans l'aperçu des textes
   clientToken: null,     // vue « espace client »
   grilleToken: null,     // vue « grille tarifaire » d'un client
   clientEtape: 'infos'
@@ -8814,6 +8852,131 @@ document.addEventListener('keydown', (e) => {
   tete.click();
 });
 
+
+/* ==========================================================================
+   L'aperçu des textes
+   --------------------------------------------------------------------------
+   Un modèle plein d'accolades ne dit pas ce que le client va lire. On le
+   remplit donc avec un exemple, sous les yeux, pendant qu'on l'écrit — et on
+   bascule entre un particulier et un garage confrère, parce que le même
+   modèle ne parle pas pareil aux deux.
+
+   L'aperçu passe par remplirModele() et recompose la signature comme les
+   vraies fonctions d'envoi : ce qu'on voit est ce qui part.
+   ========================================================================== */
+const EXEMPLES_TEXTE = {
+  client: {
+    qui: 'Julien Marchand', court: 'un particulier',
+    valeurs: {
+      prenom: 'Julien', client: 'Julien Marchand',
+      vehicule: 'Peugeot 308', immat: 'AB-123-CD',
+      numero: 'D-2026-041', montant: '742,80 €',
+      jour: 'mardi 25 août', heure: '09:00', prestation: 'la distribution',
+      mecanicien: 'Yoann', validite: '30 jours'
+    }
+  },
+  pro: {
+    qui: 'Garage Central', court: 'un garage confrère',
+    valeurs: {
+      prenom: 'Karim', client: 'Garage Central',
+      vehicule: 'Renault Master', immat: 'CD-456-EF',
+      numero: 'D-2026-042', montant: '1 284,00 €',
+      jour: 'jeudi 27 août', heure: '14:00', prestation: 'le calculateur',
+      mecanicien: 'Allan', validite: '30 jours'
+    }
+  }
+};
+
+/** Les six modèles, avec qui les reçoit et à quoi ils servent. */
+const TEXTES_APERCU = [
+  { cle: 'messageInfos',  nom: "Demande d'informations", pour: 'les deux',
+    aide: 'Envoyé avant chiffrage, pour que le client remplisse sa fiche.' },
+  { cle: 'messageDevis',  nom: 'Envoi du devis', pour: 'les deux',
+    aide: "Envoyé avec le PDF, pour recueillir l'accord." },
+  { cle: 'messageGrille', nom: 'Grille tarifaire', pour: 'pro',
+    aide: 'Le lien vers ses tarifs, envoyé à un garage partenaire.' },
+  { cle: 'messageRdv',    nom: 'Créneau confirmé', pour: 'pro',
+    aide: 'Envoyé au confrère dès que vous confirmez son créneau.' },
+  { cle: 'messagePret',   nom: 'Véhicule prêt', pour: 'les deux',
+    aide: 'Envoyé depuis le parc quand la voiture passe en « prêt ».' },
+  { cle: 'mentionsDevis', nom: 'Mentions légales', pour: 'papier',
+    aide: 'Imprimées en bas de chaque devis PDF — sans signature.' }
+];
+
+/** Le texte tel qu'il partira, l'exemple en place. */
+function apercuTexte(cle, mode) {
+  const r = DB.etat.reglages;
+  const ex = EXEMPLES_TEXTE[mode] || EXEMPLES_TEXTE.client;
+  const valeurs = Object.assign({}, ex.valeurs, {
+    garage: r.nom || 'Votre garage',
+    lien: (location.origin || 'https://votre-garage.fr') + '/#c=…',
+    horaires: tranchesOuverture(r).map(([a, b]) => `${enHeure(a)} à ${enHeure(b)}`).join(' et ')
+  });
+  const corps = remplirModele(r[cle], valeurs);
+  // les mentions s'impriment seules ; tout le reste part signé
+  return cle === 'mentionsDevis' ? corps
+    : corps + `\n\n${r.nom || ''}${r.tel ? '\n' + r.tel : ''}`;
+}
+
+/** Le bloc « Vos textes » : le modèle à gauche, ce qu'il donne à droite. */
+function blocReglagesTextes(r) {
+  const mode = S.apercuTexte === 'pro' ? 'pro' : 'client';
+  const ex = EXEMPLES_TEXTE[mode];
+
+  const ligne = (t) => {
+    const pourLui = t.pour === 'les deux' || t.pour === mode
+                 || (t.pour === 'papier');
+    return `<div class="texte-paire ${pourLui ? '' : 'hors-vue'}">
+      <div class="champ">
+        <label>${esc(t.nom)}
+          ${t.pour === 'pro' ? '<span class="badge t-info">garages pro</span>' : ''}
+          ${t.pour === 'papier' ? '<span class="badge t-neutre">sur le PDF</span>' : ''}
+        </label>
+        <textarea class="saisie" rows="6" data-champ-reglage="${t.cle}">${esc(r[t.cle])}</textarea>
+        <span class="aide">${t.aide}</span>
+      </div>
+      <div class="texte-apercu">
+        ${/* Un modèle réservé aux confrères ne part pas à un particulier : on
+              le dit plutôt que d'annoncer un destinataire qui ne le recevra
+              jamais. */ ''}
+        <div class="texte-apercu-tete">
+          ${ic(t.pour === 'papier' ? 'imprim' : pourLui ? 'envoi' : 'alerte')}
+          ${t.pour === 'papier' ? 'Au bas du devis'
+            : pourLui ? `Ce que reçoit ${esc(ex.qui)}`
+            : 'Ne part qu\'aux garages partenaires'}
+        </div>
+        <div class="texte-bulle ${t.pour === 'papier' ? 'papier' : ''}">${esc(apercuTexte(t.cle, mode))}</div>
+      </div>
+    </div>`;
+  };
+
+  return `
+    <section class="carte" style="grid-column:1/-1">
+      <div class="carte-tete">
+        <h2>Vos textes</h2>
+        <div class="segments" style="margin-left:auto">
+          <button data-act="apercu-texte" data-id="client" class="${mode === 'client' ? 'on' : ''}">Vue client</button>
+          <button data-act="apercu-texte" data-id="pro" class="${mode === 'pro' ? 'on' : ''}">Vue professionnel</button>
+        </div>
+      </div>
+      <div class="carte-corps pile">
+        <p class="aide" style="margin:0">À gauche ce que vous écrivez, à droite ce que reçoit
+        <b>${esc(ex.qui)}</b> — ${esc(ex.court)}. L'aperçu se met à jour en même temps que vous tapez.</p>
+        ${TEXTES_APERCU.map(ligne).join('')}
+        <div class="encart">
+          <b>Les étiquettes entre accolades sont remplacées automatiquement :</b>
+          <span class="num">{prenom}</span> <span class="num">{client}</span> <span class="num">{vehicule}</span>
+          <span class="num">{immat}</span> <span class="num">{numero}</span> <span class="num">{montant}</span>
+          <span class="num">{lien}</span> <span class="num">{garage}</span> <span class="num">{validite}</span>
+          <span class="num">{horaires}</span> <span class="num">{jour}</span> <span class="num">{heure}</span>
+          <span class="num">{prestation}</span> <span class="num">{mecanicien}</span>.
+          Celles qu'un message ne connaît pas restent écrites telles quelles.
+        </div>
+      </div>
+    </section>
+`;
+}
+
 function vueReglages() {
   const r = DB.etat.reglages;
   /* `min="0"` sur les nombres : un taux ou une durée négative ne veut rien dire
@@ -8978,52 +9141,7 @@ function vueReglages() {
       </div>
     </section>
 
-    <section class="carte" style="grid-column:1/-1">
-      <div class="carte-tete"><h2>Vos textes</h2></div>
-      <div class="carte-corps grille g-2">
-        <div class="champ">
-          <label>Message — demande d'informations</label>
-          <textarea class="saisie" rows="6" data-champ-reglage="messageInfos">${esc(r.messageInfos)}</textarea>
-          <span class="aide">Envoyé avant chiffrage, pour que le client remplisse sa fiche.</span>
-        </div>
-        <div class="champ">
-          <label>Message — envoi du devis</label>
-          <textarea class="saisie" rows="6" data-champ-reglage="messageDevis">${esc(r.messageDevis)}</textarea>
-          <span class="aide">Envoyé avec le PDF, pour recueillir l'accord.</span>
-        </div>
-        <div class="champ">
-          <label>Message — grille tarifaire professionnelle</label>
-          <textarea class="saisie" rows="5" data-champ-reglage="messageGrille">${esc(r.messageGrille)}</textarea>
-        </div>
-        <div class="champ">
-          <label>Message — créneau confirmé</label>
-          <textarea class="saisie" rows="5" data-champ-reglage="messageRdv">${esc(r.messageRdv)}</textarea>
-          <span class="aide">Envoyé au garage confrère dès que vous confirmez son créneau.
-          Étiquettes : <b class="num">{jour}</b>, <b class="num">{heure}</b>,
-          <b class="num">{prestation}</b>, <b class="num">{immat}</b>, <b class="num">{mecanicien}</b>.</span>
-        </div>
-        <div class="champ">
-          <label>Message — véhicule prêt</label>
-          <textarea class="saisie" rows="6" data-champ-reglage="messagePret">${esc(r.messagePret)}</textarea>
-          <span class="aide">Envoyé depuis le parc quand la voiture passe en « prêt », pour
-          prévenir sans appeler. Étiquettes : <b class="num">{prenom}</b>, <b class="num">{vehicule}</b>,
-          <b class="num">{immat}</b>, <b class="num">{montant}</b>, <b class="num">{horaires}</b>,
-          <b class="num">{numero}</b>.</span>
-        </div>
-        <div class="champ">
-          <label>Mentions légales du devis</label>
-          <textarea class="saisie" rows="5" data-champ-reglage="mentionsDevis">${esc(r.mentionsDevis)}</textarea>
-          <span class="aide">Imprimées en bas de chaque devis PDF.</span>
-        </div>
-        <div class="encart" style="grid-column:1/-1">
-          <b>Les étiquettes entre accolades sont remplacées automatiquement :</b>
-          <span class="num">{prenom}</span> <span class="num">{client}</span> <span class="num">{vehicule}</span>
-          <span class="num">{immat}</span> <span class="num">{numero}</span> <span class="num">{montant}</span>
-          <span class="num">{lien}</span> <span class="num">{garage}</span> <span class="num">{validite}</span>.
-          Votre nom et votre téléphone sont ajoutés en signature.
-        </div>
-      </div>
-    </section>
+    ${blocReglagesTextes(r)}
 
     <section class="carte">
       <div class="carte-tete"><h2>L'allure de l'outil</h2><span class="badge t-info">Vos réglages à vous</span></div>
@@ -12720,6 +12838,8 @@ document.addEventListener('click', (e) => {
       glisserSemaine(Number(id));
     },
 
+    'apercu-texte'() { S.apercuTexte = id; rendre(); },
+
     /* Suivre une personne, ou rendre le planning à tout l'atelier. */
     'planif-qui'() { S.planningQui = id || null; rendre(); },
     'planif-nouveau'() {
@@ -15090,10 +15210,12 @@ rendre = function rendreV2() {
             return n ? `<span class="pastille">${n}</span>` : '';
           })()}
         </button>
+        ${/* Chercher se fait aussi souvent que changer d'écran : les deux
+              gestes tiennent côte à côte, à gauche. */ ''}
+        <button class="btn cherche-vite" data-act="recherche" title="Rechercher">
+          ${ic('loupe')}<span>Rechercher</span>
+        </button>
         <div class="fin">
-          <button class="btn cherche-vite" data-act="recherche" title="Rechercher">
-            ${ic('loupe')}<span>Rechercher</span>
-          </button>
           <button class="btn nu micro ${VOIX.voulu ? 'ecoute' : ''}" data-act="voix"
                   title="${VOIX.voulu ? 'Couper le micro' : 'Commander à la voix'}"
                   aria-pressed="${VOIX.voulu ? 'true' : 'false'}">${ic('micro', 1.9)}</button>
