@@ -2265,6 +2265,34 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
    trois et le compteur grandissait pour rien. */
 .brief-item .leg { font-size: 11.5px; color: var(--encre-2); line-height: 1.25; max-width: 17ch; }
 .brief-item.calme .val { color: var(--encre-3); }
+/* Un compteur qui appelle une action bat, tant qu'il n'est pas à zéro : le
+   chiffre pulse et le bord s'allume. Ni le clignotement d'un néon ni un rouge
+   plein écran — juste assez pour se voir de l'autre bout de l'atelier sans
+   qu'on cherche à l'éteindre. */
+@keyframes bat-compteur {
+  0%, 100% { box-shadow: var(--ombre); border-color: var(--trait); }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ton) 22%, transparent), var(--ombre);
+        border-color: color-mix(in srgb, var(--ton) 60%, var(--trait)); }
+}
+@keyframes bat-compteur-val { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+.brief-item.appelle { animation: bat-compteur 1.9s ease-in-out infinite; }
+.brief-item.appelle .val { animation: bat-compteur-val 1.9s ease-in-out infinite; }
+.brief-item.appelle .leg { color: var(--encre); font-weight: 600; }
+/* Un écran qu'on regarde toute la journée n'a pas à trembler pour qui le
+   supporte mal : le bord reste allumé, il cesse seulement de battre. */
+@media (prefers-reduced-motion: reduce) {
+  .brief-item.appelle, .brief-item.appelle .val { animation: none; }
+  .brief-item.appelle {
+    border-color: color-mix(in srgb, var(--ton) 60%, var(--trait));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ton) 18%, transparent), var(--ombre);
+  }
+}
+/* Les compteurs du parc, en haut de son écran : un peu plus serrés, ils
+   accompagnent le plan au lieu de lui voler la vedette. */
+.brief-parc { margin-bottom: 14px; }
+.brief-parc .brief-item { padding: 6px 10px 6px 9px; }
+.brief-parc .val { font-size: 18px; }
+
 /* --- ranger ses compteurs au doigt ----------------------------------------
    La case décollée suit le doigt au-dessus de tout ; à sa place, un trou en
    pointillé montre où elle retombera. */
@@ -2949,6 +2977,8 @@ const REGLAGES = {
   appelJours: 14,         // combien de jours on garde le journal
   appelDouble: 20,        // un même numéro qui resonne dans ces secondes-là est le même appel
 
+  compteursClignotent: true,   // les compteurs qui appellent une action battent-ils ?
+
   // l'allure du planning
   planningPasH: 62,       // la hauteur d'une heure, en pixels
   planningAnnules: true,  // les créneaux rendus restent-ils visibles, barrés ?
@@ -3570,6 +3600,16 @@ const DB = {
       if (avantPause && e.reglages.heureDebut === '08:00') e.reglages.heureDebut = d.heureDebut;
     }
     if (!Array.isArray(e.appels)) e.appels = [];
+    /* Les places libres et la rue sont passées dans l'écran Parc. On les retire
+       une fois de l'accueil de chacun — sans y toucher ensuite, pour que celui
+       qui les y remet les garde. */
+    if (Array.isArray(e.utilisateurs)) e.utilisateurs.forEach(u => {
+      if (!u.prefs || u.prefs.compteursRanges) return;
+      if (Array.isArray(u.prefs.compteurs)) {
+        u.prefs.compteurs = u.prefs.compteurs.filter(k => !['placesMeca', 'placesElectro', 'rue'].includes(k));
+      }
+      u.prefs.compteursRanges = true;
+    });
     if (!e.reglages.nomsRangees) e.reglages.nomsRangees = {};
     if (!e.reglages.typesPlaces) e.reglages.typesPlaces = {};
     if (!e.reglages.libelles) e.reglages.libelles = {};
@@ -4494,14 +4534,18 @@ const COMPTEURS = [
     calc: () => demandesPro().length },
 
   /* --- les dossiers ----------------------------------------------------- */
+  /* Ces trois-là ne se lisent pas, ils se règlent : un appel qui attend, un
+     devis qui dort, une fiche qu'on ne pourra pas rappeler. Ils clignotent tant
+     qu'ils ne sont pas à zéro — c'est la seule chose qui distingue un chiffre
+     à regarder d'un chiffre à traiter. */
   { cle: 'appels', groupe: 'Les dossiers', nom: () => 'appels à traiter', ton: 'var(--occupe)', vue: 'atelier',
-    calc: () => appelsATraiter().length },
+    alerte: true, calc: () => appelsATraiter().length },
   { cle: 'relances', groupe: 'Les dossiers', nom: () => 'devis à relancer', ton: 'var(--attente)', vue: 'atelier',
-    calc: () => aRelancer().length },
+    alerte: true, calc: () => aRelancer().length },
   { cle: 'envoyes', groupe: 'Les dossiers', nom: () => 'devis en attente de réponse', ton: 'var(--actif)', vue: 'devis',
     calc: () => DB.etat.devis.filter(d => d.statut === 'envoye').length },
   { cle: 'attenteInfos', groupe: 'Les dossiers', nom: () => 'fiches client à compléter', ton: 'var(--attente)', vue: 'atelier',
-    calc: () => attenteInfos().length },
+    alerte: true, calc: () => attenteInfos().length },
   { cle: 'aChiffrer', groupe: 'Les dossiers', nom: () => 'devis à chiffrer', ton: 'var(--attente)', vue: 'devis',
     calc: () => DB.etat.devis.filter(d => d.statut === 'brouillon').length },
   { cle: 'enAtelier', groupe: 'Les dossiers', nom: () => 'en atelier en ce moment', ton: 'var(--actif)', vue: 'devis',
@@ -4568,10 +4612,32 @@ const COMPTEURS = [
     calc: () => (DB.etat.appels || []).filter(a => minuit(a.quand) === minuit(Date.now())).length }
 ];
 
-/* Ceux qu'on affiche à la livraison : les six d'origine. Le reste attend
-   qu'on aille le chercher — un tableau de bord de quarante cases ne se lit
-   plus. */
-const COMPTEURS_DEFAUT = ['prets', 'relances', 'rue', 'rdvJour', 'placesMeca', 'placesElectro'];
+/* Ceux qu'on affiche à la livraison. Les places libres et les voitures dans la
+   rue n'y sont plus : elles vivent en haut de l'écran Parc, où l'on va de toute
+   façon quand on cherche une place. L'accueil garde ce qui appelle une action.
+   Le reste attend qu'on aille le chercher — un tableau de bord de quarante
+   cases ne se lit plus. */
+const COMPTEURS_DEFAUT = ['appels', 'relances', 'attenteInfos', 'prets', 'rdvJour'];
+
+/* Les compteurs du parc, montrés en haut de l'écran Parc. On y va pour placer
+   une voiture ou en sortir une : le nombre de places libres se lit là, pas sur
+   un tableau de bord qu'on regarde le matin. */
+const COMPTEURS_PARC = ['placesMeca', 'placesElectro', 'placesTotal', 'rue', 'prets', 'immobilises'];
+
+/* Une seule tuile de compteur, dessinée pareil partout — l'accueil et le parc
+   n'en font pas deux versions. */
+function tuileCompteur(c) {
+  let v;
+  try { v = c.calc(); } catch (e) { return ''; }
+  const n = Number(typeof v === 'object' ? v.n : v) || 0;
+  const aff = typeof v === 'object' ? v.aff : v;
+  const bat = c.alerte && n > 0 && DB.etat.reglages.compteursClignotent !== false;
+  return `<button class="brief-item ${n ? '' : 'calme'} ${bat ? 'appelle' : ''}"
+      style="--ton:${c.ton}" data-act="aller" data-vue="${c.vue}"
+      data-cpt="${c.cle}" ${c.extra || ''}>
+    <span class="val">${aff}</span><span class="leg">${esc(c.nom(n))}</span>
+  </button>`;
+}
 
 /** Poser d'un coup la liste des compteurs de la personne connectée. */
 function poserCompteurs(liste) {
@@ -8184,6 +8250,13 @@ function vueParking() {
     `${occupees} occupée${occupees > 1 ? 's' : ''} · ${libres} libre${libres > 1 ? 's' : ''} sur ${PLACES.length} places`,
     `<button class="btn plein" data-act="tour-parc">${ic('check')} Tour du parc</button>`
   ) + `<div class="corps">
+    ${/* Les compteurs du parc sont chez eux ici : on vient y chercher une place,
+          pas la contempler depuis l'accueil. Un clic filtre le plan. */ ''}
+    <div class="brief brief-parc">
+      ${COMPTEURS_PARC.map(cle => COMPTEURS.find(c => c.cle === cle))
+        .filter(Boolean).map(tuileCompteur).join('')}
+    </div>
+
     ${S.immatPlacement && !S.placeId ? `<div class="encart" style="margin-bottom:14px">
       <b>Choisissez une place libre</b> pour <b>${esc(S.immatPlacement)}</b>.
       <button class="btn nu" data-act="annuler-placement">Annuler</button>
@@ -10004,6 +10077,14 @@ function vueReglages() {
 
         <div class="sep"></div>
         <div class="etiq">Les compteurs</div>
+        <label class="voix-reglage">
+          <input type="checkbox" data-champ-oui="compteursClignotent" ${
+            r.compteursClignotent !== false ? 'checked' : ''}>
+          <div><b>Faire battre ceux qui appellent une action</b>
+            <span class="aide">Les appels à traiter, les devis à relancer et les fiches à compléter
+            clignotent tant qu'ils ne sont pas à zéro. Les autres se lisent, ceux-là se règlent —
+            c'est la seule chose qui les distingue.</span></div>
+        </label>
         <p class="aide" style="margin:0">Tout ce qui se compte est là. Cochez ce que vous voulez lire
         en arrivant le matin ; un compteur coché se pose à la fin.
         <b>Pour les ranger, c'est sur l'accueil</b> : gardez le doigt sur un compteur, il se décolle,
@@ -16847,16 +16928,6 @@ function blocAppels() {
 
 function vueTableauAtelier() {
   const ceJour = minuit(Date.now());
-  /* `n` dit si le compteur est à zéro — pas ce qui est écrit : « 0,00 € » et
-     « 0 % » sont des textes bien remplis, et se seraient allumés comme s'il y
-     avait quelque chose à voir. */
-  const item = (val, leg, ton, vue, extra, n) => `<button class="brief-item ${
-      (n === undefined ? val : n) ? '' : 'calme'}"
-      style="--ton:${ton}" data-act="aller" data-vue="${vue}" ${extra || ''}>
-    <span class="val">${val}</span><span class="leg">${leg}</span>
-  </button>`;
-
-  // chacun garde ce qu'il regarde vraiment : le reste disparaît de l'accueil
   // chacun compose son accueil : ce que Yoann cache reste chez Laura
   const montre = (cle) => prefAccueil(cle);
 
@@ -16879,16 +16950,8 @@ function vueTableauAtelier() {
       if (!choisis.length) return `<div class="brief-vide">
         Aucun compteur affiché — choisissez les vôtres dans
         <b>Paramètres → L'écran d'accueil</b>.</div>`;
-      return `<div class="brief">${choisis.map(c => {
-        /* Un compteur qui tombe en panne ne doit pas emporter l'accueil : on
-           saute celui-là et on garde les autres. */
-        let v;
-        try { v = c.calc(); } catch (e) { return ''; }
-        const n = typeof v === 'object' ? v.n : v;
-        const aff = typeof v === 'object' ? v.aff : v;
-        return item(aff, esc(c.nom(Number(n) || 0)), c.ton, c.vue,
-          `data-cpt="${c.cle}" ${c.extra || ''}`, Number(n) || 0);
-      }).join('')}</div>`;
+      // un compteur qui tombe en panne est sauté : il n'emporte pas l'accueil
+      return `<div class="brief">${choisis.map(tuileCompteur).join('')}</div>`;
     },
 
     facturer: () => blocFacturer(),
