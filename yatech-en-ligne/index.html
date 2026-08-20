@@ -1205,7 +1205,14 @@ body.avertie .commande, body.avertie .barre { top: var(--haut-avert, 62px); }
 @media (max-width: 900px) { .pdf-l .btn { min-height: 42px; } }
 
 /* ranger les blocs de son accueil */
-.bloc-accueil { display: flex; align-items: center; gap: 4px; }
+/* Une ligne de réglage se prend en main : sa poignée à gauche, son fond à
+   elle, et un bord qui la détache de la suivante quand on la déplace. */
+.bloc-accueil {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 6px 2px 2px; border-radius: var(--r);
+  border: 1px solid transparent; background: var(--plan);
+}
+.bloc-accueil:hover { border-color: var(--trait); }
 .bloc-accueil .bascule { margin: 0; }
 .raccourci.on { border-color: var(--accent); color: var(--accent); }
 .raccourci.on svg { opacity: 1; }
@@ -2293,7 +2300,7 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
 .brief-parc .brief-item { padding: 6px 10px 6px 9px; }
 .brief-parc .val { font-size: 18px; }
 
-/* --- ranger ses compteurs au doigt ----------------------------------------
+/* --- ranger ses listes au doigt -------------------------------------------
    La case décollée suit le doigt au-dessus de tout ; à sa place, un trou en
    pointillé montre où elle retombera. */
 .brief-item { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
@@ -2302,17 +2309,45 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
   box-shadow: 0 14px 30px -10px rgba(0, 0, 0, .38);
   border-color: var(--accent); transform-origin: 50% 50%;
 }
-.brief-trou {
+/* Le trou : là où l'élément retombera si on lâche maintenant. */
+.trou-rangement {
   border: 1px dashed var(--accent); border-radius: var(--r-l);
-  background: var(--accent-voile); flex: none;
+  background: var(--accent-voile); flex: none; box-sizing: border-box;
 }
+.bloc-trou { border-radius: var(--r); }
 /* Pendant le rangement, les autres cases glissent à leur nouvelle place au
    lieu de sauter — c'est ce qui rend le geste lisible. */
-.brief.range .brief-item:not(.en-main) { transition: transform .14s ease; }
-.brief.range { cursor: grabbing; }
+.range .brief-item:not(.en-main),
+.range .raccourci:not(.en-main),
+.range .bloc-accueil:not(.en-main) { transition: transform .14s ease; }
+.range { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
-  .brief.range .brief-item:not(.en-main) { transition: none; }
+  .range .brief-item:not(.en-main),
+  .range .raccourci:not(.en-main),
+  .range .bloc-accueil:not(.en-main) { transition: none; }
 }
+
+/* Les raccourcis se rangent comme les compteurs : même geste, même allure. */
+.raccourci { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.raccourci.en-main, .bloc-accueil.en-main {
+  position: fixed; z-index: 90; margin: 0; pointer-events: none;
+  box-shadow: 0 14px 30px -10px rgba(0, 0, 0, .38);
+  border-color: var(--accent); background: var(--plan);
+}
+
+/* La poignée d'une ligne de réglage : discrète au repos, franche sous le
+   doigt. Assez large pour être attrapée avec des gants. */
+.liste-blocs { display: flex; flex-direction: column; gap: 6px; }
+.poignee {
+  flex: none; width: 30px; min-height: 34px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--encre-3); cursor: grab; touch-action: none;
+  border-radius: var(--r); background: none; border: 1px solid transparent;
+}
+.poignee:hover { color: var(--encre); background: var(--plan-2); border-color: var(--trait); }
+.poignee:active { cursor: grabbing; }
+.poignee svg { width: 18px; height: 18px; }
+@media (max-width: 720px) { .poignee { width: 40px; min-height: 42px; } }
 /* Personne n'a rien coché : mieux vaut le dire que de laisser un blanc qu'on
    prendrait pour une panne. */
 .brief-vide {
@@ -4193,6 +4228,8 @@ const ICO = {
   devis:    '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
   parking:  '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V8h3.5a2.75 2.75 0 010 5.5H9"/>',
   clients:  '<path d="M16 20v-1.5a3.5 3.5 0 00-3.5-3.5h-5A3.5 3.5 0 004 18.5V20"/><circle cx="10" cy="8" r="3.2"/><path d="M20 20v-1.5a3.5 3.5 0 00-2.6-3.4"/><path d="M15.5 5.2a3.2 3.2 0 010 5.6"/>',
+  /* six points : la poignée qu'on reconnaît sans qu'on l'explique */
+  poignee:  '<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>',
   catalogue:'<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="1.6" fill="currentColor" stroke="none"/>',
   reglages: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/>',
   plus:     '<path d="M12 5v14M5 12h14"/>',
@@ -10059,11 +10096,17 @@ function vueReglages() {
       <div class="carte-corps pile">
         <p class="aide" style="margin:0">Décochez ce que vous ne regardez jamais, et rangez le reste
         dans l'ordre où vous le lisez — les pense-bêtes avant les appels si c'est votre façon de faire.
+        Attrapez une ligne par sa <b>poignée</b> à gauche pour la déplacer, ou servez-vous des flèches.
         <b>C'est votre accueil à vous</b> : vos collègues gardent le leur.</p>
         ${(() => {
           const ordre = ordreAccueil();
           const nom = Object.fromEntries(BLOCS_ACCUEIL);
-          return ordre.map((cle, i) => `<div class="bloc-accueil">
+          return `<div class="liste-blocs">${ordre.map((cle, i) => `<div class="bloc-accueil" data-bloc="${cle}">
+            ${/* La poignée dit où attraper : la ligne est pleine de boutons qui
+                  ont déjà leur rôle. Les flèches restent, pour ranger d'un cran
+                  sans viser. */ ''}
+            <button class="poignee" title="Garder appuyé pour déplacer" aria-label="Déplacer ce bloc">
+              ${ic('poignee')}</button>
             <label class="bascule" style="flex:1">
               <input type="checkbox" data-champ-accueil="${cle}" ${prefAccueil(cle) ? 'checked' : ''}>
               <span>${esc(nom[cle] || cle)}</span>
@@ -10072,7 +10115,7 @@ function vueReglages() {
                     title="Monter" ${i === 0 ? 'disabled' : ''}>${ic('haut')}</button>
             <button class="btn nu range-l" data-act="descendre-bloc" data-id="${cle}"
                     title="Descendre" ${i === ordre.length - 1 ? 'disabled' : ''}>${ic('bas')}</button>
-          </div>`).join('');
+          </div>`).join('')}</div>`;
         })()}
 
         <div class="sep"></div>
@@ -10124,7 +10167,9 @@ function vueReglages() {
 
         <div class="sep"></div>
         <div class="etiq">Les raccourcis de la barre</div>
-        <p class="aide" style="margin:0">Cochez ceux que vous voulez sous la main, dans l'ordre de la liste.</p>
+        <p class="aide" style="margin:0">Cochez ceux que vous voulez sous la main.
+        <b>Pour les ranger, c'est sur l'accueil</b> : gardez le doigt sur un raccourci et posez-le
+        où vous voulez, comme les compteurs.</p>
         <div class="rangee" style="gap:6px">
           ${Object.keys(RACCOURCIS).map(k => `<button class="raccourci ${
             raccourcisChoisis().includes(k) ? 'on' : ''}" data-act="bascule-raccourci" data-id="${k}">
@@ -12378,11 +12423,16 @@ function temoinEnregistrement() {
 const RANGEMENT = { tuile: null, fantome: null, zone: null, x0: 0, y0: 0,
                     minuterie: null, actif: false, styleAvant: '', vientDeRanger: false };
 
-function brancherRangementCompteurs() {
-  const zone = document.querySelector('.brief');
+/* Ranger une liste au doigt. Trois listes s'en servent : les compteurs et les
+   raccourcis sur l'accueil, les blocs dans les paramètres — toutes trois avec
+   le même geste, parce qu'un outil qui se range de trois façons ne se range
+   pas.
+
+   `opts` dit ce qui change d'une liste à l'autre : ce qu'on attrape, où l'on
+   lit sa clé, comment on trouve la place d'accueil, et quoi enregistrer. */
+function rendreRangeable(zone, opts) {
   if (!zone) return;
   const R = RANGEMENT;
-  R.zone = zone;
 
   const arreterMinuterie = () => { if (R.minuterie) { clearTimeout(R.minuterie); R.minuterie = null; } };
 
@@ -12390,9 +12440,11 @@ function brancherRangementCompteurs() {
     const r = t.getBoundingClientRect();
     R.actif = true;
     R.tuile = t;
+    R.opts = opts;
+    R.zone = zone;
     R.styleAvant = t.getAttribute('style') || '';
     R.fantome = document.createElement('div');
-    R.fantome.className = 'brief-trou';
+    R.fantome.className = 'trou-rangement ' + (opts.trou || '');
     R.fantome.style.width = r.width + 'px';
     R.fantome.style.height = r.height + 'px';
     t.parentNode.insertBefore(R.fantome, t);
@@ -12409,51 +12461,68 @@ function brancherRangementCompteurs() {
   const suivre = (x, y) => {
     if (!R.actif) return;
     R.tuile.style.transform = `translate(${x - R.x0}px, ${y - R.y0}px)`;
+    /* Près du bord, la page suit. Une liste plus haute que l'écran ne se range
+       pas autrement : on ne peut pas poser sur une ligne qu'on ne voit pas. */
+    const marge = 70;
+    if (y < marge) window.scrollBy(0, -Math.ceil((marge - y) / 4));
+    else if (y > window.innerHeight - marge) window.scrollBy(0, Math.ceil((y - (window.innerHeight - marge)) / 4));
     const sous = document.elementFromPoint(x, y);
-    const cible = sous && sous.closest ? sous.closest('.brief-item') : null;
+    const cible = sous && sous.closest ? sous.closest(opts.item) : null;
     if (!cible || cible === R.tuile || !zone.contains(cible)) return;
-    /* Avant ou après la case survolée, selon le côté par lequel on arrive :
-       c'est ce qui permet de traverser une ligne sans que tout sautille. */
+    /* Avant ou après l'élément survolé, selon le côté par lequel on arrive.
+       Une rangée qui s'enroule se juge en largeur, une liste en hauteur : sinon
+       tout sautille dès qu'on traverse une ligne. */
     const r = cible.getBoundingClientRect();
-    const apres = (x - r.left) > r.width / 2;
-    zone.insertBefore(R.fantome, apres ? cible.nextSibling : cible);
+    const apres = opts.axe === 'y' ? (y - r.top) > r.height / 2 : (x - r.left) > r.width / 2;
+    cible.parentNode.insertBefore(R.fantome, apres ? cible.nextSibling : cible);
   };
 
   const poser = () => {
     arreterMinuterie();
     if (!R.actif) { R.tuile = null; return; }
-    const t = R.tuile;
-    zone.insertBefore(t, R.fantome);
+    const t = R.tuile, o = R.opts || opts, z = R.zone || zone;
+    R.fantome.parentNode.insertBefore(t, R.fantome);
     R.fantome.remove();
     t.classList.remove('en-main');
     if (R.styleAvant) t.setAttribute('style', R.styleAvant); else t.removeAttribute('style');
-    zone.classList.remove('range');
-    R.actif = false; R.tuile = null; R.fantome = null;
-    /* Le clic de fin de geste ne doit pas emmener sur un autre écran : on
-       l'avale une fois. */
+    z.classList.remove('range');
+    R.actif = false; R.tuile = null; R.fantome = null; R.opts = null;
+    /* Le clic de fin de geste ne doit pas déclencher ce que fait un vrai clic
+       sur cet élément : on l'avale une fois. */
     R.vientDeRanger = true;
     setTimeout(() => { R.vientDeRanger = false; }, 400);
 
-    const ordre = [...zone.querySelectorAll('.brief-item')].map(b => b.dataset.cpt).filter(Boolean);
-    const p = prefsDe();
-    if (p) { p.compteurs = ordre; DB.sauver(); }
+    const ordre = [...z.querySelectorAll(o.item)].map(b => b.dataset[o.cle]).filter(Boolean);
+    o.enregistrer(ordre);
+    DB.sauver();
     rendre();
-    toast('Compteurs rangés');
+    if (o.dit) toast(o.dit);
   };
 
   zone.addEventListener('pointerdown', (e) => {
     if (e.button !== undefined && e.button !== 0) return;
-    const t = e.target.closest('.brief-item');
-    if (!t) return;
-    R.x0 = e.clientX; R.y0 = e.clientY; R.tuile = t; R.actif = false;
+    const t = e.target.closest(opts.item);
+    if (!t || !zone.contains(t)) return;
+    /* Une poignée dit exactement où attraper : c'est ce qu'il faut quand la
+       ligne est pleine de boutons. Sans poignée, on attrape n'importe où —
+       mais alors on ne part pas d'un bouton qui a déjà son propre rôle. */
+    if (opts.poignee) {
+      if (!e.target.closest(opts.poignee)) return;
+    } else {
+      const inter = e.target.closest('button, a, input, select, textarea, label');
+      if (inter && inter !== t && t.contains(inter)) return;
+    }
+    R.x0 = e.clientX; R.y0 = e.clientY; R.tuile = t; R.actif = false; R.opts = opts; R.zone = zone;
     arreterMinuterie();
-    // au doigt, il faut rester posé ; à la souris, la minuterie ne sert qu'au clic immobile
+    /* Une poignée n'attend pas : elle ne sert qu'à ça. Ailleurs il faut rester
+       posé au doigt, sinon on ne pourrait plus faire défiler la page. */
+    if (opts.poignee) { decoller(t); return; }
     R.minuterie = setTimeout(() => { R.minuterie = null; if (R.tuile === t) decoller(t); }, 340);
     try { t.setPointerCapture(e.pointerId); } catch (err) { /* sans capture, ça marche aussi */ }
   });
 
   zone.addEventListener('pointermove', (e) => {
-    if (!R.tuile) return;
+    if (!R.tuile || R.zone !== zone) return;
     const dx = Math.abs(e.clientX - R.x0), dy = Math.abs(e.clientY - R.y0);
     if (!R.actif) {
       /* À la souris, un déplacement franc décolle tout de suite. Au doigt, le
@@ -12467,11 +12536,11 @@ function brancherRangementCompteurs() {
 
   ['pointerup', 'pointercancel'].forEach(ev => zone.addEventListener(ev, poser));
   /* Le doigt peut se relever ailleurs — hors de la zone, ou pendant que le
-     navigateur reprend la main. Sans ce filet, la case resterait collée au
+     navigateur reprend la main. Sans ce filet, l'élément resterait collé au
      curseur pour toujours. */
   R.relacher = poser;
 
-  /* Une fois décollée, la case suit le doigt et la page ne bouge plus. Il faut
+  /* Une fois décollé, l'élément suit le doigt et la page ne bouge plus. Il faut
      le dire ici : `touch-action` posé après le début du geste arrive trop tard
      pour le navigateur. */
   zone.addEventListener('touchmove', (e) => {
@@ -12479,11 +12548,34 @@ function brancherRangementCompteurs() {
   }, { passive: false });
 }
 
+/* Tout ce qui se range dans l'outil, branché après chaque affichage. */
+function brancherRangements() {
+  const p = () => prefsDe();
+
+  rendreRangeable(document.querySelector('.brief'), {
+    item: '.brief-item', cle: 'cpt', trou: 'brief-trou', axe: 'x',
+    dit: 'Compteurs rangés',
+    enregistrer: (ordre) => { const q = p(); if (q) q.compteurs = ordre; }
+  });
+
+  rendreRangeable(document.querySelector('.barre-actions'), {
+    item: '.raccourci', cle: 'racc', trou: 'racc-trou', axe: 'x',
+    dit: 'Raccourcis rangés',
+    enregistrer: (ordre) => { const q = p(); if (q) q.raccourcis = ordre; }
+  });
+
+  rendreRangeable(document.querySelector('.liste-blocs'), {
+    item: '.bloc-accueil', cle: 'bloc', trou: 'bloc-trou', axe: 'y',
+    poignee: '.poignee', dit: 'Accueil rangé',
+    enregistrer: (ordre) => { const q = p(); if (q) q.ordreAccueil = ordre; }
+  });
+}
+
 /* Le clic qui termine un rangement n'est pas un clic : il ne doit pas changer
    d'écran. On l'attrape avant tout le monde. */
 document.addEventListener('click', (e) => {
   if (!RANGEMENT.vientDeRanger) return;
-  if (!e.target.closest || !e.target.closest('.brief-item')) return;
+  if (!e.target.closest || !e.target.closest('.brief-item, .raccourci, .bloc-accueil')) return;
   e.stopPropagation(); e.preventDefault();
   RANGEMENT.vientDeRanger = false;
 }, true);
@@ -12496,7 +12588,7 @@ document.addEventListener('visibilitychange', () => {
 
 function apresRendu() {
   appliquerCouleurs();
-  brancherRangementCompteurs();
+  brancherRangements();
   temoinEnregistrement();
   titreOnglet();
 
@@ -15304,11 +15396,9 @@ document.addEventListener('click', (e) => {
       const liste = raccourcisChoisis().slice();
       const i = liste.indexOf(id);
       if (i >= 0) liste.splice(i, 1);
-      else {
-        // on garde l'ordre de la liste d'origine, pas l'ordre des clics
-        liste.push(id);
-        liste.sort((a, b) => Object.keys(RACCOURCIS).indexOf(a) - Object.keys(RACCOURCIS).indexOf(b));
-      }
+      /* Un raccourci coché se pose à la fin : trier ici défairait le rangement
+         fait à la main sur l'accueil. */
+      else liste.push(id);
       p.raccourcis = liste;
       DB.sauver(); rendre();
     },
@@ -16938,7 +17028,7 @@ function vueTableauAtelier() {
     raccourcis: () => `<div class="barre-actions">
       ${/* Les raccourcis d'abord — c'est ce qu'on vient chercher —, la date
             ensuite : elle se lit, elle ne se clique pas. */ ''}
-      ${(raccourcisChoisis()).map(k => RACCOURCIS[k] ? `<button class="raccourci"
+      ${(raccourcisChoisis()).map(k => RACCOURCIS[k] ? `<button class="raccourci" data-racc="${k}"
           data-act="${RACCOURCIS[k].act}" ${RACCOURCIS[k].vue ? `data-vue="${RACCOURCIS[k].vue}"` : ''}>
           ${ic(RACCOURCIS[k].ico)} ${esc(RACCOURCIS[k].nom)}</button>` : '').join('')}
       <span class="jour-dit">${dateLongue(Date.now())}</span>
