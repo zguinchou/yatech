@@ -2265,6 +2265,52 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
    trois et le compteur grandissait pour rien. */
 .brief-item .leg { font-size: 11.5px; color: var(--encre-2); line-height: 1.25; max-width: 17ch; }
 .brief-item.calme .val { color: var(--encre-3); }
+/* Personne n'a rien coché : mieux vaut le dire que de laisser un blanc qu'on
+   prendrait pour une panne. */
+.brief-vide {
+  margin-bottom: 16px; padding: 12px 14px; border-radius: var(--r-l);
+  border: 1px dashed var(--trait); color: var(--encre-2); font-size: 12.5px;
+}
+
+/* --- choisir ses compteurs ------------------------------------------------
+   Chaque case montre le compteur tel qu'il s'affichera, sa vraie valeur du
+   moment comprise : on choisit sur pièces, pas sur un intitulé. */
+.grp-compteurs { margin-top: 4px; }
+.grille-compteurs {
+  display: grid; gap: 7px; margin-top: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+}
+/* La valeur au-dessus de son intitulé, la case à gauche des deux : « 2 688,12 € »
+   et « de devis en attente de réponse » ne se partagent pas une ligne sans que
+   l'un des deux se casse en quatre. */
+.choix-compteur {
+  display: grid; grid-template-columns: auto 1fr; gap: 1px 9px;
+  grid-template-areas: "case val" "case nom";
+  align-items: center;
+  padding: 8px 11px 8px 9px; border-radius: var(--r);
+  border: 1px solid var(--trait); background: var(--plan);
+  cursor: pointer; transition: border-color .12s, background .12s;
+}
+.choix-compteur input { grid-area: case; align-self: center; }
+.cc-val { grid-area: val; align-self: end; }
+.cc-nom { grid-area: nom; align-self: start; }
+.choix-compteur:hover { border-color: var(--encre-3); }
+.choix-compteur.on { border-color: var(--accent); background: var(--accent-voile); }
+.choix-compteur input { flex: none; }
+.cc-val {
+  font-family: var(--din); font-size: 15px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--ton, var(--encre));
+  white-space: nowrap;
+}
+.cc-val small { font-size: .68em; }
+.cc-nom { font-size: 11.5px; color: var(--encre-2); line-height: 1.25; }
+@media (max-width: 720px) {
+  .grille-compteurs { grid-template-columns: 1fr 1fr; }
+  .choix-compteur { min-height: 46px; }
+}
+@media (max-width: 420px) {
+  .grille-compteurs { grid-template-columns: 1fr; }
+}
 
 /* --- l'équipe, dans les paramètres ---------------------------------------- */
 .compte-equipe {
@@ -4343,6 +4389,184 @@ function poserPrefNotifQuoi(type, valeur, userId) {
   if (!p.notifs.quoi) p.notifs.quoi = {};
   p.notifs.quoi[type] = valeur;
   DB.sauver();
+}
+
+/* ==========================================================================
+   Les compteurs de l'accueil
+   --------------------------------------------------------------------------
+   Un garage ne se pilote pas avec les mêmes chiffres selon le jour, la
+   personne et la saison. Plutôt que d'en choisir six pour tout le monde, on
+   les met tous là — le parc, la charge, l'argent, le fichier, la journée — et
+   chacun coche les siens dans les paramètres. Ce qui n'est pas coché ne
+   s'affiche pas, et ne se calcule pas.
+
+   Chaque compteur dit trois choses : combien, de quoi, et où aller en
+   cliquant. Un compteur qui n'emmène nulle part n'a rien à faire ici.
+   ========================================================================== */
+
+/** Le lundi de la semaine en cours, et le premier jour du mois. */
+function debutSemaine() {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.getTime();
+}
+function debutMois() {
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(1);
+  return d.getTime();
+}
+
+/** La date qui fait foi pour un encaissement : celle de la facture. */
+const dateFacture = (d) => (d.facture && d.facture.date) || d.reponse || d.maj;
+
+/** Tous les dossiers terminés et non encaissés, de tout le monde. */
+function toutADevoir() {
+  return DB.etat.devis.filter(d => (d.lignes || []).length && etatIntervention(d) === 'aregler');
+}
+
+const COMPTEURS = [
+  /* --- le parc ---------------------------------------------------------- */
+  { cle: 'placesMeca', groupe: 'Le parc', nom: () => 'places ' + NATURES.meca.nom.toLowerCase() + ' libres',
+    ton: 'var(--attente)', vue: 'parking', extra: 'data-cote="meca"',
+    calc: () => { const p = placesLibresParCote().meca; return { n: p.libres, aff: p.libres + '<small> / ' + p.total + '</small>' }; } },
+  { cle: 'placesElectro', groupe: 'Le parc', nom: () => 'places ' + NATURES.electro.nom.toLowerCase() + ' libres',
+    ton: 'var(--actif)', vue: 'parking', extra: 'data-cote="electro"',
+    calc: () => { const p = placesLibresParCote().electro; return { n: p.libres, aff: p.libres + '<small> / ' + p.total + '</small>' }; } },
+  { cle: 'placesTotal', groupe: 'Le parc', nom: () => 'places libres en tout', ton: 'var(--libre)', vue: 'parking',
+    calc: () => ({ n: placesLibres().length, aff: placesLibres().length + '<small> / ' + PLACES.length + '</small>' }) },
+  { cle: 'surLeParc', groupe: 'Le parc', nom: () => 'voitures sur le parc', ton: 'var(--actif)', vue: 'parking',
+    calc: () => DB.etat.occupations.length - DB.dansLaRue().length },
+  { cle: 'rue', groupe: 'Le parc', nom: () => 'voitures dans la rue', ton: 'var(--occupe)', vue: 'parking',
+    calc: () => DB.dansLaRue().length },
+  { cle: 'prets', groupe: 'Le parc', nom: (n) => 'véhicule' + (n > 1 ? 's' : '') + ' prêt' + (n > 1 ? 's' : ''),
+    ton: 'var(--libre)', vue: 'parking', extra: 'data-parc="pret"', calc: () => pretsARendre().length },
+  { cle: 'immobilises', groupe: 'Le parc', nom: () => 'immobilisés trop longtemps', ton: 'var(--occupe)', vue: 'parking',
+    calc: () => immobilisesLongs().length },
+  { cle: 'occupation', groupe: 'Le parc', nom: () => 'du parc occupé', ton: 'var(--gros)', vue: 'parking',
+    calc: () => { const t = PLACES.length || 1;
+      const pris = Math.min(t, DB.etat.occupations.length - DB.dansLaRue().length);
+      const pc = Math.round((pris / t) * 100);
+      return { n: pc, aff: pc + '<small> %</small>' }; } },
+
+  /* --- la charge -------------------------------------------------------- */
+  { cle: 'rdvJour', groupe: 'Le travail', nom: () => "au planning aujourd'hui", ton: 'var(--actif)', vue: 'planning',
+    calc: () => rdvActifs(minuit(Date.now())).length },
+  { cle: 'rdvDemain', groupe: 'Le travail', nom: () => 'au planning demain', ton: 'var(--actif)', vue: 'planning',
+    calc: () => rdvActifs(minuit(Date.now()) + JOUR).length },
+  { cle: 'heuresJour', groupe: 'Le travail', nom: () => "d'atelier posées aujourd'hui", ton: 'var(--attente)', vue: 'planning',
+    calc: () => { const h = chargeDuJour(Date.now()).pris; return { n: h, aff: heuresFr(h) }; } },
+  { cle: 'heuresLibres', groupe: 'Le travail', nom: () => 'encore libres aujourd\'hui', ton: 'var(--libre)', vue: 'planning',
+    calc: () => { const h = chargeDuJour(Date.now()).libre; return { n: h, aff: heuresFr(h) }; } },
+  { cle: 'rdvSemaine', groupe: 'Le travail', nom: () => 'rendez-vous cette semaine', ton: 'var(--actif)', vue: 'planning',
+    calc: () => { const l = debutSemaine();
+      return DB.etat.planning.filter(p => !p.annule && minuit(p.jour) >= l && minuit(p.jour) < l + 7 * JOUR).length; } },
+  { cle: 'heuresSemaine', groupe: 'Le travail', nom: () => 'posées cette semaine', ton: 'var(--attente)', vue: 'planning',
+    calc: () => { const l = debutSemaine();
+      const h = DB.etat.planning.filter(p => !p.annule && minuit(p.jour) >= l && minuit(p.jour) < l + 7 * JOUR)
+        .reduce((s, p) => s + (Number(p.duree) || 0), 0);
+      return { n: h, aff: heuresFr(h) }; } },
+  { cle: 'auPont', groupe: 'Le travail', nom: () => 'au pont aujourd\'hui', ton: 'var(--gros)', vue: 'planning',
+    calc: () => rdvActifs(minuit(Date.now())).filter(p => p.emplacement === 'pont').length },
+  { cle: 'aPlanifier', groupe: 'Le travail', nom: () => 'devis validés sans créneau', ton: 'var(--attente)', vue: 'planning',
+    calc: () => aPlanifier().length },
+  { cle: 'annulations', groupe: 'Le travail', nom: () => 'créneaux rendus à voir', ton: 'var(--occupe)', vue: 'planning',
+    calc: () => annulationsClient().length },
+  { cle: 'demandesPro', groupe: 'Le travail', nom: () => 'demandes de confrères', ton: 'var(--pret)', vue: 'planning',
+    calc: () => demandesPro().length },
+
+  /* --- les dossiers ----------------------------------------------------- */
+  { cle: 'appels', groupe: 'Les dossiers', nom: () => 'appels à traiter', ton: 'var(--occupe)', vue: 'atelier',
+    calc: () => appelsATraiter().length },
+  { cle: 'relances', groupe: 'Les dossiers', nom: () => 'devis à relancer', ton: 'var(--attente)', vue: 'atelier',
+    calc: () => aRelancer().length },
+  { cle: 'envoyes', groupe: 'Les dossiers', nom: () => 'devis en attente de réponse', ton: 'var(--actif)', vue: 'devis',
+    calc: () => DB.etat.devis.filter(d => d.statut === 'envoye').length },
+  { cle: 'attenteInfos', groupe: 'Les dossiers', nom: () => 'fiches client à compléter', ton: 'var(--attente)', vue: 'atelier',
+    calc: () => attenteInfos().length },
+  { cle: 'aChiffrer', groupe: 'Les dossiers', nom: () => 'devis à chiffrer', ton: 'var(--attente)', vue: 'devis',
+    calc: () => DB.etat.devis.filter(d => d.statut === 'brouillon').length },
+  { cle: 'enAtelier', groupe: 'Les dossiers', nom: () => 'en atelier en ce moment', ton: 'var(--actif)', vue: 'devis',
+    calc: () => DB.etat.devis.filter(d => d.statut === 'encours').length },
+  { cle: 'piecesAttendues', groupe: 'Les dossiers', nom: () => 'pièces commandées, non livrées', ton: 'var(--attente)', vue: 'devis',
+    calc: () => DB.etat.devis.filter(d => d.statut === 'commande').length },
+  { cle: 'ebp', groupe: 'Les dossiers', nom: () => 'à repasser dans EBP', ton: 'var(--occupe)', vue: 'atelier',
+    calc: () => devisATransferer().length },
+
+  /* --- l'argent --------------------------------------------------------- */
+  { cle: 'aEncaisser', groupe: 'L\'argent', nom: () => 'restent à encaisser', ton: 'var(--occupe)', vue: 'clients',
+    calc: () => { const m = toutADevoir().reduce((s, d) => s + totaux(d).ttc, 0); return { n: m, aff: eur(m) }; } },
+  { cle: 'moisFacture', groupe: 'L\'argent', nom: () => 'facturés ce mois-ci', ton: 'var(--libre)', vue: 'devis',
+    calc: () => { const l = debutMois();
+      const m = DB.etat.devis.filter(d => d.statut === 'facture' && dateFacture(d) >= l)
+        .reduce((s, d) => s + totaux(d).ttc, 0);
+      return { n: m, aff: eur(m) }; } },
+  { cle: 'semaineFacture', groupe: 'L\'argent', nom: () => 'facturés cette semaine', ton: 'var(--libre)', vue: 'devis',
+    calc: () => { const l = debutSemaine();
+      const m = DB.etat.devis.filter(d => d.statut === 'facture' && dateFacture(d) >= l)
+        .reduce((s, d) => s + totaux(d).ttc, 0);
+      return { n: m, aff: eur(m) }; } },
+  { cle: 'enCoursMontant', groupe: 'L\'argent', nom: () => 'de travail engagé', ton: 'var(--actif)', vue: 'devis',
+    calc: () => { const m = DB.etat.devis
+        .filter(d => ['accepte', 'commande', 'encours'].includes(d.statut))
+        .reduce((s, d) => s + totaux(d).ttc, 0);
+      return { n: m, aff: eur(m) }; } },
+  { cle: 'devisEnJeu', groupe: 'L\'argent', nom: () => 'de devis en attente de réponse', ton: 'var(--attente)', vue: 'devis',
+    calc: () => { const m = DB.etat.devis.filter(d => d.statut === 'envoye')
+        .reduce((s, d) => s + totaux(d).ttc, 0);
+      return { n: m, aff: eur(m) }; } },
+  { cle: 'panierMoyen', groupe: 'L\'argent', nom: () => 'par intervention en moyenne', ton: 'var(--gros)', vue: 'devis',
+    calc: () => { const l = DB.etat.devis.filter(d => d.statut === 'facture' && (d.lignes || []).length);
+      if (!l.length) return { n: 0, aff: eur(0) };
+      const m = l.reduce((s, d) => s + totaux(d).ttc, 0) / l.length;
+      return { n: m, aff: eur(m) }; } },
+  { cle: 'ebpMontant', groupe: 'L\'argent', nom: () => 'à repasser dans EBP', ton: 'var(--occupe)', vue: 'atelier',
+    calc: () => { const m = devisATransferer().reduce((s, d) => s + totaux(d).ttc, 0); return { n: m, aff: eur(m) }; } },
+
+  /* --- le fichier ------------------------------------------------------- */
+  { cle: 'clients', groupe: 'Le fichier', nom: () => 'clients au fichier', ton: 'var(--perso)', vue: 'clients',
+    calc: () => DB.etat.clients.length },
+  { cle: 'clientsMois', groupe: 'Le fichier', nom: () => 'nouveaux clients ce mois-ci', ton: 'var(--libre)', vue: 'clients',
+    calc: () => { const l = debutMois(); return DB.etat.clients.filter(c => (c.cree || 0) >= l).length; } },
+  { cle: 'vehicules', groupe: 'Le fichier', nom: () => 'véhicules connus', ton: 'var(--perso)', vue: 'clients',
+    calc: () => DB.etat.vehicules.length },
+  { cle: 'pros', groupe: 'Le fichier', nom: () => 'garages partenaires', ton: 'var(--pret)', vue: 'clients',
+    calc: () => DB.etat.clients.filter(c => DB.estPro(c)).length },
+  { cle: 'fichesTrouees', groupe: 'Le fichier', nom: () => 'fiches sans téléphone ni e-mail', ton: 'var(--occupe)', vue: 'clients',
+    calc: () => DB.etat.clients.filter(c => !(c.tel || '').trim() && !(c.email || '').trim()).length },
+
+  /* --- la journée ------------------------------------------------------- */
+  { cle: 'memosJour', groupe: 'Ma journée', nom: () => 'pense-bêtes pour aujourd\'hui', ton: 'var(--accent)', vue: 'memos',
+    calc: () => mesMemos(false).filter(m => m.quand && minuit(m.quand) <= minuit(Date.now())).length },
+  { cle: 'memosRetard', groupe: 'Ma journée', nom: () => 'pense-bêtes en retard', ton: 'var(--occupe)', vue: 'memos',
+    calc: () => mesMemos(false).filter(m => m.quand && minuit(m.quand) < minuit(Date.now())).length },
+  { cle: 'memosTous', groupe: 'Ma journée', nom: () => 'pense-bêtes en tout', ton: 'var(--accent)', vue: 'memos',
+    calc: () => mesMemos(false).length },
+  { cle: 'alertes', groupe: 'Ma journée', nom: () => 'alertes non lues', ton: 'var(--occupe)', vue: 'atelier',
+    calc: () => { try { return DB.alertesDe(S.userId).length; } catch (e) { return 0; } } },
+  { cle: 'appelsRappeler', groupe: 'Ma journée', nom: () => 'appels à rappeler', ton: 'var(--occupe)', vue: 'atelier',
+    calc: () => appelsEnAttente().length },
+  { cle: 'appelsJour', groupe: 'Ma journée', nom: () => 'appels reçus aujourd\'hui', ton: 'var(--pret)', vue: 'atelier',
+    calc: () => (DB.etat.appels || []).filter(a => minuit(a.quand) === minuit(Date.now())).length }
+];
+
+/* Ceux qu'on affiche à la livraison : les six d'origine. Le reste attend
+   qu'on aille le chercher — un tableau de bord de quarante cases ne se lit
+   plus. */
+const COMPTEURS_DEFAUT = ['prets', 'relances', 'rue', 'rdvJour', 'placesMeca', 'placesElectro'];
+
+/** Poser d'un coup la liste des compteurs de la personne connectée. */
+function poserCompteurs(liste) {
+  const p = prefsDe();
+  if (!p) return;
+  p.compteurs = liste;
+  DB.sauver(); rendre();
+}
+
+/** Ceux que cette personne veut voir, dans l'ordre du catalogue. */
+function compteursChoisis(userId) {
+  const u = DB.utilisateur(userId || S.userId);
+  const perso = u && u.prefs && Array.isArray(u.prefs.compteurs) ? u.prefs.compteurs : null;
+  const voulus = perso || COMPTEURS_DEFAUT;
+  return COMPTEURS.filter(c => voulus.includes(c.cle));
 }
 
 /* Les blocs de l'accueil, dans l'ordre livré. Chacun peut les ranger autrement :
@@ -9755,6 +9979,43 @@ function vueReglages() {
         })()}
 
         <div class="sep"></div>
+        <div class="etiq">Les compteurs</div>
+        <p class="aide" style="margin:0">Tout ce qui se compte est là. Cochez ce que vous voulez lire
+        en arrivant le matin — ils s'affichent dans l'ordre de cette liste.
+        ${(() => { const n = compteursChoisis().length;
+          return n ? `<b>${n} affiché${n > 1 ? 's' : ''}</b> sur ${COMPTEURS.length}.`
+                   : `<b>Aucun affiché</b> sur ${COMPTEURS.length}.`; })()}</p>
+        <div class="rangee" style="gap:7px">
+          <button class="btn nu" data-act="compteurs-defaut">Remettre les six d'origine</button>
+          <button class="btn nu" data-act="compteurs-tous">Tout cocher</button>
+          <button class="btn nu" data-act="compteurs-aucun">Tout décocher</button>
+        </div>
+        ${(() => {
+          const groupes = [];
+          COMPTEURS.forEach(c => {
+            const g = groupes.find(x => x.nom === c.groupe)
+              || (groupes.push({ nom: c.groupe, liste: [] }), groupes[groupes.length - 1]);
+            g.liste.push(c);
+          });
+          const pris = compteursChoisis().map(c => c.cle);
+          return groupes.map(g => `<div class="grp-compteurs">
+            <div class="etiq">${esc(g.nom)}</div>
+            <div class="grille-compteurs">
+              ${g.liste.map(c => {
+                let v; try { v = c.calc(); } catch (e) { v = 0; }
+                const n = typeof v === 'object' ? v.n : v;
+                const aff = typeof v === 'object' ? v.aff : v;
+                return `<label class="choix-compteur ${pris.includes(c.cle) ? 'on' : ''}">
+                  <input type="checkbox" data-champ-compteur="${c.cle}" ${pris.includes(c.cle) ? 'checked' : ''}>
+                  <span class="cc-val" style="--ton:${c.ton}">${aff}</span>
+                  <span class="cc-nom">${esc(c.nom(Number(n) || 0))}</span>
+                </label>`;
+              }).join('')}
+            </div>
+          </div>`).join('');
+        })()}
+
+        <div class="sep"></div>
         <div class="etiq">Les raccourcis de la barre</div>
         <p class="aide" style="margin:0">Cochez ceux que vous voulez sous la main, dans l'ordre de la liste.</p>
         <div class="rangee" style="gap:6px">
@@ -14014,6 +14275,10 @@ document.addEventListener('click', (e) => {
       }, 40);
     },
 
+    'compteurs-defaut'() { poserCompteurs(COMPTEURS_DEFAUT.slice()); },
+    'compteurs-tous'()   { poserCompteurs(COMPTEURS.map(c => c.cle)); },
+    'compteurs-aucun'()  { poserCompteurs([]); },
+
     'planning-hauteur'() {
       DB.etat.reglages.planningPasH = Math.min(120, Math.max(34, Number(id) || 62));
       DB.sauver(); rendre();
@@ -15681,6 +15946,24 @@ document.addEventListener('input', (e) => {
     return;                       // pas de redessin : la couleur suit toute seule
   }
 
+  /* Les compteurs appartiennent à celui qui les regarde, comme le reste de
+     son accueil. On garde l'ordre du catalogue : la liste stockée n'est qu'un
+     ensemble, pas un rangement. */
+  if (t.dataset.champCompteur) {
+    const p = prefsDe();
+    if (p) {
+      const cle = t.dataset.champCompteur;
+      const actuels = Array.isArray(p.compteurs) ? p.compteurs.slice() : COMPTEURS_DEFAUT.slice();
+      const i = actuels.indexOf(cle);
+      if (t.checked && i < 0) actuels.push(cle);
+      if (!t.checked && i >= 0) actuels.splice(i, 1);
+      p.compteurs = actuels;
+      DB.sauver();
+    }
+    rendre();
+    return;
+  }
+
   if (t.dataset.champAccueil) {
     // l'accueil appartient à celui qui le regarde
     const p = prefsDe();
@@ -16404,14 +16687,12 @@ function blocAppels() {
 }
 
 function vueTableauAtelier() {
-  const prets = pretsARendre().length;
-  const relances = aRelancer().length;
-  const places = placesLibresParCote();
-  const meca = places.meca, elec = places.electro;
   const ceJour = minuit(Date.now());
-  const rdvJour = rdvActifs(ceJour).length;
-  const rue = DB.dansLaRue().length;
-  const item = (val, leg, ton, vue, extra) => `<button class="brief-item ${val ? '' : 'calme'}"
+  /* `n` dit si le compteur est à zéro — pas ce qui est écrit : « 0,00 € » et
+     « 0 % » sont des textes bien remplis, et se seraient allumés comme s'il y
+     avait quelque chose à voir. */
+  const item = (val, leg, ton, vue, extra, n) => `<button class="brief-item ${
+      (n === undefined ? val : n) ? '' : 'calme'}"
       style="--ton:${ton}" data-act="aller" data-vue="${vue}" ${extra || ''}>
     <span class="val">${val}</span><span class="leg">${leg}</span>
   </button>`;
@@ -16434,16 +16715,21 @@ function vueTableauAtelier() {
       <button class="btn plein sur-grand" data-act="appel">${ic('tel')} Nouvelle demande</button>
     </div>`,
 
-    compteurs: () => `<div class="brief">
-      ${item(prets, 'véhicule' + (prets > 1 ? 's' : '') + ' prêt' + (prets > 1 ? 's' : ''), 'var(--libre)', 'parking', 'data-parc="pret"')}
-      ${item(relances, 'devis à relancer', 'var(--attente)', 'atelier')}
-      ${item(rue, 'voiture' + (rue > 1 ? 's' : '') + ' dans la rue', 'var(--occupe)', 'parking')}
-      ${item(rdvJour, 'au planning aujourd\'hui', 'var(--actif)', 'planning')}
-      ${item(meca.libres + '<small> / ' + meca.total + '</small>', 'places ' + esc(NATURES.meca.nom.toLowerCase()) + ' libres',
-             'var(--attente)', 'parking', 'data-cote="meca"')}
-      ${item(elec.libres + '<small> / ' + elec.total + '</small>', 'places ' + esc(NATURES.electro.nom.toLowerCase()) + ' libres',
-             'var(--actif)', 'parking', 'data-cote="electro"')}
-    </div>`,
+    compteurs: () => {
+      const choisis = compteursChoisis();
+      if (!choisis.length) return `<div class="brief-vide">
+        Aucun compteur affiché — choisissez les vôtres dans
+        <b>Paramètres → L'écran d'accueil</b>.</div>`;
+      return `<div class="brief">${choisis.map(c => {
+        /* Un compteur qui tombe en panne ne doit pas emporter l'accueil : on
+           saute celui-là et on garde les autres. */
+        let v;
+        try { v = c.calc(); } catch (e) { return ''; }
+        const n = typeof v === 'object' ? v.n : v;
+        const aff = typeof v === 'object' ? v.aff : v;
+        return item(aff, esc(c.nom(Number(n) || 0)), c.ton, c.vue, c.extra || '', Number(n) || 0);
+      }).join('')}</div>`;
+    },
 
     facturer: () => blocFacturer(),
     pros:     () => blocProsAccueil(),
