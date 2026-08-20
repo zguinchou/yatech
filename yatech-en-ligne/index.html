@@ -1738,8 +1738,9 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
      collée à gauche. Des colonnes un peu plus étroites, une heure un peu plus
      courte : trois jours tiennent à l'écran d'un coup. */
   .planning { grid-template-columns: 54px repeat(var(--jours, 6), 128px); --pas-h: 54px; }
-  .planning-cadre { scroll-snap-type: x proximity; }
-  .pl-jour { scroll-snap-align: start; padding: 8px 4px; }
+  /* Pas d'aimant de défilement : sur des colonnes de 128 px, un petit
+     glissement retombait toujours sur la colonne d'où il venait. */
+  .pl-jour { padding: 8px 4px; }
   .pl-jour b { font-size: 12.5px; }
   .pl-h { font-size: 10px; right: 5px; }
 
@@ -4090,6 +4091,10 @@ const S = {
   clientToken: null,     // vue « espace client »
   grilleToken: null,     // vue « grille tarifaire » d'un client
   annulToken: null,      // vue « annuler mon rendez-vous »
+  /* Où on en est dans le défilement horizontal du planning. Chaque affichage
+     réécrit la page entière : sans ce repère, ouvrir un rendez-vous ou classer
+     une annulation ramènerait la semaine à lundi. */
+  planningScroll: 0,
   clientEtape: 'infos'
 };
 
@@ -7008,12 +7013,16 @@ function poserSemaine(lundi) {
 
 /* Passer à la semaine voisine — en jours de calendrier, jamais en ajoutant
    7 × 24 h : la semaine du changement d'heure ne dure pas 168 heures. */
-function glisserSemaine(sens) {
+/* Changer de semaine, et se replacer au bon bout : on entre dans la semaine
+   suivante par le lundi, et dans la précédente par le samedi — c'est le sens de
+   la lecture, et celui du doigt qui vient de pousser. */
+function glisserSemaine(sens, parLeDoigt) {
   const mois = semainesDuMois(S.moisPlanning || 0);
   const sem = mois.semaines[semaineAffichee(mois)];
   const d = new Date(sem.lundi);
   d.setDate(d.getDate() + sens * 7);
   poserSemaine(d.getTime());
+  S.planningScroll = parLeDoigt && sens < 0 ? 'fin' : 0;
   rendre();
 }
 
@@ -11764,15 +11773,43 @@ function apresRendu() {
     ajuster();
   }
 
-  /* Glisser d'une semaine à l'autre. On ne bouge que si le geste est franc et
-     surtout horizontal : sur téléphone, le planning se lit en défilant vers le
-     bas, et il ne doit pas changer de semaine pendant qu'on descend. */
+  /* Glisser d'une semaine à l'autre. Le geste est franc et surtout horizontal :
+     sur téléphone, le planning se lit en défilant vers le bas, et il ne doit pas
+     changer de semaine pendant qu'on descend.
+
+     Mais la semaine elle-même défile maintenant du pouce, jour après jour. Le
+     même geste veut donc dire deux choses, et c'est la place dans la semaine qui
+     tranche : tant qu'il reste des jours à découvrir, on les découvre ; une fois
+     collé au samedi, pousser encore fait passer à la semaine suivante. Il faut
+     avoir été au bord avant ET après le geste — sinon le glissement qui vient
+     tout juste d'atteindre le samedi changerait de semaine dans la foulée. */
   const pl = $('#planning-glisse');
+  const cadre = pl ? pl.closest('.planning-cadre') : null;
+
+  /* Où en est le défilement : au début, à la fin, ou entre les deux. Sans
+     débordement — sur grand écran — les deux bords sont vrais à la fois, et le
+     geste retrouve son sens d'avant. */
+  const bordsScroll = () => {
+    if (!cadre) return { debut: true, fin: true };
+    const reste = cadre.scrollWidth - cadre.clientWidth;
+    return { debut: cadre.scrollLeft <= 2, fin: cadre.scrollLeft >= reste - 2 };
+  };
+
+  if (cadre) {
+    /* On retient la position pendant qu'on défile : le prochain affichage la
+       repose telle quelle. */
+    cadre.addEventListener('scroll', () => { S.planningScroll = cadre.scrollLeft; }, { passive: true });
+    cadre.scrollLeft = S.planningScroll === 'fin'
+      ? Math.max(0, cadre.scrollWidth - cadre.clientWidth)
+      : (Number(S.planningScroll) || 0);
+  }
+
   if (pl) {
-    let x0 = null, y0 = null;
+    let x0 = null, y0 = null, bord0 = null;
     pl.addEventListener('touchstart', (e) => {
       if (e.touches.length !== 1) { x0 = null; return; }
       x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+      bord0 = bordsScroll();
     }, { passive: true });
     pl.addEventListener('touchend', (e) => {
       if (x0 === null) return;
@@ -11780,7 +11817,12 @@ function apresRendu() {
       const dx = t.clientX - x0, dy = t.clientY - y0;
       x0 = null;
       if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
-      glisserSemaine(dx < 0 ? +1 : -1);
+      const sens = dx < 0 ? +1 : -1;
+      const bord = bordsScroll();
+      // au milieu de la semaine, le doigt fait défiler : il ne fait que ça
+      if (sens > 0 && !(bord0.fin && bord.fin)) return;
+      if (sens < 0 && !(bord0.debut && bord.debut)) return;
+      glisserSemaine(sens, true);
     }, { passive: true });
   }
 
@@ -13396,7 +13438,7 @@ document.addEventListener('click', (e) => {
        glisserSemaine() passe au mois voisin quand il faut. « Cette semaine »
        ramène sur aujourd'hui, d'où qu'on vienne. */
     'planif-semaine'() {
-      if (id === '0') { S.moisPlanning = 0; S.semaineDuMois = null; rendre(); return; }
+      if (id === '0') { S.moisPlanning = 0; S.semaineDuMois = null; S.planningScroll = 0; rendre(); return; }
       glisserSemaine(Number(id));
     },
 
