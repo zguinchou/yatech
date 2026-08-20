@@ -4099,6 +4099,7 @@ const S = {
      réécrit la page entière : sans ce repère, ouvrir un rendez-vous ou classer
      une annulation ramènerait la semaine à lundi. */
   planningScroll: 0,
+  microEtat: '',         // ce que le navigateur a répondu sur le micro
   clientEtape: 'infos'
 };
 
@@ -9693,6 +9694,29 @@ function vueReglages() {
       <div class="carte-corps pile">
         <p class="aide" style="margin:0">Les mains dans le moteur, on parle plutôt qu'on ne touche l'écran.
         Le micro s'ouvre par le bouton en haut à droite, et tout ce qui se fait au doigt se dit aussi.</p>
+
+        ${/* L'autorisation du micro se règle dans le navigateur, pas ici : on la
+              demande d'un bouton, et on dit où elle en est. Sans ça, un micro
+              muet ressemble à une panne de l'outil. */ ''}
+        ${dansUnCadre() && (microBloque() || S.microEtat === 'refuse') ? `<div class="encart alerte">
+          <b>Yatech est affiché dans une autre page.</b> Le micro appartient alors à cette page-là,
+          qui ne le prête pas — la voix ne peut pas s'y ouvrir.
+          <div class="rangee" style="margin-top:9px">
+            <a class="btn plein" href="${esc(location.href)}" target="_blank" rel="noopener">
+              ${ic('envoi')} Ouvrir Yatech dans un onglet</a>
+          </div>
+        </div>` : `<div class="encart">
+          <b>Autorisation du micro${etatMicro() ? ' — ' + etatMicro() : ''}.</b>
+          Le navigateur la demande une fois, puis s'en souvient pour ce site.
+          <div class="rangee" style="margin-top:9px">
+            <button class="btn" data-act="micro-autoriser">${ic('micro')} Autoriser le micro</button>
+            ${/* Dans un cadre, le micro peut marcher — ou non, selon la page qui
+                  nous porte. On garde la sortie de secours sous la main sans
+                  annoncer une panne qui n'a pas eu lieu. */ ''}
+            ${dansUnCadre() ? `<a class="btn nu" href="${esc(location.href)}" target="_blank" rel="noopener">
+              Ouvrir dans un onglet</a>` : ''}
+          </div>
+        </div>`}
         <div class="pile" style="gap:11px">
           ${/* Le champ du nom vit hors du <label> : dedans, taper dedans
                 décocherait la case. */ ''}
@@ -13049,8 +13073,47 @@ const VOIX = {
   dialogue: null,        // le formulaire qu'on remplit à deux, question par question
   attente: null,         // la question posée, dont on attend la réponse
   questionPosee: false,  // une question vient-elle d'être posée dans ce tour ?
+  microOk: false,        // le navigateur a-t-il déjà accordé le micro ?
 
   dispo() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
+
+  /* Demander le micro pour de bon.
+
+     La reconnaissance vocale, lancée seule, ne fait pas toujours apparaître la
+     question du navigateur : sur iOS elle échoue en silence, et dans une page
+     affichée à l'intérieur d'une autre page elle refuse sans rien dire. C'est
+     `getUserMedia` qui déclenche la vraie demande — on la pose donc d'abord, et
+     son refus dit précisément pourquoi. On relâche aussitôt : la reconnaissance
+     rouvrira son propre flux. */
+  async autoriser() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return { ok: true };
+      const flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+      flux.getTracks().forEach(t => t.stop());
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, nom: (e && e.name) || 'erreur' };
+    }
+  },
+
+  /* Ce qu'on peut dire à quelqu'un dont le micro vient d'être refusé. La cause
+     n'est pas la même selon l'endroit : dans un cadre, il n'y a rien à
+     autoriser — la page qui l'entoure ne délègue pas le micro, et seule
+     l'ouverture dans un onglet à part y change quelque chose. */
+  pourquoiRefus(nom) {
+    if (nom === 'NotFoundError' || nom === 'DevicesNotFoundError') {
+      return 'Aucun micro trouvé sur cet appareil.';
+    }
+    if (nom === 'NotReadableError' || nom === 'TrackStartError') {
+      return 'Le micro est déjà pris par une autre application. Fermez-la, puis réessayez.';
+    }
+    if (dansUnCadre()) {
+      return 'Yatech est affiché à l\'intérieur d\'une autre page, qui ne lui donne pas le micro. '
+           + 'Ouvrez-le dans son propre onglet et la voix marchera.';
+    }
+    return 'Le micro est refusé pour ce site. Autorisez-le dans la barre d\'adresse '
+         + '(le cadenas, à gauche de l\'adresse), puis réessayez.';
+  },
 
   parler(texte) {
     if (!DB.etat.reglages.voixParle) return;
@@ -13064,7 +13127,7 @@ const VOIX = {
     } catch (e) { /* une voix muette n'empêche rien */ }
   },
 
-  demarrer() {
+  async demarrer() {
     if (!this.dispo()) {
       this.erreur = "Ce navigateur ne sait pas écouter. Chrome, Edge ou Safari le savent.";
       rendre(); return;
@@ -13075,6 +13138,22 @@ const VOIX = {
        entendu il peut s'écouler une seconde, et un bouton qui ne répond pas
        donne envie d'appuyer une deuxième fois. */
     rendre();
+
+    /* L'autorisation d'abord, une seule fois par session : le navigateur ne
+       repose pas sa question quand il l'a déjà accordée. Refusée, on s'arrête
+       ici en disant quoi faire — plutôt que de lancer une reconnaissance qui
+       échouerait sans expliquer. */
+    if (!this.microOk) {
+      const rep = await this.autoriser();
+      if (!this.voulu) return;              // coupé pendant qu'on demandait
+      if (!rep.ok) {
+        this.voulu = false;
+        this.erreur = this.pourquoiRefus(rep.nom);
+        rendre(); return;
+      }
+      this.microOk = true;
+    }
+
     if (this.reco) { try { this.reco.start(); } catch (e) { /* déjà lancée */ } return; }
 
     const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -13124,10 +13203,12 @@ const VOIX = {
     r.onerror = (ev) => {
       const c = ev.error;
       this.erreur = c === 'not-allowed' || c === 'service-not-allowed'
-          ? "Le micro est refusé. Autorisez-le dans le navigateur, puis réessayez."
+          ? this.pourquoiRefus('NotAllowedError')
         : c === 'audio-capture' ? "Aucun micro trouvé sur cet appareil."
         : c === 'network' ? "La reconnaissance a besoin du réseau."
         : c === 'no-speech' ? '' : "Le micro s'est arrêté (" + c + ').';
+      // refusée, l'autorisation est à redemander : elle a pu changer entre-temps
+      if (c === 'not-allowed' || c === 'service-not-allowed') this.microOk = false;
       if (c === 'not-allowed' || c === 'service-not-allowed' || c === 'audio-capture') this.voulu = false;
       rendre();
     };
@@ -13166,6 +13247,35 @@ const VOIX = {
    conversation n'a pas à le rappeler à chaque phrase.
    ========================================================================== */
 const EVEIL_SECONDES = 30;
+
+/* Yatech tourne-t-il à l'intérieur d'une autre page ? Un aperçu, un cadre, une
+   application qui l'affiche : dans ce cas le micro ne dépend plus de nous mais
+   de la page qui nous entoure, et elle ne le délègue pas. Un cadre d'une autre
+   origine fait lever l'accès à `window.top` — c'en est un aussi. */
+/* Ce qu'on sait de l'autorisation. Tous les navigateurs ne savent pas la dire :
+   dans le doute on n'affirme rien plutôt que d'annoncer un refus imaginaire. */
+function etatMicro() {
+  if (VOIX.microOk || S.microEtat === 'accorde') return 'accordée';
+  if (S.microEtat === 'refuse') return 'refusée';
+  return '';
+}
+
+function dansUnCadre() {
+  try { return window.self !== window.top; } catch (e) { return true; }
+}
+
+/* Le micro nous est-il coupé par la page qui nous entoure ? Être dans un cadre
+   ne suffit pas à le dire : un cadre de la même origine hérite du micro sans
+   rien demander. Chrome sait répondre pour de bon ; ailleurs on ne devine pas —
+   on attend le refus, qui est une réponse sûre. */
+function microBloque() {
+  try {
+    if (document.featurePolicy && document.featurePolicy.allowsFeature) {
+      return !document.featurePolicy.allowsFeature('microphone');
+    }
+  } catch (e) { /* pas de réponse : on n'en tire rien */ }
+  return false;
+}
 
 function motAppel() { return String(DB.etat.reglages.voixMot || 'Yatech').trim() || 'Yatech'; }
 
@@ -13232,6 +13342,12 @@ function barreVocale() {
         : `<b>${dit ? esc(dit) : (VOIX.ecoute ? 'Je vous écoute…' : 'Un instant…')}</b>
            ${VOIX.reponse ? `<span class="mini">${esc(VOIX.reponse)}</span>` : ''}`}
     </div>
+    ${/* Dans un cadre, il n'y a rien à autoriser sur place : le seul geste utile
+          est d'ouvrir Yatech dans un onglet à lui. */ ''}
+    ${VOIX.erreur && dansUnCadre() && VOIX.microOk === false
+      ? `<a class="btn" href="${esc(location.href)}" target="_blank" rel="noopener"
+           title="Ouvrir Yatech dans un onglet, où le micro marche">Ouvrir à part</a>`
+      : ''}
     <button class="btn nu" data-act="voix-aide" title="Ce que je comprends">${ic('question')}</button>
     <button class="btn nu" data-act="voix" title="Couper le micro">${ic('croix')}</button>
   </div>`;
@@ -13370,6 +13486,23 @@ document.addEventListener('click', (e) => {
 
     /* Le micro : un bouton pour l'ouvrir, un autre pour savoir quoi lui dire. */
     voix() { VOIX.basculer(); },
+    /* Poser la question du navigateur sans ouvrir le micro pour autant : on
+       vient régler son autorisation, pas dicter. */
+    'micro-autoriser'() {
+      VOIX.autoriser().then(rep => {
+        if (rep.ok) {
+          VOIX.microOk = true;
+          S.microEtat = 'accorde';
+          toast('Micro autorisé');
+        } else {
+          VOIX.microOk = false;
+          S.microEtat = 'refuse';
+          toast(VOIX.pourquoiRefus(rep.nom));
+        }
+        rendre();
+      });
+    },
+
     'voix-aide'() { S.modale = { type: 'voix' }; rendre(); },
 
     'menu-plus'() { S.modale = { type: 'plus' }; rendre(); },
