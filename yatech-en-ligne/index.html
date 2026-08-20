@@ -2265,6 +2265,26 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
    trois et le compteur grandissait pour rien. */
 .brief-item .leg { font-size: 11.5px; color: var(--encre-2); line-height: 1.25; max-width: 17ch; }
 .brief-item.calme .val { color: var(--encre-3); }
+/* --- ranger ses compteurs au doigt ----------------------------------------
+   La case décollée suit le doigt au-dessus de tout ; à sa place, un trou en
+   pointillé montre où elle retombera. */
+.brief-item { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.brief-item.en-main {
+  position: fixed; z-index: 90; margin: 0; pointer-events: none;
+  box-shadow: 0 14px 30px -10px rgba(0, 0, 0, .38);
+  border-color: var(--accent); transform-origin: 50% 50%;
+}
+.brief-trou {
+  border: 1px dashed var(--accent); border-radius: var(--r-l);
+  background: var(--accent-voile); flex: none;
+}
+/* Pendant le rangement, les autres cases glissent à leur nouvelle place au
+   lieu de sauter — c'est ce qui rend le geste lisible. */
+.brief.range .brief-item:not(.en-main) { transition: transform .14s ease; }
+.brief.range { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  .brief.range .brief-item:not(.en-main) { transition: none; }
+}
 /* Personne n'a rien coché : mieux vaut le dire que de laisser un blanc qu'on
    prendrait pour une panne. */
 .brief-vide {
@@ -4561,12 +4581,16 @@ function poserCompteurs(liste) {
   DB.sauver(); rendre();
 }
 
-/** Ceux que cette personne veut voir, dans l'ordre du catalogue. */
+/** Ceux que cette personne veut voir, dans SON ordre — celui qu'elle a rangé
+ *  au doigt sur l'accueil. Un compteur inconnu (venu d'une version antérieure,
+ *  ou coché deux fois) est écarté au passage. */
 function compteursChoisis(userId) {
   const u = DB.utilisateur(userId || S.userId);
   const perso = u && u.prefs && Array.isArray(u.prefs.compteurs) ? u.prefs.compteurs : null;
-  const voulus = perso || COMPTEURS_DEFAUT;
-  return COMPTEURS.filter(c => voulus.includes(c.cle));
+  const vus = [];
+  return (perso || COMPTEURS_DEFAUT)
+    .map(cle => (vus.includes(cle) ? null : (vus.push(cle), COMPTEURS.find(c => c.cle === cle))))
+    .filter(Boolean);
 }
 
 /* Les blocs de l'accueil, dans l'ordre livré. Chacun peut les ranger autrement :
@@ -9981,7 +10005,9 @@ function vueReglages() {
         <div class="sep"></div>
         <div class="etiq">Les compteurs</div>
         <p class="aide" style="margin:0">Tout ce qui se compte est là. Cochez ce que vous voulez lire
-        en arrivant le matin — ils s'affichent dans l'ordre de cette liste.
+        en arrivant le matin ; un compteur coché se pose à la fin.
+        <b>Pour les ranger, c'est sur l'accueil</b> : gardez le doigt sur un compteur, il se décolle,
+        et vous le posez où vous voulez.
         ${(() => { const n = compteursChoisis().length;
           return n ? `<b>${n} affiché${n > 1 ? 's' : ''}</b> sur ${COMPTEURS.length}.`
                    : `<b>Aucun affiché</b> sur ${COMPTEURS.length}.`; })()}</p>
@@ -12255,8 +12281,141 @@ function temoinEnregistrement() {
   if (h) document.body.style.setProperty('--haut-avert', Math.round(h + 20) + 'px');
 }
 
+/* ==========================================================================
+   Ranger ses compteurs au doigt
+   --------------------------------------------------------------------------
+   Cocher ses compteurs dans les paramètres, c'est un moment ; les mettre dans
+   le bon ordre, c'en est un autre — et il se fait devant eux, pas dans une
+   liste. On garde le doigt sur une case, elle se décolle, on la pose ailleurs.
+
+   Deux gestes cohabitent sur la même case : le clic qui emmène à l'écran
+   correspondant, et l'appui long qui la décolle. C'est le temps et le
+   mouvement qui tranchent — à la souris, un déplacement franc suffit ; au
+   doigt, il faut rester posé, sinon on ne pourrait plus faire défiler la page
+   en partant d'un compteur.
+   ========================================================================== */
+const RANGEMENT = { tuile: null, fantome: null, zone: null, x0: 0, y0: 0,
+                    minuterie: null, actif: false, styleAvant: '', vientDeRanger: false };
+
+function brancherRangementCompteurs() {
+  const zone = document.querySelector('.brief');
+  if (!zone) return;
+  const R = RANGEMENT;
+  R.zone = zone;
+
+  const arreterMinuterie = () => { if (R.minuterie) { clearTimeout(R.minuterie); R.minuterie = null; } };
+
+  const decoller = (t) => {
+    const r = t.getBoundingClientRect();
+    R.actif = true;
+    R.tuile = t;
+    R.styleAvant = t.getAttribute('style') || '';
+    R.fantome = document.createElement('div');
+    R.fantome.className = 'brief-trou';
+    R.fantome.style.width = r.width + 'px';
+    R.fantome.style.height = r.height + 'px';
+    t.parentNode.insertBefore(R.fantome, t);
+    t.classList.add('en-main');
+    t.style.width = r.width + 'px';
+    t.style.height = r.height + 'px';
+    t.style.left = r.left + 'px';
+    t.style.top = r.top + 'px';
+    zone.classList.add('range');
+    // une pichenette pour dire que c'est décollé, quand l'appareil sait la faire
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { /* tant pis */ }
+  };
+
+  const suivre = (x, y) => {
+    if (!R.actif) return;
+    R.tuile.style.transform = `translate(${x - R.x0}px, ${y - R.y0}px)`;
+    const sous = document.elementFromPoint(x, y);
+    const cible = sous && sous.closest ? sous.closest('.brief-item') : null;
+    if (!cible || cible === R.tuile || !zone.contains(cible)) return;
+    /* Avant ou après la case survolée, selon le côté par lequel on arrive :
+       c'est ce qui permet de traverser une ligne sans que tout sautille. */
+    const r = cible.getBoundingClientRect();
+    const apres = (x - r.left) > r.width / 2;
+    zone.insertBefore(R.fantome, apres ? cible.nextSibling : cible);
+  };
+
+  const poser = () => {
+    arreterMinuterie();
+    if (!R.actif) { R.tuile = null; return; }
+    const t = R.tuile;
+    zone.insertBefore(t, R.fantome);
+    R.fantome.remove();
+    t.classList.remove('en-main');
+    if (R.styleAvant) t.setAttribute('style', R.styleAvant); else t.removeAttribute('style');
+    zone.classList.remove('range');
+    R.actif = false; R.tuile = null; R.fantome = null;
+    /* Le clic de fin de geste ne doit pas emmener sur un autre écran : on
+       l'avale une fois. */
+    R.vientDeRanger = true;
+    setTimeout(() => { R.vientDeRanger = false; }, 400);
+
+    const ordre = [...zone.querySelectorAll('.brief-item')].map(b => b.dataset.cpt).filter(Boolean);
+    const p = prefsDe();
+    if (p) { p.compteurs = ordre; DB.sauver(); }
+    rendre();
+    toast('Compteurs rangés');
+  };
+
+  zone.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const t = e.target.closest('.brief-item');
+    if (!t) return;
+    R.x0 = e.clientX; R.y0 = e.clientY; R.tuile = t; R.actif = false;
+    arreterMinuterie();
+    // au doigt, il faut rester posé ; à la souris, la minuterie ne sert qu'au clic immobile
+    R.minuterie = setTimeout(() => { R.minuterie = null; if (R.tuile === t) decoller(t); }, 340);
+    try { t.setPointerCapture(e.pointerId); } catch (err) { /* sans capture, ça marche aussi */ }
+  });
+
+  zone.addEventListener('pointermove', (e) => {
+    if (!R.tuile) return;
+    const dx = Math.abs(e.clientX - R.x0), dy = Math.abs(e.clientY - R.y0);
+    if (!R.actif) {
+      /* À la souris, un déplacement franc décolle tout de suite. Au doigt, le
+         même déplacement veut dire « je fais défiler » : on abandonne. */
+      if (dx < 7 && dy < 7) return;
+      if (e.pointerType === 'mouse') { arreterMinuterie(); decoller(R.tuile); }
+      else { arreterMinuterie(); R.tuile = null; return; }
+    }
+    suivre(e.clientX, e.clientY);
+  });
+
+  ['pointerup', 'pointercancel'].forEach(ev => zone.addEventListener(ev, poser));
+  /* Le doigt peut se relever ailleurs — hors de la zone, ou pendant que le
+     navigateur reprend la main. Sans ce filet, la case resterait collée au
+     curseur pour toujours. */
+  R.relacher = poser;
+
+  /* Une fois décollée, la case suit le doigt et la page ne bouge plus. Il faut
+     le dire ici : `touch-action` posé après le début du geste arrive trop tard
+     pour le navigateur. */
+  zone.addEventListener('touchmove', (e) => {
+    if (RANGEMENT.actif) e.preventDefault();
+  }, { passive: false });
+}
+
+/* Le clic qui termine un rangement n'est pas un clic : il ne doit pas changer
+   d'écran. On l'attrape avant tout le monde. */
+document.addEventListener('click', (e) => {
+  if (!RANGEMENT.vientDeRanger) return;
+  if (!e.target.closest || !e.target.closest('.brief-item')) return;
+  e.stopPropagation(); e.preventDefault();
+  RANGEMENT.vientDeRanger = false;
+}, true);
+
+['pointerup', 'pointercancel', 'blur'].forEach(ev =>
+  window.addEventListener(ev, () => { if (RANGEMENT.relacher) RANGEMENT.relacher(); }));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && RANGEMENT.relacher) RANGEMENT.relacher();
+});
+
 function apresRendu() {
   appliquerCouleurs();
+  brancherRangementCompteurs();
   temoinEnregistrement();
   titreOnglet();
 
@@ -16727,7 +16886,8 @@ function vueTableauAtelier() {
         try { v = c.calc(); } catch (e) { return ''; }
         const n = typeof v === 'object' ? v.n : v;
         const aff = typeof v === 'object' ? v.aff : v;
-        return item(aff, esc(c.nom(Number(n) || 0)), c.ton, c.vue, c.extra || '', Number(n) || 0);
+        return item(aff, esc(c.nom(Number(n) || 0)), c.ton, c.vue,
+          `data-cpt="${c.cle}" ${c.extra || ''}`, Number(n) || 0);
       }).join('')}</div>`;
     },
 
