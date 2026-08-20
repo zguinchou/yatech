@@ -2275,13 +2275,17 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
 /* Ni flou ni rideau sur l'accueil : à peine un voile, juste assez pour dire
    qu'un clic à côté referme. C'est l'ombre de la bande qui la détache. */
 .voile.cote {
-  place-items: stretch start; padding: 0;
+  /* `start` et non `stretch` : sans quoi le panneau s'étire sur toute la
+     hauteur de l'écran, quel que soit le nombre de destinations. */
+  place-items: start start; padding: 0;
   background: color-mix(in srgb, #05080a 8%, transparent);
   backdrop-filter: none;
 }
+/* Le panneau s'arrête où s'arrête la liste : le pied suit les destinations au
+   lieu de flotter tout en bas d'un grand vide. Il ne dépasse jamais l'écran. */
 .voile.cote .modale {
-  width: min(224px, 74vw); max-height: none; height: 100%;
-  border-radius: 0; border-left: 0; border-top: 0; border-bottom: 0;
+  width: min(224px, 74vw); height: auto; max-height: 100%;
+  border-radius: 0 var(--r-l) var(--r-l) 0; border-left: 0; border-top: 0;
   box-shadow: 0 0 40px -8px rgba(0, 0, 0, .35);
   animation: glisse-gauche .18s cubic-bezier(.2,.8,.3,1);
 }
@@ -16059,14 +16063,9 @@ modalePlus = function modalePlusV2() {
         ${MENU2.map(m => tuile(m.id, m.nom, m.ico, badges[m.id])).join('')}
         ${tuile('devis', 'Tous les devis', 'devis', 0)}
       </div>
-
-      <div class="etiq">Qui travaille</div>
-      <div class="rangee" style="flex-wrap:wrap;gap:7px">
-        ${DB.etat.utilisateurs.map(x => `<button class="pl-leg ${x.id === S.userId ? 'on' : ''}"
-            data-act="connexion" data-id="${x.id}">
-          <span class="jeton-mini" style="--teinte:${x.teinte}">${esc(x.init)}</span>${esc(x.nom)}
-        </button>`).join('')}
-      </div>
+      ${/* Ce menu sert à changer d'écran. Changer de personne se fait par le
+            verrou, en bas : la liste de l'équipe ici doublait le pied et
+            allongeait le panneau d'autant. */ ''}
     </div>
     <div class="modale-pied">
       <span class="mini">Connecté : <b>${esc(u.nom)}</b></span>
