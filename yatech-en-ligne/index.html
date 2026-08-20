@@ -304,6 +304,12 @@ h1, h2, h3, h4 { font-family: var(--din); font-weight: 600; margin: 0; text-wrap
 .btn.nu:hover { background: var(--plan-2); color: var(--encre); }
 .btn.danger { color: var(--occupe); border-color: color-mix(in srgb, var(--occupe) 35%, transparent); }
 .btn.danger:hover { background: var(--occupe-voile); }
+/* Le geste qu'on ne fait qu'une fois et qui compte — annuler son rendez-vous —
+   se voit de loin : il est seul sur sa page. */
+.btn.danger.plein {
+  background: var(--occupe); border-color: var(--occupe); color: #fff;
+}
+.btn.danger.plein:hover { background: color-mix(in srgb, var(--occupe) 85%, #000); }
 .btn.grand { padding: 11px 18px; font-size: 14.5px; }
 .btn[disabled] { opacity: .45; pointer-events: none; }
 
@@ -590,6 +596,15 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 .pl-bloc:active { transform: translateY(1px); }
 .pl-bloc.pont { box-shadow: inset 0 0 0 1px hsl(var(--teinte, 220) 55% 45% / .45); }
 .pl-bloc.fini { opacity: .5; }
+/* Rendu par le client : la place est libre, mais le trou garde son explication.
+   Barré et hachuré, il ne se confond ni avec un créneau tenu ni avec du vide. */
+.pl-bloc.annule {
+  opacity: .55;
+  border-style: dashed;
+  background: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--occupe) 9%, var(--plan)) 0 5px, var(--plan) 5px 10px);
+}
+.pl-bloc.annule .pl-bloc-t, .pl-bloc.annule .pl-bloc-h { text-decoration: line-through; }
 /* Posé hors des heures ouvertes : la boîte n'a pas de place sur la frise, on
    la borde en pointillé pour que l'anomalie se voie. */
 .pl-bloc.hors { border: 1px dashed var(--occupe); border-left-width: 3px; }
@@ -657,6 +672,21 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
   .pl-plus:hover { border: 0; }
 }
 .pl-plus:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
+
+/* Un créneau rendu par un client. Il se lit en haut du planning, bordé de la
+   couleur des choses qui demandent un regard — pas une alarme, une nouvelle. */
+.carte.annulations { border-color: color-mix(in srgb, var(--occupe) 40%, var(--trait)); }
+.carte.annulations .carte-tete h2 { color: var(--occupe); }
+.annul-ligne {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px; border-radius: var(--r);
+  border: 1px solid var(--trait); background: var(--plan-2);
+}
+.annul-ligne > div:first-child { flex: 1; min-width: 0; }
+@media (max-width: 720px) {
+  .annul-ligne { flex-wrap: wrap; }
+  .annul-ligne > div:first-child { flex-basis: 100%; }
+}
 
 /* Qui porte quelle couleur. Le nom reste écrit : deux teintes voisines, un
    écran d'atelier mal réglé, un daltonien — la couleur seule ne dit rien. */
@@ -2775,6 +2805,20 @@ const REGLAGES = {
   messagePret: "Bonjour {prenom},\n\nVotre {vehicule} ({immat}) est prête, les travaux sont terminés.\n"
     + "Vous pouvez venir la récupérer aux horaires d'ouverture, de {horaires}.\n\n"
     + "Montant à régler : {montant}.\n\nÀ bientôt,",
+  /* Le SMS de confirmation. Il tient dans un écran de téléphone : la voiture
+     dont on parle, quand venir, où venir, et de quoi se décommander sans avoir
+     à appeler — un client qui ne peut pas venir et qui ne peut pas le dire ne
+     prévient pas, et le créneau est perdu pour tout le monde. */
+  messageRdvClient: "Bonjour,\n\nVotre rendez-vous est confirmé chez {garage}.\n\n"
+    + "Véhicule : {marque} — {immat}\n"
+    + "Le {jour} à {heure}\n"
+    + "Adresse : {adresse}\n\n"
+    + "Un empêchement ? Annulez en un clic, sans nous appeler :\n{lien}",
+  /* L'accusé d'annulation. Le client vient de cliquer : il a besoin de lire
+     que c'est bien enregistré, et sur quel rendez-vous — pas sur un autre. */
+  messageAnnule: "Bonjour,\n\nVotre rendez-vous du {jour} à {heure} pour votre {marque} ({immat}) "
+    + "est bien annulé, c'est noté de notre côté.\n\n"
+    + "Rappelez-nous quand vous voulez reprendre un créneau.",
 
   // le planning
   joursOuvres: 6,         // 5 = lundi-vendredi, 6 = jusqu'au samedi
@@ -3620,6 +3664,15 @@ const DB = {
   memosDe:   uid => DB.etat.memos.filter(m => m.userId === uid),
   rdv:       id => DB.etat.planning.find(p => p.id === id),
   clientParToken: t => DB.etat.clients.find(c => c.token === t),
+  rdvParToken:    t => DB.etat.planning.find(p => p.token === t),
+
+  /** Jeton d'annulation d'un rendez-vous, créé au premier envoi. Un jeton par
+   *  rendez-vous : le lien d'un client ne peut pas décommander celui d'un
+   *  autre, et il meurt avec le créneau. */
+  jetonRdv(p) {
+    if (!p.token) { p.token = Math.random().toString(36).slice(2, 9); DB.sauver(); }
+    return p.token;
+  },
 
   /** Jeton de partage d'un client, créé au premier besoin. */
   jetonClient(c) {
@@ -4036,6 +4089,7 @@ const S = {
   apercuOuvert: false,    // on regarde une page client depuis les réglages
   clientToken: null,     // vue « espace client »
   grilleToken: null,     // vue « grille tarifaire » d'un client
+  annulToken: null,      // vue « annuler mon rendez-vous »
   clientEtape: 'infos'
 };
 
@@ -4437,7 +4491,8 @@ function poserVeille(cle, pour, type, texte, contexte) {
 /* La veille ne connaît que ses propres suivis : elle efface ce qui porte une de
    ses clés et n'a plus lieu d'être. Une alerte à clé venue d'ailleurs ne la
    regarde pas — sans cette précaution, elle balaierait ce qu'elle n'a pas posé. */
-const PREFIXES_VEILLE = ['appel:', 'memo-du-jour:', 'client-incomplet:', 'impaye:', 'demande-pro:'];
+const PREFIXES_VEILLE = ['appel:', 'memo-du-jour:', 'client-incomplet:', 'impaye:', 'demande-pro:',
+  'annul-client:'];
 
 function resoudreCequiEstFait(clesVivantes) {
   if (!Array.isArray(DB.etat.alertes)) return 0;
@@ -4510,6 +4565,16 @@ function veilleAlertes() {
     });
   }
 
+  /* 6 · ce qu'un client vient de décommander tout seul. Personne ne l'a
+     décidé ici : sans ce rappel, on découvrirait le trou le jour même. */
+  annulationsClient().forEach(p => {
+    const quoi = [marqueRdv(p), immatRdv(p)].filter(x => x && x !== '—').join(' · ');
+    if (poser('annul-client:' + p.id, 'tous', 'rdv',
+      `${p.client || 'Un client'} a annulé son rendez-vous du ${dateCourte(p.jour)} à ${p.heure}`
+      + (quoi ? ' — ' + quoi : ''),
+      { vue: 'planning', ref: p.id })) posees++;
+  });
+
   demandesPro().forEach(p => {
     // le nom est posé à la réservation ; s'il manque, on retrouve le demandeur
     const dem = p.demandeur ? DB.client(p.demandeur) : null;
@@ -4531,7 +4596,7 @@ function veilleAlertes() {
    même si elle est sur un autre onglet. */
 let dernierSon = 0;
 function sonnerSiNouveau() {
-  if (!S.userId || S.clientToken || S.grilleToken) return;
+  if (!S.userId || enVuePublique()) return;
   const neuves = DB.alertesDe(S.userId).filter(a => Date.now() - a.quand < 15000);
   if (!neuves.length || Date.now() - dernierSon < 8000) return;
   dernierSon = Date.now();
@@ -5685,6 +5750,11 @@ function lienClient(d) {
   const base = location.href.split('#')[0];
   return `${base}#client=${d.token}`;
 }
+/** L'adresse de l'atelier sur une ligne, telle qu'on la met dans un SMS. */
+function adresseGarage(r) {
+  return [r.adresse, [r.cp, r.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+}
+
 /** Remplace les {étiquettes} d'un modèle par les valeurs du dossier. */
 function remplirModele(modele, valeurs) {
   return String(modele || '').replace(/\{(\w+)\}/g, (t, cle) =>
@@ -5729,6 +5799,62 @@ function messagePret(o) {
     garage: r.nom,
     horaires: tranchesOuverture(r).map(([a, b]) => `${enHeure(a)} à ${enHeure(b)}`).join(' et ')
   }) + signature;
+}
+
+/* ==========================================================================
+   Le rendez-vous du client : le confirmer, et pouvoir l'annuler
+   --------------------------------------------------------------------------
+   Un client prévenu par SMS vient. Un client qui a un empêchement et qui doit
+   téléphoner pour le dire ne prévient pas : il ne vient pas, et le créneau
+   reste vide sans qu'on le sache. Le lien d'annulation existe pour ça — pour
+   que la place se libère d'elle-même, et qu'on l'apprenne tout de suite.
+   ========================================================================== */
+
+/** Le lien qui décommande ce créneau-là, et lui seul. */
+function lienAnnulation(p) {
+  return location.href.split('#')[0] + '#annul=' + DB.jetonRdv(p);
+}
+
+/** Ce qu'on sait d'un rendez-vous, prêt à remplir un modèle. */
+function valeursRdv(p) {
+  const r = DB.etat.reglages;
+  const meca = p.userId ? DB.utilisateur(p.userId) : null;
+  return {
+    garage: r.nom || '',
+    marque: marqueRdv(p) || 'votre véhicule',
+    vehicule: marqueRdv(p) || 'votre véhicule',
+    immat: immatRdv(p) || '—',
+    /* « jeudi 20 août » plutôt que « jeudi 20 août 2026 » : un rendez-vous se
+       prend pour les jours qui viennent, l'année n'apprend rien à personne. */
+    jour: new Date(p.jour).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }),
+    heure: p.heure || '',
+    adresse: adresseGarage(r) || (r.nom || ''),
+    tel: r.tel || '',
+    client: p.client || '',
+    prestation: p.prestation || 'l\'intervention prévue',
+    mecanicien: meca ? meca.nom : '',
+    /* La date d'envoi, pour qui veut dater son SMS : le client retrouve alors
+       lequel des deux messages est le dernier. */
+    envoye: dateCourte(Date.now()) + ' à ' + new Date().toTimeString().slice(0, 5)
+  };
+}
+
+/* Le SMS de confirmation au client. Le lien d'annulation en fait partie : sans
+   lui le message n'est qu'une information de plus, avec lui c'est un créneau
+   qui se rend tout seul. */
+function messageRdvClient(p) {
+  const r = DB.etat.reglages;
+  return remplirModele(r.messageRdvClient,
+    Object.assign(valeursRdv(p), { lien: lienAnnulation(p) }))
+    + `\n\n${r.nom || ''}${r.tel ? '\n' + r.tel : ''}`;
+}
+
+/* L'accusé d'annulation. Il redit le rendez-vous annulé — jour, heure,
+   véhicule : un client qui en a deux doit savoir lequel vient de tomber. */
+function messageAnnule(p) {
+  const r = DB.etat.reglages;
+  return remplirModele(r.messageAnnule, valeursRdv(p))
+    + `\n\n${r.nom || ''}${r.tel ? '\n' + r.tel : ''}`;
 }
 
 /* Le mot qui confirme un créneau à un confrère. Il a demandé un jour, on lui
@@ -5792,6 +5918,7 @@ function rendre() {
   sessionValide();
   if (S.grilleToken) { app.innerHTML = vueGrilleTarifs(); apresRendu(); return; }
   if (S.clientToken) { app.innerHTML = vueClient(); apresRendu(); return; }
+  if (S.annulToken) { app.innerHTML = vueAnnulation(); apresRendu(); return; }
   if (!S.userId)     { app.innerHTML = SANS_CODE ? vueConnexionProfils() : vueConnexion(); apresRendu(); return; }
 
   const contenu = {
@@ -5877,6 +6004,13 @@ function modalePlanif(ctx) {
 
   const prestations = [...new Set(DB.etat.catalogue.map(x => x.libelle))];
   const emp = p ? p.emplacement : 'sol';
+  /* Ce qui part dans le SMS de confirmation : la marque, la plaque, le numéro.
+     Rattaché à un devis, tout est déjà connu — sinon on le demande, parce
+     qu'un SMS sans plaque ne dit pas au client de quelle voiture on parle. */
+  const marqueVeh = p ? marqueRdv(p) : (iSel ? iSel.vehiculeTexte : '');
+  const immatVeh = p ? immatRdv(p) : (iSel ? iSel.immat : '');
+  const telVeh = p ? telRdv(p) : (iSel && iSel.client ? String(iSel.client.tel || '') : '');
+  const marquesConnues = [...new Set(DB.etat.vehicules.map(v => (v.marque || '').trim()).filter(Boolean))].sort();
 
   return `<div class="voile" data-voile><div class="modale">
     <div class="modale-tete">
@@ -5923,6 +6057,29 @@ function modalePlanif(ctx) {
           <datalist id="liste-prestations">
             ${prestations.map(l => `<option value="${esc(l)}"></option>`).join('')}
           </datalist>
+        </div>
+
+        ${/* Marque, plaque, portable : le strict nécessaire pour que le client
+              reçoive un SMS qui lui parle, et pour qu'on sache quelle voiture
+              on attend. Tout est facultatif — un créneau se pose sans. */ ''}
+        <div class="champ-duo">
+          <div class="champ"><label>Marque du véhicule</label>
+            <input class="saisie" name="marque" list="liste-marques-rdv"
+                   value="${esc(marqueVeh)}" placeholder="Peugeot 308">
+            <datalist id="liste-marques-rdv">
+              ${marquesConnues.map(m => `<option value="${esc(m)}"></option>`).join('')}
+            </datalist>
+          </div>
+          <div class="champ"><label>Immatriculation</label>
+            <input class="saisie" name="immat" value="${esc(immatVeh)}"
+                   placeholder="AB-123-CD" style="text-transform:uppercase">
+          </div>
+        </div>
+
+        <div class="champ">
+          <label>Portable du client</label>
+          <input class="saisie" type="tel" name="tel" value="${esc(telVeh)}" placeholder="06 12 34 56 78">
+          <span class="aide">Sert au SMS de confirmation, avec le lien qui lui permet d'annuler seul.</span>
         </div>
 
         ${/* On ne prend pas rendez-vous hier : le calendrier s'arrête à
@@ -5979,7 +6136,12 @@ function modalePlanif(ctx) {
       </div>
       <div class="modale-pied">
         ${p ? `<button type="button" class="btn danger" data-act="planif-suppr" data-id="${p.id}">${ic('poubelle')} Supprimer</button>
-               <button type="button" class="btn" data-act="planif-fait" data-id="${p.id}">${p.fait ? 'Remettre à faire' : ic('check') + ' Marquer fait'}</button>` : ''}
+               <button type="button" class="btn" data-act="planif-fait" data-id="${p.id}">${p.fait ? 'Remettre à faire' : ic('check') + ' Marquer fait'}</button>
+               ${/* Reconfirmer après un déplacement, ou prévenir quelqu'un qu'on
+                     avait oublié : le SMS se reprend à tout moment. */ ''}
+               <button type="button" class="btn" data-act="rdv-prevenir" data-id="${p.id}"
+                       title="${p.prevenuLe ? 'Déjà prévenu le ' + dateCourte(p.prevenuLe) : 'Envoyer le SMS de confirmation'}">
+                 ${ic('tel')} ${p.prevenuLe ? 'Reprévenir' : 'Prévenir le client'}</button>` : ''}
         <button type="button" class="btn nu pousse" style="margin-left:auto" data-act="fermer-modale">Annuler</button>
         <button type="submit" class="btn plein">${ic('check')} ${p ? 'Enregistrer' : 'Poser le rendez-vous'}</button>
       </div>
@@ -6877,22 +7039,52 @@ function prestationDeDevis(d) {
 }
 
 /** Immatriculation du véhicule concerné, si le rendez-vous porte un devis. */
+/* Un créneau posé à la main porte sa plaque et sa marque ; un créneau rattaché
+   à un devis les tient du véhicule. On demande d'abord ce qui a été saisi : ce
+   que quelqu'un a écrit à la main l'emporte sur ce qu'on devine. */
 function immatRdv(p) {
+  if (String(p.immat || '').trim()) return p.immat.trim();
   const d = p.devisId ? DB.devis(p.devisId) : null;
   const v = d ? DB.vehicule(d.vehiculeId) : null;
   return v ? v.immat : '';
 }
 
-/** Les rendez-vous d'un jour : de tout le monde, ou d'une seule personne. */
+/** La marque du véhicule attendu — celle qu'on écrit dans le SMS. */
+function marqueRdv(p) {
+  if (String(p.marque || '').trim()) return p.marque.trim();
+  const d = p.devisId ? DB.devis(p.devisId) : null;
+  const v = d ? DB.vehicule(d.vehiculeId) : null;
+  return v ? (v.marque + ' ' + (v.modele || '')).trim() : '';
+}
+
+/** Le portable où prévenir : celui du créneau, sinon celui du dossier. */
+function telRdv(p) {
+  if (String(p.tel || '').trim()) return p.tel.trim();
+  const c = p.demandeur ? DB.client(p.demandeur)
+          : (p.devisId && DB.devis(p.devisId) ? DB.client(DB.devis(p.devisId).clientId) : null);
+  return c ? String(c.tel || '').trim() : '';
+}
+
+/** Les rendez-vous d'un jour : de tout le monde, ou d'une seule personne. Les
+ *  créneaux annulés en font partie — barrés, ils ne comptent plus dans la
+ *  charge, mais on voit le trou et pourquoi il est là. Les effacer d'office
+ *  laisserait un blanc inexplicable au milieu d'une journée pleine. */
 function rdvDu(jour, userId) {
   return DB.etat.planning
     .filter(p => minuit(p.jour) === jour && (userId === undefined || p.userId === userId))
     .sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
 }
 
+/** Ce que des clients ont décommandé et que personne n'a encore vu. */
+function annulationsClient() {
+  return DB.etat.planning
+    .filter(p => p.annule && !p.annuleVu)
+    .sort((a, b) => (b.annule.quand || 0) - (a.annule.quand || 0));
+}
+
 /** Devis validés qui n'ont encore aucun créneau. */
 function aPlanifier() {
-  const poses = new Set(DB.etat.planning.map(p => p.devisId).filter(Boolean));
+  const poses = new Set(DB.etat.planning.filter(p => !p.annule).map(p => p.devisId).filter(Boolean));
   return DB.etat.devis.filter(d => ['accepte', 'commande', 'encours'].includes(d.statut) && !poses.has(d.id));
 }
 
@@ -7040,14 +7232,15 @@ function vuePlanning() {
     const e = EMPLACEMENTS[p.emplacement] || EMPLACEMENTS.sol;
     const immat = immatRdv(p);
     return `<button class="pl-bloc ${p.fait ? 'fini' : ''} ${p.emplacement === 'pont' ? 'pont' : ''} ${
-                hors ? 'hors' : ''} ${deborde ? 'deborde' : ''}"
+                hors ? 'hors' : ''} ${deborde ? 'deborde' : ''} ${p.annule ? 'annule' : ''}"
               style="--teinte:${u ? u.teinte : 220};--y:${y}%;--h:${hauteur}%;--c:${col}"
               data-act="planif-ouvrir" data-id="${p.id}"
               title="${esc(p.heure)} · ${heuresFr(p.duree)} · ${esc(libelleRdv(p))}${
                 p.client ? ' · ' + esc(p.client) : ''}${u ? ' · ' + esc(u.nom) : ''}${
                 immat ? ' · ' + esc(immat) : ''} · ${esc(e.nom)}${
                 hors ? ' — posé hors des heures ouvertes' : ''}${
-                deborde ? ' — déborde après ' + heureCourte(t[1]) : ''}">
+                deborde ? ' — déborde après ' + heureCourte(t[1]) : ''}${
+                p.annule ? ' — ANNULÉ par le client le ' + dateCourte(p.annule.quand) : ''}">
       <span class="pl-bloc-tete">
         <span class="pl-bloc-h">${esc(p.heure)}</span>
         <span class="pl-bloc-t">${esc(p.client || libelleRdv(p))}</span>
@@ -7058,13 +7251,53 @@ function vuePlanning() {
 
   const fin = lundi + (jours.length - 1) * JOUR;
 
+  /* Poser un rendez-vous à la main ne doit pas dépendre du survol d'une case :
+     on prend un appel debout, avec un téléphone dans une main. Le bouton se
+     pose sur le premier jour ouvrable de la semaine affichée — jamais dans le
+     passé, où rien ne peut se planifier. */
+  const jourNouveau = Math.max(lundi, aujourdhui);
+
   return entete('Planning', libelleSemaine(lundi, fin),
-    `<div class="segments">
+    `<button class="btn plein" data-act="planif-nouveau"
+             data-jour="${jourNouveau}" data-user="${S.planningQui || S.userId}">
+       ${ic('plus')} Nouveau rendez-vous</button>
+     <div class="segments">
        <button data-act="planif-semaine" data-id="-1" title="Semaine précédente">${ic('retour')}</button>
        <button data-act="planif-semaine" data-id="0" class="${surLaSemaineDuJour() ? 'on' : ''}">Cette semaine</button>
        <button data-act="planif-semaine" data-id="1" title="Semaine suivante">${ic('fleche')}</button>
      </div>`
   ) + `<div class="corps pile">
+
+    ${(() => {
+      /* Ce que des clients ont rendu depuis le dernier passage. C'est la
+         première chose à lire en ouvrant le planning : une place s'est libérée,
+         et quelqu'un ne viendra pas. */
+      const rendus = annulationsClient();
+      if (!rendus.length) return '';
+      return `<section class="carte annulations">
+        <div class="carte-tete">
+          <h2>${rendus.length} rendez-vous annulé${rendus.length > 1 ? 's' : ''} par ${
+            rendus.length > 1 ? 'des clients' : 'le client'}</h2>
+          <button class="btn nu" style="margin-left:auto" data-act="annul-toutes-vues">Tout classer</button>
+        </div>
+        <div class="carte-corps pile" style="gap:8px">
+          ${rendus.map(p => {
+            const quoi = [marqueRdv(p), immatRdv(p)].filter(x => x && x !== '—').join(' · ');
+            return `<div class="annul-ligne">
+              <div style="min-width:0">
+                <b>${esc(p.client || 'Client')}</b> — ${esc(dateCourte(p.jour))} à ${esc(p.heure || '')}
+                ${quoi ? `<div class="mini">${esc(quoi)}${p.prestation ? ' · ' + esc(p.prestation) : ''}</div>` : ''}
+                <div class="mini">Annulé ${esc(dateCourte(p.annule.quand))}, le créneau est libre.</div>
+              </div>
+              <button class="btn nu" data-act="annul-vue" data-id="${p.id}"
+                      title="Ne plus le compter — le créneau reste barré au planning">${ic('check')} Vu</button>
+              <button class="btn nu" data-act="annul-effacer" data-id="${p.id}"
+                      title="Retirer du planning">${ic('poubelle')}</button>
+            </div>`;
+          }).join('')}
+        </div>
+      </section>`;
+    })()}
 
     ${attente.length ? `<section class="carte">
       <div class="carte-tete">
@@ -7121,7 +7354,8 @@ function vuePlanning() {
       <div class="planning" id="planning-glisse" style="--jours:${jours.length}">
         <div class="pl-coin"></div>
         ${jours.map(j => {
-          const charge = rdvVus(j.ts).reduce((s, p) => s + p.duree, 0);
+          // un créneau rendu ne charge plus la journée : il ne se compte plus
+          const charge = rdvVus(j.ts).filter(x => !x.annule).reduce((s, p) => s + p.duree, 0);
           const plein = charge > capaciteJour;
           return `<div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''} ${
                        j.ts < aujourdhui ? 'passe' : ''}">
@@ -8935,7 +9169,8 @@ const EXEMPLES_TEXTE = {
       vehicule: 'Peugeot 308', immat: 'AB-123-CD',
       numero: 'D-2026-041', montant: '742,80 €',
       jour: 'mardi 25 août', heure: '09:00', prestation: 'la distribution',
-      mecanicien: 'Yoann', validite: '30 jours'
+      mecanicien: 'Yoann', validite: '30 jours',
+      marque: 'Peugeot 308', envoye: '20/08 à 11:42'
     }
   },
   pro: {
@@ -8945,7 +9180,8 @@ const EXEMPLES_TEXTE = {
       vehicule: 'Renault Master', immat: 'CD-456-EF',
       numero: 'D-2026-042', montant: '1 284,00 €',
       jour: 'jeudi 27 août', heure: '14:00', prestation: 'le calculateur',
-      mecanicien: 'Allan', validite: '30 jours'
+      mecanicien: 'Allan', validite: '30 jours',
+      marque: 'Renault Master', envoye: '20/08 à 11:42'
     }
   }
 };
@@ -8958,6 +9194,11 @@ const TEXTES_APERCU = [
     aide: "Envoyé avec le PDF, pour recueillir l'accord." },
   { cle: 'messageGrille', nom: 'Grille tarifaire', pour: 'pro',
     aide: 'Le lien vers ses tarifs, envoyé à un garage partenaire.' },
+  { cle: 'messageRdvClient', nom: 'Rendez-vous confirmé (SMS client)', pour: 'client',
+    aide: 'Part dès que le créneau est posé : la voiture, le jour, l\'adresse, '
+        + 'et le lien qui lui permet d\'annuler seul.' },
+  { cle: 'messageAnnule', nom: 'Annulation confirmée', pour: 'client',
+    aide: 'Ce que le client lit après avoir cliqué sur le lien d\'annulation.' },
   { cle: 'messageRdv',    nom: 'Créneau confirmé', pour: 'pro',
     aide: 'Envoyé au confrère dès que vous confirmez son créneau.' },
   { cle: 'messagePret',   nom: 'Véhicule prêt', pour: 'les deux',
@@ -8972,7 +9213,12 @@ function apercuTexte(cle, mode) {
   const ex = EXEMPLES_TEXTE[mode] || EXEMPLES_TEXTE.client;
   const valeurs = Object.assign({}, ex.valeurs, {
     garage: r.nom || 'Votre garage',
-    lien: (location.origin || 'https://votre-garage.fr') + '/#c=…',
+    /* Le lien d'annulation a sa propre forme : montrer « #c=… » sous un modèle
+       qui parle d'annuler ferait croire à un lien qui n'existe pas. */
+    lien: (location.origin || 'https://votre-garage.fr') + '/#'
+        + (cle === 'messageRdvClient' ? 'annul=k3f9x2a' : 'c=…'),
+    adresse: adresseGarage(r) || '12 rue de l\'Atelier, 13270 Fos-sur-Mer',
+    tel: r.tel || '04 42 00 00 00',
     horaires: tranchesOuverture(r).map(([a, b]) => `${enHeure(a)} à ${enHeure(b)}`).join(' et ')
   });
   const corps = remplirModele(r[cle], valeurs);
@@ -9088,6 +9334,7 @@ function blocReglagesTextes(r) {
       <div class="champ">
         <label>${esc(t.nom)}
           ${t.pour === 'pro' ? '<span class="badge t-info">garages pro</span>' : ''}
+          ${t.pour === 'client' ? '<span class="badge t-neutre">particuliers</span>' : ''}
           ${t.pour === 'papier' ? '<span class="badge t-neutre">sur le PDF</span>' : ''}
         </label>
         <textarea class="saisie" rows="6" data-champ-reglage="${t.cle}">${esc(r[t.cle])}</textarea>
@@ -9101,7 +9348,8 @@ function blocReglagesTextes(r) {
           ${ic(t.pour === 'papier' ? 'imprim' : pourLui ? 'envoi' : 'alerte')}
           ${t.pour === 'papier' ? 'Au bas du devis'
             : pourLui ? `Ce que reçoit ${esc(ex.qui)}`
-            : 'Ne part qu\'aux garages partenaires'}
+            : t.pour === 'pro' ? 'Ne part qu\'aux garages partenaires'
+            : 'Ne part qu\'aux particuliers'}
         </div>
         <div class="texte-bulle ${t.pour === 'papier' ? 'papier' : ''}">${esc(apercuTexte(t.cle, mode))}</div>
       </div>
@@ -9902,6 +10150,60 @@ function modalePret() {
   </div></div>`;
 }
 
+/* Le SMS de confirmation au client, relu avant de partir. On le voit en entier,
+   lien d'annulation compris : c'est ce lien qui fera revenir le créneau si le
+   client ne peut pas venir, autant vérifier qu'il y est. */
+function modaleRdvClient() {
+  const p = DB.rdv(S.modale.id);
+  if (!p) return '';
+  const tel = telRdv(p).replace(/\s/g, '');
+  const texte = S.texteP !== undefined && S.texteP !== null ? S.texteP : messageRdvClient(p);
+  const sujet = (DB.etat.reglages.nom || '') + ' — votre rendez-vous du ' + dateCourte(p.jour);
+  const veh = [marqueRdv(p), immatRdv(p)].filter(x => x && x !== '—').join(' · ');
+  /* Le dossier du client, s'il y en a un : c'est là qu'on trouve un e-mail
+     quand on n'a que le portable dans le créneau. */
+  const c = p.devisId && DB.devis(p.devisId) ? DB.client(DB.devis(p.devisId).clientId)
+          : (p.demandeur ? DB.client(p.demandeur) : null);
+  const email = c ? String(c.email || '').trim() : '';
+
+  return `<div class="voile" data-voile><div class="modale" style="width:min(560px,100%)">
+    <div class="modale-tete">
+      <div><h2 style="font-size:18px">Confirmer à ${esc(p.client || 'votre client')}</h2>
+        <div class="mini">${esc(dateLongue(p.jour))} à ${esc(p.heure || '')}${veh ? ' · ' + esc(veh) : ''}</div></div>
+      <button class="btn nu" style="margin-left:auto" data-act="fermer-modale">${ic('croix')}</button>
+    </div>
+    <div class="modale-corps pile">
+      <div class="champ">
+        <label>Le SMS</label>
+        <textarea class="saisie" id="texte-pret" rows="9">${esc(texte)}</textarea>
+        <span class="aide">Le modèle se règle dans <b>Paramètres → Vos textes</b>.</span>
+      </div>
+      <div class="encart">
+        <b>Le lien d'annulation est dedans.</b> S'il clique dessus, le créneau se libère
+        tout seul dans votre planning et vous en êtes averti.
+        <div class="mini" style="margin-top:6px;word-break:break-all">${esc(lienAnnulation(p))}</div>
+      </div>
+      ${!tel ? `<div class="encart alerte">Pas de portable sur ce rendez-vous — ajoutez-le dans le créneau
+        pour pouvoir envoyer le SMS.</div>` : ''}
+      ${/* Un SMS qui dit « Adresse : » et rien derrière fait plus de mal que de
+            bien : autant le voir avant de l'envoyer. */ ''}
+      ${!adresseGarage(DB.etat.reglages) ? `<div class="encart alerte">L'adresse de l'atelier est vide :
+        renseignez-la dans <b>Paramètres → Votre garage</b>, sinon le client reçoit une ligne
+        « Adresse » sans adresse.</div>` : ''}
+    </div>
+    <div class="modale-pied">
+      <button class="btn nu pousse" style="margin-right:auto" data-act="copier-pret">${ic('copie')} Copier</button>
+      ${tel ? `<a class="btn plein" data-act="rdv-envoye" data-id="${p.id}" data-canal="sms"
+         href="sms:${esc(tel)}?body=${encodeURIComponent(texte)}">${ic('tel')} SMS</a>` : ''}
+      ${tel ? `<a class="btn" data-act="rdv-envoye" data-id="${p.id}" data-canal="whatsapp"
+         target="_blank" rel="noopener"
+         href="https://wa.me/${esc(telInternational(tel))}?text=${encodeURIComponent(texte)}">${ic('envoi')} WhatsApp</a>` : ''}
+      ${email ? `<a class="btn ${tel ? '' : 'plein'}" data-act="rdv-envoye" data-id="${p.id}" data-canal="email"
+         href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(texte)}">${ic('envoi')} E-mail</a>` : ''}
+    </div>
+  </div></div>`;
+}
+
 /* Le message de confirmation, relu avant de partir. Même fenêtre que pour un
    véhicule prêt : on écrit, le confrère reçoit, personne ne décroche. */
 function modaleRdvConfirme() {
@@ -10103,6 +10405,90 @@ function vueGrilleTarifs() {
     </div>
     ${barrePanier(c)}
   </div>`;
+}
+
+/* ==========================================================================
+   ANNULER SON RENDEZ-VOUS (ce que le client voit au bout du lien du SMS)
+   --------------------------------------------------------------------------
+   Une page, une phrase, un bouton. Le client est peut-être au volant, peut-être
+   pressé : il doit voir de quel rendez-vous on parle et pouvoir le rendre en un
+   geste. Rien d'autre n'est cliquable — ni l'atelier, ni les autres dossiers.
+   ========================================================================== */
+function vueAnnulation() {
+  const p = DB.rdvParToken(S.annulToken);
+  const r = DB.etat.reglages;
+
+  const page = (dedans) => `<div class="client-page">
+    <div class="client-bandeau">
+      <div class="client-boite" style="padding:0;flex-direction:row;align-items:center;gap:12px">
+        ${marque()}
+        <div>
+          <b style="font-family:var(--din);font-size:16px">${esc(r.nom || 'Votre garage')}</b>
+          <div class="mini">${esc(adresseGarage(r)) || 'Votre garage'}</div>
+        </div>
+        ${/* Le client n'a pas de session : cette porte ne s'ouvre que pour qui
+              regarde sa propre page depuis l'atelier. */ ''}
+        ${S.userId ? `<button class="btn nu" style="margin-left:auto" data-act="quitter-annul"
+          title="Revenir à l'atelier">${ic('croix')}</button>` : ''}
+      </div>
+    </div>
+    <div class="client-boite">${dedans}</div>
+  </div>`;
+
+  if (!p) {
+    return page(`<section class="carte"><div class="vide">
+      <h3>Ce lien ne mène à aucun rendez-vous</h3>
+      <p class="mini">Il a peut-être déjà servi, ou le créneau a été déplacé.
+      ${r.tel ? 'Appelez le garage au <b>' + esc(r.tel) + '</b>.' : 'Appelez le garage.'}</p>
+    </div></section>`);
+  }
+
+  const veh = [marqueRdv(p), immatRdv(p)].filter(x => x && x !== '—').join(' · ');
+  const recap = `<section class="carte"><div class="carte-corps pile" style="gap:10px">
+    <div><div class="etiq">Le rendez-vous</div>
+      <b style="font-family:var(--din);font-size:19px">${esc(dateLongue(p.jour))} à ${esc(p.heure || '')}</b></div>
+    ${veh ? `<div><div class="etiq">Véhicule</div><b>${esc(veh)}</b></div>` : ''}
+    ${adresseGarage(r) ? `<div><div class="etiq">Où</div>${esc(adresseGarage(r))}</div>` : ''}
+  </div></section>`;
+
+  /* Déjà annulé : le client revient sur son lien, ou il a cliqué deux fois. On
+     ne lui redemande rien — on lui redit ce qu'il a fait. */
+  if (p.annule) {
+    return page(`<div>
+        <h1 style="font-size:26px">Rendez-vous annulé</h1>
+        <p class="mini">Annulé le ${esc(dateCourte(p.annule.quand))} — c'est bien noté de notre côté.</p>
+      </div>
+      ${recap}
+      <section class="carte"><div class="carte-corps">
+        <div style="white-space:pre-wrap">${esc(messageAnnule(p))}</div>
+      </div></section>
+      ${r.tel ? `<a class="btn plein" href="tel:${esc(String(r.tel).replace(/\s/g, ''))}">
+        ${ic('tel')} Appeler pour reprendre un créneau</a>` : ''}`);
+  }
+
+  /* Un rendez-vous passé ne s'annule plus : il a eu lieu, ou il a été manqué.
+     Dans les deux cas c'est au téléphone que ça se règle. */
+  if (minuit(p.jour) < minuit(Date.now())) {
+    return page(`<div>
+        <h1 style="font-size:26px">Ce rendez-vous est passé</h1>
+        <p class="mini">Il n'y a plus rien à annuler.</p>
+      </div>
+      ${recap}
+      ${r.tel ? `<a class="btn plein" href="tel:${esc(String(r.tel).replace(/\s/g, ''))}">
+        ${ic('tel')} Appeler le garage</a>` : ''}`);
+  }
+
+  return page(`<div>
+      <h1 style="font-size:26px">Annuler votre rendez-vous</h1>
+      <p class="mini">Vérifiez qu'il s'agit bien de celui-ci, puis confirmez.</p>
+    </div>
+    ${recap}
+    <div class="encart">Vous n'avez rien d'autre à faire : le créneau se libère aussitôt
+    et le garage est prévenu. ${r.tel ? 'Pour le déplacer plutôt que l\'annuler, appelez le <b>'
+      + esc(r.tel) + '</b>.' : ''}</div>
+    <button class="btn danger plein grand" style="width:100%;justify-content:center"
+            data-act="annuler-mon-rdv" data-id="${p.id}">
+      ${ic('croix')} Annuler ce rendez-vous</button>`);
 }
 
 /* ==========================================================================
@@ -10407,7 +10793,10 @@ const COULEURS_REGLABLES = [
    — l'atelier : les appels reçus, les pense-bêtes, les fiches clients ;
    — les pros : les demandes de rendez-vous des garages confrères.
    Rien d'autre ne vient encombrer l'une ou l'autre. */
-const TYPES_CLOCHE = { atelier: ['demande', 'memo', 'client'], pro: ['rdv', 'devis'] };
+/* Une annulation est de type « rdv » sans être une demande de confrère : elle
+   n'a rien à faire dans la cloche des pros, qui ne sert qu'à ce qu'ils
+   attendent de nous. Le drapeau `pro` les sépare. */
+const TYPES_CLOCHE = { atelier: ['demande', 'memo', 'client', 'rdv'], pro: ['rdv', 'devis'] };
 
 const estCloche = (a, quoi) => quoi === 'pro'
   ? !!a.pro
@@ -10928,7 +11317,7 @@ function attendDepuis() {
 function titreOnglet() {
   const n = devisATransferer().length + clientsATransferer().length;
   const nom = (DB.etat && DB.etat.reglages && DB.etat.reglages.nomOutil) || 'Yatech';
-  const voulu = n && S.userId && !S.clientToken && !S.grilleToken ? `(${n}) ${nom}` : nom;
+  const voulu = n && S.userId && !enVuePublique() ? `(${n}) ${nom}` : nom;
   if (document.title !== voulu) document.title = voulu;
 }
 
@@ -10951,7 +11340,7 @@ function prevenirEbp(n, minutes) {
 }
 
 function verifierRappelEbp() {
-  if (!DB.etat || !S.userId || S.clientToken || S.grilleToken) return;
+  if (!DB.etat || !S.userId || enVuePublique()) return;
   const minutes = Number(DB.etat.reglages.rappelEbp) || 0;
   if (!minutes) return;
 
@@ -11086,7 +11475,7 @@ function temoinEnregistrement() {
     t.id = 'temoin-enr';
     document.body.appendChild(t);
   }
-  if (S.clientToken || S.grilleToken || !S.userId) {
+  if (enVuePublique() || !S.userId) {
     t.hidden = true;
     document.body.classList.remove('avertie');
     return;
@@ -11137,6 +11526,7 @@ function apresRendu() {
             : S.modale.type === 'intervention' ? modaleIntervention()
             : S.modale.type === 'pret' ? modalePret()
             : S.modale.type === 'rdv-confirme' ? modaleRdvConfirme()
+            : S.modale.type === 'rdv-client' ? modaleRdvClient()
             : S.modale.type === 'envoi-pdf' ? modaleEnvoiPdf()
             : S.modale.type === 'confirmer' ? modaleConfirmer() : '';
     const d = document.createElement('div');
@@ -11554,15 +11944,27 @@ function apresRendu() {
       emplacement: f.emplacement,
       devisId: f.devisId || null,
       client: String(f.client || '').trim(),
-      prestation: String(f.prestation || '').trim()
+      prestation: String(f.prestation || '').trim(),
+      marque: String(f.marque || '').trim(),
+      immat: String(f.immat || '').trim().toUpperCase(),
+      tel: String(f.tel || '').trim()
     };
     if (existant) Object.assign(existant, donnees);
     else DB.etat.planning.push(Object.assign({ id: DB.nouvelId('r'), fait: false }, donnees));
 
     const u = DB.utilisateur(donnees.userId);
+    const pose = existant || DB.etat.planning[DB.etat.planning.length - 1];
     S.modale = null;
     enregistrer(`Planning : ${libelleRdv(donnees)} — ${u ? u.nom : ''} ${dateCourte(donnees.jour)} ${donnees.heure}`);
     toast(existant ? 'Créneau modifié' : 'Créneau posé');
+
+    /* Le créneau est posé, le portable est là : le SMS s'écrit tout seul et
+       n'attend qu'un envoi. Prévenir plus tard, c'est ne pas prévenir. */
+    if (telRdv(pose)) {
+      S.texteP = null;
+      S.modale = { type: 'rdv-client', id: pose.id };
+      rendre();
+    }
   });
 
   // ajout d'un pense-bête
@@ -11654,7 +12056,7 @@ function apresRendu() {
      visible quel que soit ce qu'on regarde, et survivre à chaque redessin. */
   const ancien = document.getElementById('voix-barre');
   if (ancien) ancien.remove();
-  const h = (S.userId && !S.clientToken && !S.grilleToken) ? barreVocale() : '';
+  const h = (S.userId && !enVuePublique()) ? barreVocale() : '';
   if (h) {
     const d = document.createElement('div');
     d.id = 'voix-barre';
@@ -13102,6 +13504,55 @@ document.addEventListener('click', (e) => {
       const d = DB.devis(id);
       S.clientToken = d.token; poserAdresse('client=' + d.token); rendre();
     },
+    /* Le client rend son créneau. On ne supprime rien : le rendez-vous reste,
+       marqué annulé — le garage doit pouvoir lire ce qui est tombé, et qui
+       n'est pas venu. Sa place, elle, est libre à la seconde. */
+    'annuler-mon-rdv'() {
+      const p = DB.rdv(cible.dataset.id);
+      if (!p || p.annule) return;
+      confirmer({
+        titre: 'Annuler ce rendez-vous ?',
+        texte: `<b>${esc(dateLongue(p.jour))} à ${esc(p.heure || '')}</b>`
+             + (marqueRdv(p) || immatRdv(p) ? `<br>${esc([marqueRdv(p), immatRdv(p)].filter(Boolean).join(' · '))}` : '')
+             + '<br><br>Le créneau sera rendu au garage. Cette action est définitive.',
+        bouton: 'Oui, annuler', danger: true,
+        alors() {
+          p.annule = { quand: Date.now(), par: 'client' };
+          p.annuleVu = false;
+          DB.sauver();
+          rendre();
+        }
+      });
+    },
+
+    /* Le garage a vu l'annulation : elle sort du compteur et de la cloche, mais
+       reste lisible dans le créneau — rien n'est effacé sans qu'on le demande. */
+    'annul-vue'() {
+      const p = DB.rdv(id);
+      if (!p) return;
+      p.annuleVu = true;
+      DB.resoudre('annul-client:' + p.id);
+      DB.sauver(); rendre();
+    },
+    'annul-toutes-vues'() {
+      annulationsClient().forEach(p => { p.annuleVu = true; DB.resoudre('annul-client:' + p.id); });
+      DB.sauver(); rendre();
+      toast('Annulations classées');
+    },
+    /* Le créneau est libre, le client prévenu : il ne reste qu'à ranger. */
+    'annul-effacer'() {
+      const p = DB.rdv(id);
+      if (!p) return;
+      DB.etat.planning = DB.etat.planning.filter(x => x.id !== id);
+      DB.resoudre('annul-client:' + id);
+      enregistrer('Rendez-vous annulé retiré du planning');
+      toast('Retiré du planning');
+    },
+
+    'quitter-annul'() {
+      S.annulToken = null; poserAdresse(''); rendre();
+    },
+
     'quitter-client'() {
       S.clientToken = null; poserAdresse('');
       if (S.apercuOuvert) { S.apercuOuvert = false; nettoyerApercu(); S.vue = 'reglages'; }
@@ -14070,6 +14521,15 @@ document.addEventListener('click', (e) => {
       toast('Message préparé — envoyez-le depuis l\'application');
     },
 
+    /* Le SMS de confirmation, repris depuis un créneau déjà posé. */
+    'rdv-prevenir'() {
+      const p = DB.rdv(id);
+      if (!p) return;
+      S.texteP = null;
+      S.modale = { type: 'rdv-client', id: p.id };
+      rendre();
+    },
+
     'copier-pret'() {
       const champ = $('#texte-pret');
       if (champ) copier(champ.value, 'Message');
@@ -14753,8 +15213,17 @@ function lireAdresse() {
   try { hash = location.hash || ''; } catch (e) { hash = ''; }
   const client = hash.match(/client=([a-z0-9]+)/i);
   const grille = hash.match(/tarifs=([a-z0-9]+)/i);
+  const annul = hash.match(/annul=([a-z0-9]+)/i);
   S.clientToken = client ? client[1] : null;
   S.grilleToken = grille ? grille[1] : null;
+  S.annulToken = annul ? annul[1] : null;
+}
+
+/* Trois liens publics mènent ici sans compte : l'espace client, la grille
+   tarifaire, l'annulation d'un rendez-vous. Derrière l'un d'eux, l'outil n'est
+   plus l'atelier — ni cloches, ni micro, ni ouverture de session. */
+function enVuePublique() {
+  return !!(S.clientToken || S.grilleToken || S.annulToken);
 }
 
 window.addEventListener('hashchange', () => { lireAdresse(); rendre(); });
@@ -14775,7 +15244,7 @@ setInterval(() => {
   if (jour === jourAffiche) return;
   jourAffiche = jour;
   try {
-    if (!S.userId || S.clientToken || S.grilleToken) return;
+    if (!S.userId || enVuePublique()) return;
     menagePlanning();
     S.semaineDuMois = null;        // on retombe sur la semaine du jour
     if (S.vue === 'planning') S.moisPlanning = 0;
@@ -14805,7 +15274,7 @@ setInterval(() => { try { verifierVerrou(); } catch (e) { /* jamais bloquant */ 
     if (qui && DB.utilisateur(qui)) S.userId = qui;
 
     // porte ouverte : on n'attend personne devant l'écran de connexion
-    if (SANS_CODE && !S.userId && !S.clientToken && !S.grilleToken) S.userId = compteParDefaut();
+    if (SANS_CODE && !S.userId && !enVuePublique()) S.userId = compteParDefaut();
 
     rendre();
   } catch (e) {
@@ -15363,10 +15832,11 @@ rendre = function rendreV2() {
   sessionValide();   // jamais afficher le nom de quelqu'un d'autre
   if (S.grilleToken) { app.innerHTML = vueGrilleTarifs(); apresRendu(); return; }
   if (S.clientToken) { app.innerHTML = vueClient(); apresRendu(); return; }
+  if (S.annulToken) { app.innerHTML = vueAnnulation(); apresRendu(); return; }
   if (!S.userId) { app.innerHTML = SANS_CODE ? vueConnexionProfils() : vueConnexion(); apresRendu(); return; }
 
   // la veille tourne avant l'affichage : la cloche est juste dès l'ouverture
-  if (S.userId && !S.clientToken && !S.grilleToken) {
+  if (S.userId && !enVuePublique()) {
     try { menagePlanning(); veilleAlertes(); } catch (e) { /* rien */ }
   }
 
@@ -15375,7 +15845,8 @@ rendre = function rendreV2() {
     atelier: appelsATraiter().length + aRelancer().length,
     parking: pretsARendre().length,
     memos: mesMemos(false).length,
-    planning: demandesPro().length      // demandes des garages pro à confirmer
+    // demandes des garages pro à confirmer, et créneaux rendus par des clients
+    planning: demandesPro().length + annulationsClient().length
   };
 
   // les fiches gardent le titre que la v1 leur donne : on le laisse tomber et
