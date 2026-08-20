@@ -551,6 +551,7 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 
 /* Une heure vaut la même hauteur partout : c'est ce qui rend les trous
    comparables d'un jour à l'autre. */
+/* Repli si rien n'est posé à la volée : une heure vaut 62 px. */
 .planning { --pas-h: 62px; }
 .pl-piste {
   position: relative; background: var(--plan);
@@ -672,6 +673,21 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
   .pl-plus:hover { border: 0; }
 }
 .pl-plus:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
+
+/* Une ligne d'appel : le nom, puis les gestes, tous sur la même ligne. Les
+   icônes ne se replient pas — quatre boutons empilés à droite d'un nom, on ne
+   sait plus lequel va avec quoi. */
+.journal-appel { display: flex; align-items: center; gap: 2px; flex-wrap: nowrap; }
+.journal-appel > a, .journal-appel > button {
+  flex: none; width: 34px; height: 34px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.journal-appel svg { width: 17px; height: 17px; }
+.journal-appel.fait { opacity: .5; }
+.journal-appel.fait b { text-decoration: line-through; }
+@media (max-width: 720px) {
+  .journal-appel > a, .journal-appel > button { width: 40px; height: 40px; }
+}
 
 /* --- l'appel entrant -------------------------------------------------------
    Ça sonne, et il faut lire de loin : le nom en gros, la raison probable
@@ -1769,7 +1785,9 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
      plutôt que de la déplier en liste — l'échelle des heures, elle, reste
      collée à gauche. Des colonnes un peu plus étroites, une heure un peu plus
      courte : trois jours tiennent à l'écran d'un coup. */
-  .planning { grid-template-columns: 54px repeat(var(--jours, 6), 128px); --pas-h: 54px; }
+  /* Au doigt, l'heure se resserre un peu : sans ça la semaine ne tient plus
+     dans l'écran. Le réglage reste maître — on le ramène juste d'un cran. */
+  .planning { grid-template-columns: 54px repeat(var(--jours, 6), 128px); }
   /* Pas d'aimant de défilement : sur des colonnes de 128 px, un petit
      glissement retombait toujours sur la colonne d'où il venait. */
   .pl-jour { padding: 8px 4px; }
@@ -2857,6 +2875,21 @@ const REGLAGES = {
     + "est bien annulé, c'est noté de notre côté.\n\n"
     + "Rappelez-nous quand vous voulez reprendre un créneau.",
 
+  // le téléphone de l'atelier
+  appelFiche: true,       // la fiche s'ouvre-t-elle à chaque appel ?
+  appelSon: true,         // une sonnerie à l'écran
+  appelNotif: true,       // une notification du navigateur, écran éteint
+  appelJournal: true,     // garde-t-on la trace des appels ?
+  appelJours: 14,         // combien de jours on garde le journal
+  appelDouble: 20,        // un même numéro qui resonne dans ces secondes-là est le même appel
+
+  // l'allure du planning
+  planningPasH: 62,       // la hauteur d'une heure, en pixels
+  planningAnnules: true,  // les créneaux rendus restent-ils visibles, barrés ?
+
+  // la facturation
+  tvaFranchise: false,    // franchise en base : pas de TVA, et la mention qui va avec
+
   // le planning
   joursOuvres: 6,         // 5 = lundi-vendredi, 6 = jusqu'au samedi
   heureDebut: '09:00',
@@ -3211,7 +3244,7 @@ const ETATS_PIECE = {
 function jeuVierge() {
   return {
     reglages: JSON.parse(JSON.stringify(REGLAGES)),
-    clients: [], vehicules: [], devis: [], occupations: [], memos: [], planning: [],
+    clients: [], vehicules: [], devis: [], occupations: [], memos: [], planning: [], appels: [],
     /* Le catalogue, lui, reste servi : c'est une base de prestations d'électro-
        mécanique à corriger, pas des données d'exemple à effacer. Repartir d'une
        page blanche sur les tarifs, ce serait retaper vingt lignes pour rien. */
@@ -3470,6 +3503,7 @@ const DB = {
       Object.keys(d).forEach(k => { if (e.reglages[k] === undefined) e.reglages[k] = d[k]; });
       if (avantPause && e.reglages.heureDebut === '08:00') e.reglages.heureDebut = d.heureDebut;
     }
+    if (!Array.isArray(e.appels)) e.appels = [];
     if (!e.reglages.nomsRangees) e.reglages.nomsRangees = {};
     if (!e.reglages.typesPlaces) e.reglages.typesPlaces = {};
     if (!e.reglages.libelles) e.reglages.libelles = {};
@@ -4170,7 +4204,9 @@ function totaux(d) {
   const brut = (d.lignes || []).reduce((s, l) => s + (Number(l.qte) || 0) * (Number(l.prixHT) || 0) * (1 - (Number(l.remise) || 0) / 100), 0);
   const rem = brut * (Number(d.remise) || 0) / 100;
   const ht = brut - rem;
-  const tva = ht * (DB.etat.reglages.tauxTva / 100);
+  /* En franchise en base, il n'y a pas de TVA à facturer : le taux ne
+     s'applique pas, quel qu'il soit resté dans les réglages. */
+  const tva = DB.etat.reglages.tvaFranchise ? 0 : ht * (DB.etat.reglages.tauxTva / 100);
   return { brut, rem, ht, tva, ttc: ht + tva };
 }
 
@@ -4317,6 +4353,7 @@ const BLOCS_ACCUEIL = [
   ['facturer',   'Ce qu\'il reste à facturer dans EBP'],
   ['pros',       'Les garages partenaires et leurs grilles'],
   ['appels',     'Les appels reçus'],
+  ['journal',    'Le journal du téléphone (qui a appelé)'],
   ['memos',      'Les pense-bêtes'],
   ['planning',   'Le planning du jour et du lendemain']
 ];
@@ -6533,7 +6570,7 @@ function vueTableau() {
   const longs = immobilisesLongs();
   const libres = placesLibres().length;
   const ceJour = minuit(Date.now());
-  const rdvJour = DB.etat.planning.filter(p => minuit(p.jour) === ceJour);
+  const rdvJour = rdvActifs(ceJour);
 
   const bloc = (titre, liste, rendu, vide) => `
     <section class="carte">
@@ -7156,6 +7193,14 @@ function rdvDu(jour, userId) {
     .sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
 }
 
+/** Les rendez-vous d'un jour qui tiennent encore. Un créneau rendu par le
+ *  client n'occupe plus rien : il ne se compte ni dans la charge, ni dans ce
+ *  qu'un confrère peut réserver, ni dans « au planning aujourd'hui ». Seul le
+ *  planning le montre encore, barré, pour expliquer le trou. */
+function rdvActifs(jour, userId) {
+  return rdvDu(jour, userId).filter(p => !p.annule);
+}
+
 /** Ce que des clients ont décommandé et que personne n'a encore vu. */
 function annulationsClient() {
   return DB.etat.planning
@@ -7273,7 +7318,10 @@ function vuePlanning() {
   /* Suivre une personne ne change pas la forme du planning : on retire
      simplement les rendez-vous des autres. Le jour reste le jour. */
   const suivi = S.planningQui && DB.utilisateur(S.planningQui) ? S.planningQui : null;
-  const rdvVus = (ts) => rdvDu(ts, suivi || undefined);
+  /* Montrer ce qui a été rendu explique les trous ; le cacher rend la semaine
+     plus nette. Les deux se défendent — c'est un réglage. */
+  const gardeAnnules = DB.etat.reglages.planningAnnules !== false;
+  const rdvVus = (ts) => rdvDu(ts, suivi || undefined).filter(p => gardeAnnules || !p.annule);
 
   // au-delà de quoi une journée est pleine : une personne, ou tout l'atelier
   const capaciteJour = heuresOuvertes(DB.etat.reglages)
@@ -7432,7 +7480,9 @@ function vuePlanning() {
           téléphone la grille garde ses colonnes et glisse latéralement —
           l'échelle, elle, reste collée à gauche. */ ''}
     <div class="planning-cadre">
-      <div class="planning" id="planning-glisse" style="--jours:${jours.length}">
+      <div class="planning" id="planning-glisse"
+           style="--jours:${jours.length};--pas-h:${
+             Math.min(120, Math.max(34, Number(DB.etat.reglages.planningPasH) || 62))}px">
         <div class="pl-coin"></div>
         ${jours.map(j => {
           // un créneau rendu ne charge plus la journée : il ne se compte plus
@@ -7639,6 +7689,9 @@ function blocImpression(d) {
       <div class="imp-mentions">
         <div class="imp-eti">Conditions</div>
         <p>${esc(remplirModele(r.mentionsDevis, { validite: r.validiteDevis, garage: r.nom }))}</p>
+        ${/* La mention est obligatoire dès qu'on ne facture pas la TVA : sans
+              elle, un devis en franchise n'est pas en règle. */ ''}
+        ${r.tvaFranchise ? '<p><b>TVA non applicable, article 293 B du CGI.</b></p>' : ''}
         <p>Le devis est réputé accepté par la mention « Bon pour accord », datée et signée.</p>
       </div>
       <table class="imp-totaux">
@@ -9523,6 +9576,13 @@ function vueReglages() {
             <span class="aide">Pour reprendre votre numérotation actuelle.</span>
           </div>
         </div>
+        <label class="voix-reglage">
+          <input type="checkbox" data-champ-oui="tvaFranchise" ${r.tvaFranchise ? 'checked' : ''}>
+          <div><b>TVA non applicable (franchise en base)</b>
+            <span class="aide">Aucune TVA n'est facturée, quel que soit le taux ci-dessus, et la mention
+            <b>« TVA non applicable, article 293 B du CGI »</b> s'imprime sur les devis — elle est
+            obligatoire. À cocher si vous êtes en franchise.</span></div>
+        </label>
         ${ch('Relancer après (jours sans réponse)', 'relanceApres', 'number', 'Un devis envoyé et sans réponse passe en « à relancer ».')}
         ${ch('Alerte immobilisation (jours)', 'immobilisationAlerte', 'number', 'Un véhicule qui dort sur le parc au-delà de ce délai passe en rouge.')}
         ${ch('Alerte impayé (jours, 0 = jamais)', 'impayeAlerte', 'number',
@@ -9747,6 +9807,27 @@ function vueReglages() {
           <div class="champ"><label>Nom de la ressource « sol »</label>
             <input class="saisie" data-champ-parc="nomSol" value="${esc(r.nomSol)}" placeholder="Au sol"></div>
         </div>
+        <div class="sep"></div>
+        <div class="etiq">L'allure de l'agenda</div>
+        <div class="champ">
+          <label>Hauteur d'une heure</label>
+          <div class="segments" style="max-width:400px">
+            ${[[44, 'Serré'], [62, 'Normal'], [86, 'Large']].map(([v, t]) => `<button
+              data-act="planning-hauteur" data-id="${v}"
+              class="${(Number(r.planningPasH) || 62) === v ? 'on' : ''}">${t}</button>`).join('')}
+          </div>
+          <span class="aide">Serré fait tenir la semaine entière dans l'écran ; large se lit de loin,
+          depuis l'établi. ${esc(String(Math.round(Number(r.planningPasH) || 62)))} px l'heure
+          actuellement.</span>
+        </div>
+        <label class="voix-reglage">
+          <input type="checkbox" data-champ-oui="planningAnnules" ${r.planningAnnules !== false ? 'checked' : ''}>
+          <div><b>Laisser les créneaux annulés, barrés</b>
+            <span class="aide">Ils ne comptent plus dans la charge, mais le trou garde son explication.
+            Décoché, ils disparaissent du planning — ils restent dans le bandeau du haut jusqu'à
+            ce que vous les classiez.</span></div>
+        </label>
+
         <p class="aide">Les créneaux proposés suivent ces horaires, coupure du midi comprise.
         Actuellement ${HEURES.length} créneaux —
         ${tranchesOuverture(r).map(([a, b]) => `de <b>${esc(enHeure(a))}</b> à <b>${esc(enHeure(b))}</b>`).join(' et ')},
@@ -9787,6 +9868,38 @@ function vueReglages() {
           </div>
           <span class="aide">Tapez le numéro d'un client déjà enregistré : vous verrez exactement
           ce qui s'affichera le jour où il appellera.</span>
+        </div>
+
+        <div class="sep"></div>
+        <div class="etiq">Ce qui se passe quand ça sonne</div>
+        <div class="pile" style="gap:11px">
+          <label class="voix-reglage">
+            <input type="checkbox" data-champ-oui="appelFiche" ${r.appelFiche !== false ? 'checked' : ''}>
+            <div><b>Ouvrir la fiche du client</b>
+              <span class="aide">La fenêtre passe devant l'écran en cours. Décoché, l'appel s'inscrit
+              seulement au journal — utile si l'écran sert à autre chose pendant la journée.</span></div>
+          </label>
+          <label class="voix-reglage">
+            <input type="checkbox" data-champ-oui="appelSon" ${r.appelSon !== false ? 'checked' : ''}>
+            <div><b>Sonner</b>
+              <span class="aide">Une petite sonnerie à l'écran. Elle ne dépend pas du réglage de la voix.</span></div>
+          </label>
+          <label class="voix-reglage">
+            <input type="checkbox" data-champ-oui="appelNotif" ${r.appelNotif !== false ? 'checked' : ''}>
+            <div><b>Prévenir hors de l'outil</b>
+              <span class="aide">Une notification du navigateur, pour la voir même sur un autre onglet.</span></div>
+          </label>
+          <label class="voix-reglage ${r.appelJournal === false ? '' : 'sans-bas'}">
+            <input type="checkbox" data-champ-oui="appelJournal" ${r.appelJournal !== false ? 'checked' : ''}>
+            <div><b>Garder le journal des appels</b>
+              <span class="aide">Qui a appelé, quand, et ce qu'on en a fait — même les appels
+              qu'on n'a pas pu prendre. Le journal s'affiche sur l'accueil.</span></div>
+          </label>
+          ${r.appelJournal !== false ? `<div class="champ-duo" style="margin-left:34px">
+            ${ch('Garder pendant (jours)', 'appelJours', 'number')}
+            ${ch('Même appel si rappelé sous (secondes)', 'appelDouble', 'number',
+                 'Beaucoup de standards annoncent un appel plusieurs fois : on ne le compte qu\'une.')}
+          </div>` : ''}
         </div>
 
         <div class="encart">Un numéro écrit <b class="num">+33 6 12 34 56 78</b> dans une fiche et annoncé
@@ -10121,9 +10234,13 @@ function listeInterventions(c, pourLePro) {
 /** Ce qu'il reste comme place un jour donné, tous mécaniciens confondus. */
 function chargeDuJour(jour) {
   const j = minuit(jour);
-  const rdv = DB.etat.planning.filter(p => minuit(p.jour) === j);
+  const rdv = rdvActifs(j);
   const heuresOuvrees = heuresOuvertes(DB.etat.reglages);
-  const capacite = heuresOuvrees * DB.etat.utilisateurs.filter(u => u.role !== 'secretariat').length;
+  /* Ceux qui réparent. Dans un garage d'une personne qui s'est déclarée à
+     l'accueil, il n'y en a aucun : la capacité tomberait à zéro et plus
+     personne ne pourrait réserver. On retombe alors sur toute l'équipe. */
+  const repare = DB.etat.utilisateurs.filter(u => u.role !== 'secretariat');
+  const capacite = heuresOuvrees * (repare.length || DB.etat.utilisateurs.length);
   const pris = rdv.reduce((s, p) => s + (Number(p.duree) || 1), 0);
   return { pris, capacite, libre: Math.max(0, capacite - pris) };
 }
@@ -10779,9 +10896,104 @@ function vueClient() {
    numéro. Presque tous savent le faire, et ça ne demande aucun serveur.
    ========================================================================== */
 
+/* Le journal des appels. Un garagiste est sous une voiture quand ça sonne :
+   la fenêtre passe et personne ne l'a vue. Sans trace, l'appel est perdu — on
+   ne sait même pas qu'il a eu lieu. Trois lignes de journal valent mieux qu'un
+   rappel qu'on ne fera jamais. */
+function noterAppelJournal(num) {
+  const r = DB.etat.reglages;
+  if (r.appelJournal === false) return null;
+  if (!Array.isArray(DB.etat.appels)) DB.etat.appels = [];
+  const maintenant = Date.now();
+
+  /* Beaucoup de standards ouvrent l'adresse plusieurs fois pour une seule
+     sonnerie. Le même numéro à quelques secondes d'intervalle, c'est le même
+     appel : on ne le compte pas deux fois. */
+  const fenetre = Math.max(0, Number(r.appelDouble) || 0) * 1000;
+  const recent = DB.etat.appels.find(a => memeNumero(a.num, num) && maintenant - a.quand < fenetre);
+  if (recent) return recent;
+
+  const info = reconnaitreNumero(num);
+  const c = info && info.client;
+  const appel = {
+    id: DB.nouvelId('ap'), num: String(num).trim(), quand: maintenant,
+    clientId: c ? c.id : null,
+    nom: c ? (DB.estPro(c) ? c.nom : (c.prenom + ' ' + c.nom).trim())
+           : (info && info.rdvSeul ? info.rdvSeul.client : ''),
+    pris: false        // a-t-on fait quelque chose de cet appel ?
+  };
+  DB.etat.appels.unshift(appel);
+  menageAppels();
+  DB.sauver();
+  return appel;
+}
+
+/** Le journal ne grossit pas indéfiniment : il oublie ce qui est vieux. */
+function menageAppels() {
+  if (!Array.isArray(DB.etat.appels)) { DB.etat.appels = []; return; }
+  const jours = Math.max(1, Number(DB.etat.reglages.appelJours) || 14);
+  const limite = Date.now() - jours * JOUR;
+  DB.etat.appels = DB.etat.appels.filter(a => a.quand >= limite).slice(0, 300);
+}
+
+/** Les appels dont personne n'a rien fait. */
+function appelsEnAttente() {
+  return (DB.etat.appels || []).filter(a => !a.pris);
+}
+
+/* Qui a appelé, et qu'en a-t-on fait. Le seul écran où l'on voit ce qu'on a
+   raté pendant qu'on était sous une voiture. */
+function blocJournalAppels() {
+  const liste = (DB.etat.appels || []).slice(0, 8);
+  const attente = appelsEnAttente().length;
+
+  const quandDit = (ts) => {
+    const j = minuit(ts), aujourd = minuit(Date.now());
+    const h = new Date(ts).toTimeString().slice(0, 5);
+    return j === aujourd ? h : j === aujourd - JOUR ? 'hier ' + h : dateCourte(ts) + ' ' + h;
+  };
+
+  return `<section class="carte">
+    <div class="carte-tete">
+      <h2>Le téléphone</h2>
+      ${attente ? `<span class="pousse etiq" style="margin-left:auto;color:var(--occupe)">
+        ${attente} à rappeler</span>` : '<span class="pousse etiq" style="margin-left:auto">à jour</span>'}
+    </div>
+    ${liste.length ? `<div class="liste">
+      ${liste.map(a => {
+        const c = a.clientId ? DB.client(a.clientId) : null;
+        const nom = a.nom || (c ? (DB.estPro(c) ? c.nom : (c.prenom + ' ' + c.nom).trim()) : '');
+        return `<div class="item journal-appel ${a.pris ? 'fait' : ''}">
+          <div style="flex:1;min-width:0">
+            <b>${esc(nom || 'Numéro inconnu')}</b>
+            <div class="mini num">${esc(telLisible(a.num))} · ${esc(quandDit(a.quand))}</div>
+          </div>
+          <a class="btn nu" href="tel:${esc(String(a.num).replace(/\s/g, ''))}" title="Rappeler">${ic('tel')}</a>
+          ${c ? `<button class="btn nu" data-act="ouvrir-client" data-id="${c.id}"
+                  title="Ouvrir sa fiche">${ic('clients')}</button>` : ''}
+          <button class="btn nu" data-act="appel-revoir" data-id="${a.id}"
+                  title="Revoir ce qui s'affichait">${ic('loupe')}</button>
+          <button class="btn nu" data-act="appel-pris" data-id="${a.id}"
+                  title="${a.pris ? 'Remettre à rappeler' : 'Marquer traité'}">${ic('check')}</button>
+        </div>`;
+      }).join('')}
+    </div>` : `<div class="vide">
+      <h3>Aucun appel</h3>
+      <p class="mini">Les appels reçus s'inscriront ici — même ceux que vous n'avez pas pu prendre.
+      Le branchement se règle dans <b>Paramètres → Le téléphone de l'atelier</b>.</p>
+    </div>`}
+  </section>`;
+}
+
 /** Ce qu'on a de mieux à dire sur un appel : qui, et pourquoi. */
 function reconnaitreNumero(num) {
-  const info = reconnaitreAppel(num, '');
+  /* Un standard annonce un numéro entier : on le compare entier. La
+     reconnaissance de l'écran « noter un appel », elle, cherche aussi les
+     numéros en cours de frappe — et « 4408 » y désigne légitimement le
+     06 21 44 08 17. Appliquée à un appel, cette souplesse ferait afficher la
+     fiche d'un habitué au hasard dès qu'une ligne interne appelle. */
+  const client = DB.etat.clients.find(c => memeNumero(c.tel, num));
+  const info = client ? reconnaitreAppel(client.tel, '') : null;
   if (info) return info;
   /* Pas de fiche client : un rendez-vous posé à la main porte peut-être ce
      numéro-là. On n'a pas de dossier, mais on a un nom et une heure. */
@@ -10853,6 +11065,16 @@ function modaleAppelEntrant() {
     <div class="modale-corps pile">
 
       ${c && c.note ? `<div class="encart">${ic('epingle')} ${esc(c.note)}</div>` : ''}
+
+      ${(() => {
+        /* Le troisième appel en une heure ne se traite pas comme le premier :
+           quelqu'un attend une réponse qu'il n'a pas eue. */
+        const avant = (DB.etat.appels || []).filter(a =>
+          memeNumero(a.num, num) && Date.now() - a.quand < 12 * 3600 * 1000);
+        if (avant.length < 2) return '';
+        return `<div class="encart alerte"><b>${avant.length}e appel de ce numéro</b> dans la journée —
+          le premier à ${esc(new Date(avant[avant.length - 1].quand).toTimeString().slice(0, 5))}.</div>`;
+      })()}
 
       ${raisons.length ? `<div>
         <div class="etiq">Probablement pour ça</div>
@@ -13534,14 +13756,19 @@ function voixEveillee() {
 /* Un son court dit plus vite qu'une phrase que c'est pris — ou que ça ne l'est
    pas. On ne fait du bruit que si l'outil a le droit de parler. */
 let sonVoix = null;
-function bip(genre) {
-  if (!DB.etat.reglages.voixParle) return;
+/* `quandMeme` : la sonnerie d'un appel entrant n'est pas une réponse de la
+   voix. Décocher « répondre à voix haute » ne doit pas rendre le téléphone
+   muet — ce sont deux choses sans rapport. */
+function bip(genre, quandMeme) {
+  if (!quandMeme && !DB.etat.reglages.voixParle) return;
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     sonVoix = sonVoix || new Ctx();
     if (sonVoix.state === 'suspended') sonVoix.resume();
-    const notes = genre === 'eveil' ? [660, 880] : genre === 'non' ? [300, 200] : [880];
+    const notes = genre === 'appel' ? [880, 660, 880, 660]
+                : genre === 'eveil' ? [660, 880]
+                : genre === 'non' ? [300, 200] : [880];
     notes.forEach((f, i) => {
       const o = sonVoix.createOscillator(), g = sonVoix.createGain();
       o.type = 'sine'; o.frequency.value = f;
@@ -13787,6 +14014,22 @@ document.addEventListener('click', (e) => {
       }, 40);
     },
 
+    'planning-hauteur'() {
+      DB.etat.reglages.planningPasH = Math.min(120, Math.max(34, Number(id) || 62));
+      DB.sauver(); rendre();
+    },
+
+    'appel-pris'() {
+      const a = (DB.etat.appels || []).find(x => x.id === id);
+      if (!a) return;
+      a.pris = !a.pris; DB.sauver(); rendre();
+    },
+    'appel-revoir'() {
+      const a = (DB.etat.appels || []).find(x => x.id === id);
+      if (!a) return;
+      S.modale = { type: 'appel-entrant', num: a.num }; rendre();
+    },
+
     'appel-fiche'() {
       S.modale = null; S.vue = 'client-fiche'; S.clientId = id; rendre();
     },
@@ -13796,7 +14039,7 @@ document.addEventListener('click', (e) => {
       const champ = document.querySelector('#tel-test');
       const num = champ ? champ.value.trim() : '';
       if (chiffresSeuls(num).length < 4) { toast('Tapez d\'abord un numéro'); return; }
-      sonnerAppel(num);
+      sonnerAppel(num, true);
       rendre();
     },
 
@@ -15477,8 +15720,10 @@ document.addEventListener('input', (e) => {
 
   /* Ces réglages redessinent le parc ou le planning : on applique et on
      redessine, en gardant le curseur dans le champ en cours de saisie. */
-  if (t.dataset.champVoix) {
-    DB.etat.reglages[t.dataset.champVoix] = t.checked;
+  /* Un interrupteur de réglage, quel que soit le panneau : `champ-voix` est
+     le nom d'origine, `champ-oui` celui qu'on donne aux nouveaux. */
+  if (t.dataset.champVoix || t.dataset.champOui) {
+    DB.etat.reglages[t.dataset.champVoix || t.dataset.champOui] = t.checked;
     DB.sauver(); rendre();
     return;
   }
@@ -15672,6 +15917,9 @@ function lireAdresse() {
     try { num = decodeURIComponent(num); } catch (e) { /* le brut fera l'affaire */ }
     poserAdresse('');
     if (chiffresSeuls(num).length >= 4) sonnerAppel(num);
+    /* Le journal se vide de ce qui est trop vieux au premier appel du jour :
+       inutile d'y penser ailleurs. */
+    try { menageAppels(); } catch (e) { /* jamais bloquant */ }
   }
   S.clientToken = client ? client[1] : null;
   S.grilleToken = grille ? grille[1] : null;
@@ -15683,15 +15931,26 @@ function lireAdresse() {
    plus l'atelier — ni cloches, ni micro, ni ouverture de session. */
 /* Faire sonner un appel à l'écran : la fenêtre passe devant tout le reste, et
    un son plus une notification vont chercher celui qui regarde ailleurs. */
-function sonnerAppel(num) {
-  S.modale = { type: 'appel-entrant', num: String(num).trim() };
-  try { bip('eveil'); } catch (e) { /* un outil muet n'est pas cassé */ }
-  try {
-    const info = reconnaitreNumero(num);
-    const c = info && info.client;
-    const nom = c ? (DB.estPro(c) ? c.nom : (c.prenom + ' ' + c.nom).trim()) : 'Numéro inconnu';
-    notifierNavigateur('Appel entrant — ' + nom, telLisible(num));
-  } catch (e) { /* pas de notification : la fenêtre suffit */ }
+function sonnerAppel(num, essai) {
+  const r = DB.etat.reglages;
+  let appel = null;
+  try { appel = noterAppelJournal(num); } catch (e) { /* le journal n'est pas vital */ }
+
+  /* Un même appel annoncé deux fois par le standard ne refait pas sonner tout
+     l'atelier. Un essai depuis les réglages, lui, doit toujours montrer. */
+  if (!essai && appel && appel.vu) return;
+  if (appel) { appel.vu = true; }
+
+  if (essai || r.appelFiche !== false) S.modale = { type: 'appel-entrant', num: String(num).trim() };
+  if (r.appelSon !== false) { try { bip('appel', true); } catch (e) { /* un outil muet n'est pas cassé */ } }
+  if (r.appelNotif !== false) {
+    try {
+      const info = reconnaitreNumero(num);
+      const c = info && info.client;
+      const nom = c ? (DB.estPro(c) ? c.nom : (c.prenom + ' ' + c.nom).trim()) : 'Numéro inconnu';
+      notifierNavigateur('Appel entrant — ' + nom, telLisible(num));
+    } catch (e) { /* pas de notification : la fenêtre suffit */ }
+  }
 }
 
 function enVuePublique() {
@@ -16045,8 +16304,7 @@ function modaleRecherche() {
 
 /* --- la journée et le lendemain ------------------------------------------- */
 function colonneJour(titre, jour) {
-  const liste = DB.etat.planning.filter(p => minuit(p.jour) === jour)
-    .sort((a, b) => a.heure.localeCompare(b.heure));
+  const liste = rdvActifs(jour);
   const charge = liste.reduce((s, p) => s + p.duree, 0);
 
   return `<section class="carte">
@@ -16151,7 +16409,7 @@ function vueTableauAtelier() {
   const places = placesLibresParCote();
   const meca = places.meca, elec = places.electro;
   const ceJour = minuit(Date.now());
-  const rdvJour = DB.etat.planning.filter(p => minuit(p.jour) === ceJour).length;
+  const rdvJour = rdvActifs(ceJour).length;
   const rue = DB.dansLaRue().length;
   const item = (val, leg, ton, vue, extra) => `<button class="brief-item ${val ? '' : 'calme'}"
       style="--ton:${ton}" data-act="aller" data-vue="${vue}" ${extra || ''}>
@@ -16190,6 +16448,7 @@ function vueTableauAtelier() {
     facturer: () => blocFacturer(),
     pros:     () => blocProsAccueil(),
     appels:   () => blocAppels(),
+    journal:  () => blocJournalAppels(),
     memos:    () => colonneMemos(),
     planning: () => `<div class="bande-jour">
       ${colonneJour("Aujourd'hui", ceJour)}
@@ -16204,10 +16463,12 @@ function vueTableauAtelier() {
   const morceaux = [];
   for (let i = 0; i < ordre.length; i++) {
     const k = ordre[i], suivant = ordre[i + 1];
-    if ((k === 'appels' && suivant === 'memos') || (k === 'memos' && suivant === 'appels')) {
+    if ((k === 'appels' && suivant === 'memos') || (k === 'memos' && suivant === 'appels')
+        || (k === 'journal' && suivant === 'memos') || (k === 'memos' && suivant === 'journal')
+        || (k === 'journal' && suivant === 'appels') || (k === 'appels' && suivant === 'journal')) {
       morceaux.push(`<div class="duo-avant">${blocs[k]()}${blocs[suivant]()}</div>`);
       i++;
-    } else if (k === 'appels' || k === 'memos') {
+    } else if (k === 'appels' || k === 'memos' || k === 'journal') {
       morceaux.push(`<div class="duo-avant seul">${blocs[k]()}</div>`);
     } else {
       morceaux.push(blocs[k]());
