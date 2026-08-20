@@ -482,82 +482,103 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
    PLANNING
    Une grille : une colonne par personne, une bande par jour.
    ========================================================================== */
-/* `align-content: start` : sans lui, une grille plus haute que son contenu
-   étire ses rangées à parts égales, et une journée vide devenait aussi haute
-   qu'une journée pleine. */
+/* Un agenda de semaine : les jours en colonnes sur une seule ligne, le temps
+   qui descend. Le cadre glisse latéralement quand l'écran est trop étroit —
+   c'est lui qui défile, jamais la page. */
+.planning-cadre {
+  overflow-x: auto; overflow-y: hidden;
+  border-radius: var(--r-l); box-shadow: var(--ombre);
+  -webkit-overflow-scrolling: touch;
+}
 .planning {
   display: grid; align-content: start;
-  /* une colonne par demi-journée, large comme sa durée : `--demis` est posé
-     à la volée, la valeur de repli sert si le garage n'a pas de coupure */
-  grid-template-columns: 108px var(--demis, minmax(0, 1fr));
+  grid-template-columns: 62px repeat(var(--jours, 6), minmax(112px, 1fr));
   gap: 1px;
   background: var(--trait);
   border: 1px solid var(--trait);
   border-radius: var(--r-l);
   overflow: hidden;
-  box-shadow: var(--ombre);
+  min-width: max-content;
 }
 .pl-jour {
-  background: var(--plan-2); padding: 9px 12px;
-  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  background: var(--plan-2); padding: 8px 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  text-align: center;
 }
 .pl-jour b { font-family: var(--din); font-size: 13.5px; font-weight: 600; line-height: 1.2; }
 .pl-jour span { font-size: 11px; color: var(--encre-3); line-height: 1.2; }
 .pl-jour.jour-j { background: var(--accent-voile); }
 .pl-jour.jour-j b { color: var(--accent); }
 
-/* --- la frise d'une demi-journée -------------------------------------------
-   L'ouverture à gauche, la fermeture à droite. Une boîte prend sa vraie place
-   dans sa moitié : voir les trous devient immédiat. */
+/* --- l'échelle des heures, à gauche ----------------------------------------
+   L'ouverture en haut, la fermeture en bas. Une boîte prend sa vraie hauteur
+   dans sa demi-journée : voir les trous devient immédiat. */
 .pl-coin { background: var(--plan-2); }
-.pl-echelle {
-  height: 28px; background: var(--plan-2);
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 0 10px; overflow: hidden;
+/* La colonne des heures ne part pas quand on fait glisser la semaine : sans
+   elle, on ne saurait plus à quelle heure on regarde. */
+.pl-coin, .pl-rail { position: sticky; left: 0; z-index: 6; }
+.pl-rail {
+  background: var(--plan-2);
+  height: calc(var(--heures) * var(--pas-h));
 }
-.pl-echelle b {
-  font-family: var(--din); font-size: 12px; font-weight: 700; letter-spacing: .06em;
-  color: var(--accent);
+/* Le nom de la demi-journée se lit debout, dans la marge : il tient en 18 px
+   là où « S1 » couché mangerait la moitié de l'échelle. */
+.pl-demi {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 18px;
+  display: flex; align-items: center; justify-content: center;
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  background: color-mix(in srgb, var(--accent) 8%, var(--plan-2));
+  border-right: 1px solid var(--trait);
+  font-family: var(--din); font-size: 11px; font-weight: 700;
+  letter-spacing: .12em; color: var(--accent);
 }
-.pl-echelle span {
+.pl-h {
+  position: absolute; right: 8px; top: var(--y); transform: translateY(-50%);
   font-family: var(--chiffre); font-size: 11px; color: var(--encre-3);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
 }
+/* Aux deux bouts, l'heure se range à l'intérieur : à cheval sur le bord, elle
+   serait coupée en deux. */
+.pl-h.haut { transform: none; margin-top: 3px; }
+.pl-h.bas { transform: translateY(-100%); margin-top: -3px; }
+.pl-h.haut, .pl-h.bas { color: var(--encre-2); font-weight: 700; }
 
-/* `min-height` et non `height` : une hauteur fixe ne s'étire pas avec sa
-   rangée, et la colonne des jours — plus haute — laissait un vide sous la
-   frise. */
+/* Une heure vaut la même hauteur partout : c'est ce qui rend les trous
+   comparables d'un jour à l'autre. */
+.planning { --pas-h: 62px; }
 .pl-piste {
   position: relative; background: var(--plan);
-  min-height: calc(var(--lignes) * 44px + 12px);
+  height: calc(var(--heures) * var(--pas-h));
   overflow: hidden;
 }
 .pl-piste.jour-j { background: color-mix(in srgb, var(--accent) 4%, var(--plan)); }
 /* La coupure du midi n'est plus un trait dans la frise : c'est le bord entre
    les deux moitiés de la journée. Il se voit. */
-.pl-piste.coupe, .pl-echelle.coupe { border-left: 2px solid var(--trait); }
+.pl-piste.coupe, .pl-rail.coupe { border-top: 2px solid var(--trait); }
 /* Ce qui est derrière nous se relit, mais ne se planifie plus. */
 .pl-jour.passe, .pl-piste.passe { opacity: .62; }
 
 /* les heures pleines, en fond : des repères, pas un quadrillage */
 .pl-trait {
-  position: absolute; left: var(--x); top: 0; bottom: 0; width: 1px;
+  position: absolute; top: var(--y); left: 0; right: 0; height: 1px;
   background: var(--trait-fin);
 }
 /* l'instant présent */
 .pl-maintenant {
-  position: absolute; left: var(--x); top: 0; bottom: 0; width: 2px;
+  position: absolute; top: var(--y); left: 0; right: 0; height: 2px;
   background: var(--occupe); z-index: 3;
 }
 .pl-maintenant::before {
-  content: ''; position: absolute; left: 50%; top: 0; transform: translate(-50%, -2px);
+  content: ''; position: absolute; top: 50%; left: 0; transform: translate(-2px, -50%);
   width: 7px; height: 7px; border-radius: 50%; background: var(--occupe);
 }
 
+/* Deux rendez-vous qui se chevauchent se partagent la largeur du jour : aucun
+   ne disparaît sous l'autre. */
 .pl-bloc {
-  position: absolute; left: var(--x); width: var(--w); min-width: 54px;
-  top: calc(var(--l) * 44px + 6px); height: 38px;
-  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  position: absolute; top: var(--y); height: var(--h); min-height: 26px;
+  left: calc(var(--c) * (100% / var(--n))); width: calc(100% / var(--n));
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 1px;
   padding: 4px 7px; text-align: left; overflow: hidden;
   border-radius: var(--r); border: 1px solid transparent;
   border-left: 3px solid hsl(var(--teinte, 220) 55% 45%);
@@ -567,17 +588,17 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 }
 .pl-bloc:hover { box-shadow: var(--ombre); z-index: 4; }
 .pl-bloc:active { transform: translateY(1px); }
-.pl-bloc.pont { border-top: 1px solid hsl(var(--teinte, 220) 55% 45%); }
+.pl-bloc.pont { box-shadow: inset 0 0 0 1px hsl(var(--teinte, 220) 55% 45% / .45); }
 .pl-bloc.fini { opacity: .5; }
 /* Posé hors des heures ouvertes : la boîte n'a pas de place sur la frise, on
    la borde en pointillé pour que l'anomalie se voie. */
 .pl-bloc.hors { border: 1px dashed var(--occupe); border-left-width: 3px; }
 .pl-bloc.fini .pl-bloc-t { text-decoration: line-through; }
-/* Commencé ici, fini après : le bord droit s'ouvre plutôt que de faire croire
-   que l'intervention s'arrête à midi. */
+/* Commencé ici, fini après : le bas s'ouvre plutôt que de faire croire que
+   l'intervention s'arrête à midi. */
 .pl-bloc.deborde {
-  border-right: 2px dashed hsl(var(--teinte, 220) 55% 45%);
-  border-top-right-radius: 0; border-bottom-right-radius: 0;
+  border-bottom: 2px dashed hsl(var(--teinte, 220) 55% 45%);
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
 }
 .pl-bloc-tete { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .pl-bloc-h {
@@ -594,17 +615,18 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 }
 /* Étroite, une boîte laisse tomber ce qui ne tient pas : d'abord la
    prestation, puis le nom. L'heure reste toujours. */
-.pl-bloc { container-type: inline-size; }
-@container (max-width: 118px) { .pl-bloc-s { display: none; } }
-@container (max-width: 74px) { .pl-bloc-t { display: none; } }
+/* Deux rendez-vous en même temps se partagent la colonne : chaque boîte est
+   alors deux fois plus étroite. Les seuils se mesurent donc sur la boîte
+   elle-même, jamais sur la journée. */
+.pl-bloc { container-type: size; }
+@container (max-width: 66px) { .pl-bloc-s { display: none; } }
+@container (max-height: 34px) { .pl-bloc-s { display: none; } }
+@container (max-width: 44px) { .pl-bloc-t { display: none; } }
 
-/* Le nom de la demi-journée ne sert qu'au téléphone, où l'en-tête des
-   colonnes n'existe plus : sur grand écran il ferait doublon. */
-.pl-demi { display: none; }
 .pl-libre {
-  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  position: absolute; inset: 0; display: grid; place-items: center;
   font-family: var(--din); font-size: 10.5px; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--libre);
+  text-transform: uppercase; color: var(--libre); pointer-events: none;
 }
 .pl-charge {
   margin-top: 2px; font-family: var(--chiffre); font-size: 10.5px;
@@ -622,6 +644,18 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 }
 .pl-plus svg { width: 14px; height: 14px; }
 .pl-piste:hover .pl-plus, .pl-plus:focus-visible { opacity: 1; }
+/* Un écran tactile ne survole rien, et des mains sales ne visent pas un cercle
+   de 26 px : la demi-journée entière devient le bouton, le « + » se contentant
+   d'en marquer le coin. Les rendez-vous posés passent au-dessus — on peut
+   toujours en ouvrir un. */
+@media (hover: none) {
+  .pl-plus {
+    opacity: 1; z-index: 1; inset: 0; width: auto; height: auto;
+    border: 0; border-radius: 0; padding: 5px;
+    place-items: start end; color: var(--encre-3);
+  }
+  .pl-plus:hover { border: 0; }
+}
 .pl-plus:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
 
 /* Qui porte quelle couleur. Le nom reste écrit : deux teintes voisines, un
@@ -1665,34 +1699,20 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   .tour-etats .puce { min-height: 42px; padding: 6px 14px; }
   /* les segments comptent aussi les tout petits, comme le « + » du parc */
   .segments button { min-height: 40px; min-width: 40px; }
-  .pl-plus { min-height: 40px; min-width: 40px; font-size: 12.5px; }
   /* renommer une section se fait au doigt dans le catalogue */
   .titre-famille { min-height: 40px; }
   .a-poser { padding: 11px 13px; }
 
-  .planning { grid-template-columns: 1fr; }
-  /* Au doigt, la frise reste lisible : les deux demi-journées se suivent, S1
-     puis S2, et les boîtes s'empilent une par ligne — on ne vise pas un
-     créneau au doigt. */
-  .pl-echelle, .pl-coin { display: none; }
-  .pl-piste { height: auto; min-height: 0; padding: 8px 8px 8px 42px;
-    display: flex; flex-direction: column; gap: 6px; }
-  .pl-demi {
-    position: absolute; left: 0; top: 0; bottom: 0; width: 34px;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--plan-2); border-right: 1px solid var(--trait);
-    font-family: var(--din); font-size: 11.5px; font-weight: 700;
-    letter-spacing: .06em; color: var(--accent);
-  }
-  .pl-libre { position: static; transform: none; }
-  /* Rien de posé : « libre » et le « + » tiennent sur la même ligne, sinon une
-     semaine vide demandait trois écrans de défilement. */
-  .pl-piste.sans-rdv { flex-direction: row; align-items: center; justify-content: space-between; }
-  .pl-bloc { position: static; width: auto; min-width: 0; height: auto; }
-  .pl-bloc.deborde { border-right: 2px dashed hsl(var(--teinte, 220) 55% 45%); }
-  .pl-trait, .pl-maintenant { display: none; }
-  .pl-plus { position: static; opacity: 1; width: auto; height: 36px;
-    border-radius: var(--r); align-self: flex-start; padding: 0 12px; }
+  /* La semaine garde ses six colonnes au doigt : on la fait glisser du pouce
+     plutôt que de la déplier en liste — l'échelle des heures, elle, reste
+     collée à gauche. Des colonnes un peu plus étroites, une heure un peu plus
+     courte : trois jours tiennent à l'écran d'un coup. */
+  .planning { grid-template-columns: 54px repeat(var(--jours, 6), 128px); --pas-h: 54px; }
+  .planning-cadre { scroll-snap-type: x proximity; }
+  .pl-jour { scroll-snap-align: start; padding: 8px 4px; }
+  .pl-jour b { font-size: 12.5px; }
+  .pl-h { font-size: 10px; right: 5px; }
+
   .a-poser { max-width: none; width: 100%; }
   /* l'action la plus utilisée mérite d'être sous le pouce */
   .fab {
@@ -6888,9 +6908,10 @@ const heuresFr = (h) => (h % 1 === 0 ? h + ' h' : Math.floor(h) + ' h ' + Math.r
    libre » se lit d'un coup d'œil, ce qu'une frise continue ne disait qu'à
    moitié.
 
-   Dans une demi-journée, un rendez-vous prend sa vraie place et sa vraie
-   largeur ; ceux qui se chevauchent descendent d'une ligne, comme dans un
-   agenda.
+   La semaine se lit comme un agenda : les jours en colonnes sur une seule
+   ligne, le temps qui descend. Un rendez-vous prend sa vraie place et sa vraie
+   hauteur dans sa demi-journée ; deux qui se chevauchent se partagent la
+   largeur de la journée plutôt que de se cacher l'un l'autre.
    ========================================================================== */
 
 /** Le nom d'une demi-journée : S1 le matin, S2 l'après-midi. */
@@ -6916,37 +6937,44 @@ function demiDuRdv(debut, tranches) {
  *  chacun avec sa ligne — deux rendez-vous qui se chevauchent ne se cachent
  *  pas l'un l'autre. */
 function lignesDemi(rdv, tranches) {
-  const parDemi = tranches.map(() => []);
-  const lignes = tranches.map(() => []);   // fin (en %) de la dernière boîte de chaque ligne
+  const demis = tranches.map(() => ({ poses: [], colonnes: [] }));
   rdv.forEach(p => {
     const debut = enMinutes(p.heure, tranches[0][0]);
     const fin = debut + (Number(p.duree) || 1) * 60;
     const i = demiDuRdv(debut, tranches);
     const t = tranches[i];
-    const x = posDemi(debut, t);
-    const x2 = Math.min(100, Math.max(posDemi(fin, t), x + 8));
-    let ligne = lignes[i].findIndex(f => x >= f - 0.01);
-    if (ligne < 0) ligne = lignes[i].length;
-    lignes[i][ligne] = x2;
-    parDemi[i].push({
-      p, x, largeur: x2 - x, ligne,
+    const d = demis[i];
+    const y = posDemi(debut, t);
+    /* Un quart d'heure ne doit pas se réduire à un filet : une boîte garde une
+       hauteur lisible, quitte à mordre un peu sur la suivante. */
+    const y2 = Math.min(100, Math.max(posDemi(fin, t), y + 6));
+    let col = d.colonnes.findIndex(bas => y >= bas - 0.01);
+    if (col < 0) col = d.colonnes.length;
+    d.colonnes[col] = y2;
+    d.poses.push({
+      p, y, hauteur: y2 - y, col,
       /* Posé hors de sa demi-journée — dans la coupure, avant l'ouverture,
          après la fermeture. La boîte mentirait sur sa place : on le dit. */
       hors: debut < t[0] || debut >= t[1],
       /* Commencé dans cette demi-journée, fini après elle : la boîte s'arrête
-         au bord, une flèche dit que ça continue. */
+         au bord, en pointillé, plutôt que de faire croire qu'elle s'achève à
+         midi. */
       deborde: fin > t[1]
     });
   });
-  return parDemi;
+  /* Combien de colonnes se partagent la journée : c'est ce qui donne sa
+     largeur à chaque boîte. */
+  return demis.map(d => ({ poses: d.poses, cols: Math.max(1, d.colonnes.length) }));
 }
 
-/** Les heures pleines à l'intérieur d'une demi-journée : des repères discrets,
- *  jamais un quadrillage. */
-function marquesDemi([a, b]) {
+/** Les heures d'une demi-journée. Avec les bords pour l'échelle qu'on écrit à
+ *  gauche, sans eux pour les repères tracés dans la journée. */
+function marquesDemi([a, b], bords) {
   const out = [];
-  for (let m = Math.ceil((a + 1) / 60) * 60; m < b; m += 60) {
-    out.push({ m, pos: ((m - a) / (b - a)) * 100 });
+  const debut = bords ? Math.ceil(a / 60) * 60 : Math.ceil((a + 1) / 60) * 60;
+  for (let m = debut; bords ? m <= b : m < b; m += 60) {
+    const pos = ((m - a) / (b - a)) * 100;
+    out.push({ m, pos, texte: heureCourte(m), bord: pos === 0 ? 'haut' : pos === 100 ? 'bas' : '' });
   }
   return out;
 }
@@ -6980,26 +7008,25 @@ function vuePlanning() {
 
   const tranches = tranchesOuverture(DB.etat.reglages);
   const minuteCourante = new Date().getHours() * 60 + new Date().getMinutes();
+  /* Chaque journée est rangée une fois pour toutes : la grille la relit une
+     fois par demi-journée, et rien ne gagne à la ranger deux fois. */
+  const range = jours.map(j => lignesDemi(rdvVus(j.ts), tranches));
 
-  /* Une demi-journée : sa frise, ce qui y est posé, et le trait du moment
-     présent quand il y tombe — c'est lui qui dit où on en est. */
-  const piste = (jour, i, poses) => {
+  /* La demi-journée d'un jour : les repères d'heures, ce qui y est posé, et le
+     trait du moment présent quand il y tombe — c'est lui qui dit où on en est. */
+  const piste = (jour, i, demi) => {
     const t = tranches[i];
-    const lignes = Math.max(1, ...poses.map(x => x.ligne + 1));
     const passe = jour.ts < aujourdhui;
     const maintenant = jour.ts === aujourdhui && minuteCourante >= t[0] && minuteCourante <= t[1]
       ? posDemi(minuteCourante, t) : null;
 
     return `<div class="pl-piste ${jour.ts === aujourdhui ? 'jour-j' : ''} ${passe ? 'passe' : ''} ${
-                 i ? 'coupe' : ''} ${poses.length ? '' : 'sans-rdv'}"
-                 style="--lignes:${lignes}">
-      ${marquesDemi(t).map(m => `<span class="pl-trait" style="--x:${m.pos}%"></span>`).join('')}
-      ${maintenant !== null ? `<span class="pl-maintenant" style="--x:${maintenant}%"></span>` : ''}
-      ${/* Sur téléphone les deux demi-journées se suivent sans en-tête : sans
-            cette étiquette on ne saurait plus laquelle on regarde. */ ''}
-      <span class="pl-demi">${nomDemi(i)}</span>
-      ${poses.length ? '' : '<span class="pl-libre">libre</span>'}
-      ${poses.map(o => boiteRdv(o, t)).join('')}
+                 i ? 'coupe' : ''}"
+                 style="--heures:${(t[1] - t[0]) / 60};--n:${demi.cols}">
+      ${marquesDemi(t).map(m => `<span class="pl-trait" style="--y:${m.pos}%"></span>`).join('')}
+      ${maintenant !== null ? `<span class="pl-maintenant" style="--y:${maintenant}%"></span>` : ''}
+      ${demi.poses.length ? '' : '<span class="pl-libre">libre</span>'}
+      ${demi.poses.map(o => boiteRdv(o, t)).join('')}
       ${passe ? '' : `<button class="pl-plus" data-act="planif-nouveau"
         data-jour="${jour.ts}" data-heure="${enHeure(t[0])}" data-user="${S.planningQui || S.userId}"
         title="Ajouter un rendez-vous — ${nomDemi(i)}, ${heureCourte(t[0])} à ${heureCourte(t[1])}">${ic('plus')}</button>`}
@@ -7007,14 +7034,14 @@ function vuePlanning() {
   };
 
   /* Une boîte porte la couleur de la personne, son heure et son client. Trop
-     étroite pour tout dire, elle garde l'essentiel — le survol dit le reste. */
-  const boiteRdv = ({ p, x, largeur, ligne, hors, deborde }, t) => {
+     courte pour tout dire, elle garde l'essentiel — le survol dit le reste. */
+  const boiteRdv = ({ p, y, hauteur, col, hors, deborde }, t) => {
     const u = DB.utilisateur(p.userId);
     const e = EMPLACEMENTS[p.emplacement] || EMPLACEMENTS.sol;
     const immat = immatRdv(p);
     return `<button class="pl-bloc ${p.fait ? 'fini' : ''} ${p.emplacement === 'pont' ? 'pont' : ''} ${
                 hors ? 'hors' : ''} ${deborde ? 'deborde' : ''}"
-              style="--teinte:${u ? u.teinte : 220};--x:${x}%;--w:${largeur}%;--l:${ligne}"
+              style="--teinte:${u ? u.teinte : 220};--y:${y}%;--h:${hauteur}%;--c:${col}"
               data-act="planif-ouvrir" data-id="${p.id}"
               title="${esc(p.heure)} · ${heuresFr(p.duree)} · ${esc(libelleRdv(p))}${
                 p.client ? ' · ' + esc(p.client) : ''}${u ? ' · ' + esc(u.nom) : ''}${
@@ -7086,31 +7113,36 @@ function vuePlanning() {
       </button>`).join('')}
     </div>
 
-    ${/* Chaque demi-journée occupe une colonne large comme sa durée : une heure
-          fait la même largeur le matin et l'après-midi, sinon les boîtes
-          mentiraient d'une moitié à l'autre. */ ''}
-    <div class="planning" id="planning-glisse"
-         style="--demis:${tranches.map(([a, b]) => `minmax(0, ${b - a}fr)`).join(' ')}">
-      <div class="pl-coin"></div>
-      ${tranches.map(([a, b], i) => `<div class="pl-echelle ${i ? 'coupe' : ''}">
-        <b>${nomDemi(i)}</b><span>${heureCourte(a)} – ${heureCourte(b)}</span>
-      </div>`).join('')}
+    ${/* Les six jours tiennent sur une ligne et le temps descend, comme dans
+          un agenda : l'échelle des heures à gauche, une colonne par jour. Sur
+          téléphone la grille garde ses colonnes et glisse latéralement —
+          l'échelle, elle, reste collée à gauche. */ ''}
+    <div class="planning-cadre">
+      <div class="planning" id="planning-glisse" style="--jours:${jours.length}">
+        <div class="pl-coin"></div>
+        ${jours.map(j => {
+          const charge = rdvVus(j.ts).reduce((s, p) => s + p.duree, 0);
+          const plein = charge > capaciteJour;
+          return `<div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''} ${
+                       j.ts < aujourdhui ? 'passe' : ''}">
+            <b>${esc(j.nom)}</b>
+            <span class="num">${dateCourte(j.ts)}</span>
+            ${/* Chaque demi-journée dit déjà si elle est libre : le répéter ici
+                  ferait écrire « libre » trois fois sur une journée vide. */ ''}
+            ${charge ? `<span class="pl-charge ${plein ? 'plein' : ''}">${heuresFr(charge)}</span>` : ''}
+          </div>`;
+        }).join('')}
 
-      ${jours.map(j => {
-        const liste = rdvVus(j.ts);
-        const charge = liste.reduce((s, p) => s + p.duree, 0);
-        const plein = charge > capaciteJour;
-        const demis = lignesDemi(liste, tranches);
-        return `
-        <div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''} ${j.ts < aujourdhui ? 'passe' : ''}">
-          <b>${esc(j.nom)}</b>
-          <span class="num">${dateCourte(j.ts)}</span>
-          ${/* Chaque demi-journée dit déjà si elle est libre : le répéter ici
-                ferait écrire « libre » trois fois sur une journée vide. */ ''}
-          ${charge ? `<span class="pl-charge ${plein ? 'plein' : ''}">${heuresFr(charge)}</span>` : ''}
-        </div>
-        ${demis.map((poses, i) => piste(j, i, poses)).join('')}`;
-      }).join('')}
+        ${/* Une rangée par demi-journée : son échelle, puis les six jours. */ ''}
+        ${tranches.map((t, i) => `
+          <div class="pl-rail ${i ? 'coupe' : ''}" style="--heures:${(t[1] - t[0]) / 60}">
+            <span class="pl-demi" title="${heureCourte(t[0])} à ${heureCourte(t[1])}">${nomDemi(i)}</span>
+            ${marquesDemi(t, true).map(m =>
+              `<span class="pl-h ${m.bord}" style="--y:${m.pos}%">${m.texte}</span>`).join('')}
+          </div>
+          ${jours.map((j, n) => piste(j, i, range[n][i])).join('')}
+        `).join('')}
+      </div>
     </div>
   </div>`;
 }
