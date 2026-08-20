@@ -673,6 +673,38 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 }
 .pl-plus:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
 
+/* --- l'appel entrant -------------------------------------------------------
+   Ça sonne, et il faut lire de loin : le nom en gros, la raison probable
+   juste dessous, en couleur selon l'urgence. */
+.appel-sonne {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--din); font-size: 11px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--accent);
+  margin-bottom: 3px;
+}
+.appel-sonne svg { width: 15px; height: 15px; animation: sonne 1.4s ease-in-out infinite; }
+@keyframes sonne {
+  0%, 100% { transform: rotate(0); }
+  10%, 30% { transform: rotate(-12deg); }
+  20%, 40% { transform: rotate(12deg); }
+  50% { transform: rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) { .appel-sonne svg { animation: none; } }
+.modale.appel-entrant { border-top: 3px solid var(--accent); }
+.appel-raison {
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  padding: 8px 11px; border-radius: var(--r);
+  border: 1px solid var(--trait); background: var(--plan-2);
+  border-left: 3px solid var(--encre-3);
+}
+.appel-raison b { font-size: 13px; }
+.appel-raison span { font-size: 12.5px; color: var(--encre-2); }
+.appel-raison.t-actif   { border-left-color: var(--accent); }
+.appel-raison.t-ok      { border-left-color: var(--libre); }
+.appel-raison.t-attente { border-left-color: var(--attente); }
+.appel-raison.t-urgent  { border-left-color: var(--occupe); }
+.appel-raison.t-urgent b { color: var(--occupe); }
+
 /* Un créneau rendu par un client. Il se lit en haut du planning, bordé de la
    couleur des choses qui demandent un regard — pas une alarme, une nouvelle. */
 .carte.annulations { border-color: color-mix(in srgb, var(--occupe) 40%, var(--trait)); }
@@ -5438,6 +5470,37 @@ function importerClientsEbp(texte) {
 const chiffresSeuls = (s) => String(s || '').replace(/\D/g, '');
 const signesSeuls   = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+/* Un standard n'annonce pas les numéros comme on les note. « 06 12 34 56 78 »
+   dans une fiche, « +33612345678 » sur la ligne : c'est le même téléphone, et
+   un caractère de différence suffirait à ne pas reconnaître un habitué. On
+   réduit donc chaque numéro à ce qui l'identifie — les neuf chiffres qui
+   suivent l'indicatif, ce qui ne change pas d'une écriture à l'autre. */
+function numeroClef(tel) {
+  let n = chiffresSeuls(tel);
+  if (!n) return '';
+  if (n.startsWith('00')) n = n.slice(2);
+  if (n.length > 9 && n.startsWith('33')) n = n.slice(2);
+  if (n.length > 9 && n.startsWith('0')) n = n.slice(1);
+  return n.length > 9 ? n.slice(-9) : n;
+}
+
+/** Deux numéros désignent-ils la même ligne ? */
+function memeNumero(a, b) {
+  const x = numeroClef(a), y = numeroClef(b);
+  return !!x && x.length >= 6 && x === y;
+}
+
+/** Le numéro écrit comme on le lit : 06 12 34 56 78. Un standard annonce
+ *  souvent « +33612345678 » — personne ne lit un numéro dans cette forme-là. */
+function telLisible(tel) {
+  const brut = String(tel || '').trim();
+  let n = chiffresSeuls(brut);
+  if (n.startsWith('00')) n = n.slice(2);
+  if (n.length === 11 && n.startsWith('33')) n = '0' + n.slice(2);
+  if (n.length !== 10 || !n.startsWith('0')) return brut;
+  return n.replace(/(\d\d)(?=\d)/g, '$1 ');
+}
+
 function reconnaitreAppel(tel, immat) {
   const t = chiffresSeuls(tel), i = signesSeuls(immat);
   let vehicule = null, client = null;
@@ -5447,9 +5510,13 @@ function reconnaitreAppel(tel, immat) {
     vehicule = DB.etat.vehicules.find(v => signesSeuls(v.immat).includes(i)) || null;
     if (vehicule) client = DB.client(vehicule.clientId);
   }
-  // sinon le numéro, dès qu'il y a de quoi ne pas confondre deux clients
+  /* Sinon le numéro, dès qu'il y a de quoi ne pas confondre deux clients. Un
+     numéro complet est comparé sur sa forme réduite — il peut être écrit à
+     l'internationale d'un côté et à la française de l'autre ; un numéro en
+     cours de frappe, lui, se cherche tel quel. */
   if (!client && t.length >= 4) {
-    client = DB.etat.clients.find(c => chiffresSeuls(c.tel).includes(t)) || null;
+    client = DB.etat.clients.find(c => memeNumero(c.tel, tel))
+          || DB.etat.clients.find(c => chiffresSeuls(c.tel).includes(t)) || null;
   }
   if (!client) return null;
 
@@ -9687,6 +9754,47 @@ function vueReglages() {
       </div>
     </section>
 
+    ${/* Le standard n'a rien à savoir de Yatech : il ouvre une adresse, on y
+          lit le numéro. C'est le seul réglage qui demande d'aller voir
+          ailleurs — autant écrire ici exactement quoi y coller. */ ''}
+    <section class="carte">
+      <div class="carte-tete"><h2>Le téléphone de l'atelier</h2>
+        <span class="badge t-neutre">appel entrant</span>
+      </div>
+      <div class="carte-corps pile">
+        <p class="aide" style="margin:0">Quand la ligne sonne, la fiche du client s'ouvre à l'écran —
+        son nom, ses véhicules, et pourquoi il appelle probablement. Sans décrocher.</p>
+
+        <div class="champ">
+          <label>L'adresse à donner à votre standard</label>
+          <div class="rangee" style="align-items:stretch;gap:7px">
+            <input class="saisie num" id="adresse-appel" readonly
+                   value="${esc(location.href.split('#')[0])}#appel=" style="flex:1;min-width:0">
+            <button class="btn" data-act="copier-adresse-appel">${ic('copie')} Copier</button>
+          </div>
+          <span class="aide">Presque tous les standards et logiciels de téléphonie savent
+          <b>ouvrir une adresse à chaque appel</b>. Collez celle-ci et ajoutez à la fin le code
+          de votre système pour le numéro de l'appelant — souvent
+          <b class="num">%caller%</b>, <b class="num">{caller}</b> ou <b class="num">$callerid</b>.
+          Cherchez « URL sur appel entrant » dans ses réglages.</span>
+        </div>
+
+        <div class="champ">
+          <label>Essayer sans attendre le téléphone</label>
+          <div class="rangee" style="align-items:stretch;gap:7px">
+            <input class="saisie num" id="tel-test" type="tel" placeholder="06 21 44 08 17" style="flex:1;min-width:0">
+            <button class="btn plein" data-act="appel-test">${ic('tel')} Faire sonner</button>
+          </div>
+          <span class="aide">Tapez le numéro d'un client déjà enregistré : vous verrez exactement
+          ce qui s'affichera le jour où il appellera.</span>
+        </div>
+
+        <div class="encart">Un numéro écrit <b class="num">+33 6 12 34 56 78</b> dans une fiche et annoncé
+        <b class="num">0612345678</b> par la ligne désigne le même client : la comparaison ne s'arrête pas
+        à l'écriture.</div>
+      </div>
+    </section>
+
     <section class="carte">
       <div class="carte-tete"><h2>La voix</h2>
         <span class="badge t-${VOIX.dispo() ? 'info' : 'mort'}">${VOIX.dispo() ? 'Ce navigateur sait écouter' : 'Pas sur ce navigateur'}</span>
@@ -10659,6 +10767,132 @@ function vueClient() {
 /* ==========================================================================
    MODALES
    ========================================================================== */
+/* ==========================================================================
+   L'appel entrant
+   --------------------------------------------------------------------------
+   Le téléphone sonne. Avant de décrocher, on veut savoir qui c'est — et
+   surtout pourquoi il appelle : son devis attend une réponse depuis trois
+   jours, sa voiture est prête depuis mardi, il a rendez-vous dans une heure.
+   Trois secondes de lecture changent complètement la conversation.
+
+   Le standard n'a qu'une chose à faire : ouvrir une adresse en y mettant le
+   numéro. Presque tous savent le faire, et ça ne demande aucun serveur.
+   ========================================================================== */
+
+/** Ce qu'on a de mieux à dire sur un appel : qui, et pourquoi. */
+function reconnaitreNumero(num) {
+  const info = reconnaitreAppel(num, '');
+  if (info) return info;
+  /* Pas de fiche client : un rendez-vous posé à la main porte peut-être ce
+     numéro-là. On n'a pas de dossier, mais on a un nom et une heure. */
+  const rdv = DB.etat.planning.filter(p => memeNumero(p.tel, num))
+    .sort((a, b) => a.jour - b.jour)[0];
+  return rdv ? { client: null, rdvSeul: rdv } : null;
+}
+
+/* Pourquoi il appelle, probablement. Rangé du plus urgent au moins pressant :
+   ce qui a une heure passe devant ce qui attend depuis des jours. */
+function raisonsAppel(info) {
+  if (!info || !info.client) return [];
+  const c = info.client;
+  const out = [];
+  const jour = minuit(Date.now());
+
+  DB.etat.planning
+    .filter(p => !p.annule && minuit(p.jour) >= jour && minuit(p.jour) <= jour + 2 * JOUR)
+    .filter(p => memeNumero(p.tel, c.tel)
+              || (p.devisId && (DB.devis(p.devisId) || {}).clientId === c.id))
+    .sort((a, b) => a.jour - b.jour)
+    .slice(0, 2)
+    .forEach(p => out.push({ ton: 'actif', quoi: 'Rendez-vous',
+      texte: (minuit(p.jour) === jour ? "aujourd'hui" : dateCourte(p.jour)) + ' à ' + (p.heure || '')
+           + (p.prestation ? ' — ' + p.prestation : '') }));
+
+  (info.surLeParc || []).forEach(o => {
+    const v = DB.vehicule(o.vehiculeId);
+    const e = ETATS[o.etat];
+    out.push({ ton: o.etat === 'pret' ? 'ok' : 'neutre',
+      quoi: o.etat === 'pret' ? 'Sa voiture est prête' : 'Sa voiture est chez nous',
+      texte: (v ? v.marque + ' ' + v.modele + ' · ' + v.immat : '')
+           + (e ? ' · ' + e.nom : '') + ' · depuis ' + joursDepuis(o.depuis) + ' j' });
+  });
+
+  (info.enCours || []).filter(d => d.statut === 'envoye').slice(0, 2).forEach(d => {
+    out.push({ ton: 'attente', quoi: 'Devis envoyé, sans réponse',
+      texte: d.numero + ' · ' + eur(totaux(d).ttc) + ' · il y a ' + joursDepuis(d.maj) + ' j' });
+  });
+
+  const du = resteADevoir(c.id);
+  if (du > 0) out.push({ ton: 'urgent', quoi: 'Reste à encaisser', texte: eur(du) });
+
+  return out;
+}
+
+/* La fenêtre qui s'ouvre quand ça sonne. Elle se lit d'un coup d'œil et de
+   loin : le nom en gros, la raison probable juste dessous. */
+function modaleAppelEntrant() {
+  const num = (S.modale && S.modale.num) || '';
+  const info = reconnaitreNumero(num);
+  const c = info && info.client;
+  const pro = c && DB.estPro(c);
+  const nom = c ? (pro ? c.nom : (c.prenom + ' ' + c.nom).trim()) : '';
+  const raisons = raisonsAppel(info);
+  const compose = String(num).replace(/\s/g, '');
+
+  return `<div class="voile" data-voile><div class="modale appel-entrant" style="width:min(560px,100%)">
+    <div class="modale-tete">
+      <div>
+        <div class="appel-sonne">${ic('tel')} Appel entrant</div>
+        <h2 style="font-size:22px;margin:0">${c ? esc(nom) : 'Numéro inconnu'}</h2>
+        <div class="mini num">${esc(telLisible(num))}${
+          c && pro ? ' · <b>garage professionnel</b>' : ''}${
+          c && c.ville ? ' · ' + esc(c.ville) : ''}</div>
+      </div>
+      <button class="btn nu" style="margin-left:auto" data-act="fermer-modale" title="Fermer">${ic('croix')}</button>
+    </div>
+    <div class="modale-corps pile">
+
+      ${c && c.note ? `<div class="encart">${ic('epingle')} ${esc(c.note)}</div>` : ''}
+
+      ${raisons.length ? `<div>
+        <div class="etiq">Probablement pour ça</div>
+        <div class="pile" style="gap:6px;margin-top:6px">
+          ${raisons.map(r => `<div class="appel-raison t-${r.ton}">
+            <b>${esc(r.quoi)}</b><span>${esc(r.texte)}</span>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      ${c ? `<div>
+        <div class="etiq">Ses véhicules</div>
+        <div class="rangee" style="flex-wrap:wrap;gap:6px;margin-top:6px">
+          ${(info.vehicules || []).map(v => `<span class="btn" style="pointer-events:none">
+            <span class="plaque">${esc(v.immat)}</span> ${esc((v.marque + ' ' + v.modele).trim())}
+          </span>`).join('') || '<span class="mini">Aucun véhicule enregistré.</span>'}
+        </div>
+        <div class="mini" style="margin-top:7px">Client depuis ${esc(dateCourte(c.cree))} ·
+          ${info.devis.length} demande${info.devis.length > 1 ? 's' : ''}${
+          info.dernier ? ' · dernier passage facturé le ' + esc(dateCourte(info.dernier.maj)) : ''}.</div>
+      </div>`
+      : info && info.rdvSeul ? `<div class="encart">
+        <b>${esc(info.rdvSeul.client || 'Rendez-vous à ce numéro')}</b> — ${esc(dateCourte(info.rdvSeul.jour))}
+        à ${esc(info.rdvSeul.heure || '')}${info.rdvSeul.prestation ? ' · ' + esc(info.rdvSeul.prestation) : ''}.
+        <br>Aucune fiche client à ce numéro pour l'instant.
+      </div>`
+      : `<div class="encart">Ce numéro n'est dans aucune fiche. C'est peut-être un nouveau client —
+        notez sa demande, la fiche se créera avec.</div>`}
+    </div>
+    <div class="modale-pied">
+      ${compose ? `<a class="btn nu pousse" style="margin-right:auto"
+         href="tel:${esc(compose)}" title="Rappeler ce numéro">${ic('tel')} Rappeler</a>` : ''}
+      <button class="btn" data-act="fermer-modale">Plus tard</button>
+      ${c ? `<button class="btn" data-act="appel-noter" data-num="${esc(num)}">${ic('devis')} Noter la demande</button>
+             <button class="btn plein" data-act="appel-fiche" data-id="${c.id}">${ic('clients')} Ouvrir sa fiche</button>`
+          : `<button class="btn plein" data-act="appel-noter" data-num="${esc(num)}">${ic('devis')} Noter l'appel</button>`}
+    </div>
+  </div></div>`;
+}
+
 function modaleAppel() {
   return `<div class="voile" data-voile><div class="modale">
     <div class="modale-tete">
@@ -11564,6 +11798,7 @@ function apresRendu() {
             : S.modale.type === 'pret' ? modalePret()
             : S.modale.type === 'rdv-confirme' ? modaleRdvConfirme()
             : S.modale.type === 'rdv-client' ? modaleRdvClient()
+            : S.modale.type === 'appel-entrant' ? modaleAppelEntrant()
             : S.modale.type === 'envoi-pdf' ? modaleEnvoiPdf()
             : S.modale.type === 'confirmer' ? modaleConfirmer() : '';
     const d = document.createElement('div');
@@ -13535,6 +13770,36 @@ document.addEventListener('click', (e) => {
 
     appel() { S.modale = { type: 'appel' }; rendre(); },
 
+    /* Depuis l'appel entrant : noter la demande, le numéro déjà en place. Le
+       formulaire ne se remplit qu'une fois dessiné — d'où le petit délai. */
+    'appel-noter'() {
+      const num = cible.dataset.num || '';
+      S.modale = { type: 'appel' };
+      rendre();
+      setTimeout(() => {
+        const champ = document.querySelector('#form-appel [name="tel"]');
+        if (!champ) return;
+        champ.value = telLisible(num);
+        const form = document.querySelector('#form-appel');
+        if (form) rafraichirReco(form);
+        const panne = form && form.querySelector('[name="panne"]');
+        if (panne) panne.focus();
+      }, 40);
+    },
+
+    'appel-fiche'() {
+      S.modale = null; S.vue = 'client-fiche'; S.clientId = id; rendre();
+    },
+
+    /* Essayer sans le standard : on fait sonner le numéro qu'on veut. */
+    'appel-test'() {
+      const champ = document.querySelector('#tel-test');
+      const num = champ ? champ.value.trim() : '';
+      if (chiffresSeuls(num).length < 4) { toast('Tapez d\'abord un numéro'); return; }
+      sonnerAppel(num);
+      rendre();
+    },
+
     /* Reprendre la fiche d'un habitué : on remplit le formulaire à sa place,
        sans redessiner la fenêtre — il reste à noter la panne, et c'est tout. */
     'reprendre-appel'() {
@@ -14709,6 +14974,11 @@ document.addEventListener('click', (e) => {
       rendre();
     },
 
+    'copier-adresse-appel'() {
+      const champ = document.querySelector('#adresse-appel');
+      if (champ) copier(champ.value, 'Adresse');
+    },
+
     'copier-pret'() {
       const champ = $('#texte-pret');
       if (champ) copier(champ.value, 'Message');
@@ -15393,6 +15663,16 @@ function lireAdresse() {
   const client = hash.match(/client=([a-z0-9]+)/i);
   const grille = hash.match(/tarifs=([a-z0-9]+)/i);
   const annul = hash.match(/annul=([a-z0-9]+)/i);
+  /* Le standard ouvre « …#appel=0612345678 ». On prend le numéro, on ouvre la
+     fenêtre, et on efface aussitôt l'adresse : sans ça, un rafraîchissement
+     ferait sonner un appel qui date d'une heure. */
+  const appel = hash.match(/appel=([^&]+)/i);
+  if (appel) {
+    let num = appel[1];
+    try { num = decodeURIComponent(num); } catch (e) { /* le brut fera l'affaire */ }
+    poserAdresse('');
+    if (chiffresSeuls(num).length >= 4) sonnerAppel(num);
+  }
   S.clientToken = client ? client[1] : null;
   S.grilleToken = grille ? grille[1] : null;
   S.annulToken = annul ? annul[1] : null;
@@ -15401,6 +15681,19 @@ function lireAdresse() {
 /* Trois liens publics mènent ici sans compte : l'espace client, la grille
    tarifaire, l'annulation d'un rendez-vous. Derrière l'un d'eux, l'outil n'est
    plus l'atelier — ni cloches, ni micro, ni ouverture de session. */
+/* Faire sonner un appel à l'écran : la fenêtre passe devant tout le reste, et
+   un son plus une notification vont chercher celui qui regarde ailleurs. */
+function sonnerAppel(num) {
+  S.modale = { type: 'appel-entrant', num: String(num).trim() };
+  try { bip('eveil'); } catch (e) { /* un outil muet n'est pas cassé */ }
+  try {
+    const info = reconnaitreNumero(num);
+    const c = info && info.client;
+    const nom = c ? (DB.estPro(c) ? c.nom : (c.prenom + ' ' + c.nom).trim()) : 'Numéro inconnu';
+    notifierNavigateur('Appel entrant — ' + nom, telLisible(num));
+  } catch (e) { /* pas de notification : la fenêtre suffit */ }
+}
+
 function enVuePublique() {
   return !!(S.clientToken || S.grilleToken || S.annulToken);
 }
