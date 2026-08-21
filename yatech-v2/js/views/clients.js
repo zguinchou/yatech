@@ -335,7 +335,12 @@ function ligne(c, requete, tables) {
         c.type === 'pro' ? h('span.etiq.etiq--accent', 'PRO') : null,
         c.archive ? h('span.etiq', 'archivé') : null
       ]),
-      c.type === 'pro' && (c.nom || c.prenom)
+      /* Sous la raison sociale on met le nom de l'interlocuteur. Encore
+         faut-il que ce soit quelqu'un : si le champ « nom » répète la raison
+         sociale — ce qui arrive vite à la saisie — on n'écrit pas deux fois
+         la même chose. */
+      c.type === 'pro' && [c.prenom, c.nom].filter(Boolean).join(' ').trim()
+        && nu([c.prenom, c.nom].filter(Boolean).join(' ')) !== nu(lit.nomClient(c))
         ? h('div.minus.tres-faible.coupe', {
             html: surligne([c.prenom, c.nom].filter(Boolean).join(' '), requete)
           })

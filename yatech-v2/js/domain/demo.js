@@ -171,12 +171,12 @@ export function jeuDemo() {
     codeEbp: 'DUPUIS001' });
   const c2 = cli({ type: 'part', civilite: 'Mme', prenom: 'Nadia', nom: 'Belkacem', tel: '0678901234',
     email: 'n.belkacem@example.fr', cp: '69003', ville: 'Lyon', codeEbp: 'BELKACE002' });
-  const c3 = cli({ type: 'pro', societe: 'Garage du Pont', nom: 'Garage du Pont', prenom: '',
+  const c3 = cli({ type: 'pro', societe: 'Garage du Pont',
     siret: '442 111 222 00033', tel: '0472889900', email: 'contact@garagedupont.fr',
     adresse: '88 avenue de la République', cp: '69150', ville: 'Décines',
     grille: 'pro', remise: 0, codeEbp: 'GARPONT003',
     notes: 'Confrère mécanique. Nous confie toute l’électronique. Facturation mensuelle.' });
-  const c4 = cli({ type: 'pro', societe: 'AutoPlus Décines', nom: 'AutoPlus Décines',
+  const c4 = cli({ type: 'pro', societe: 'AutoPlus Décines',
     tel: '0478112233', email: 'atelier@autoplus-decines.fr', cp: '69150', ville: 'Décines',
     grille: 'pro', remise: 5, codeEbp: 'AUTOPLU004',
     notes: 'Remise supplémentaire 5 % négociée sur le volume.' });
@@ -184,7 +184,7 @@ export function jeuDemo() {
     cp: '69100', ville: 'Villeurbanne', codeEbp: 'RIVIERE005' });
   const c6 = cli({ type: 'part', civilite: 'Mme', prenom: 'Claire', nom: 'Fontaine', tel: '0644556677',
     email: 'claire.fontaine@example.fr', cp: '69120', ville: 'Vaulx-en-Velin', codeEbp: 'FONTAIN006' });
-  const c7 = cli({ type: 'pro', societe: 'Transports Meyzieu', nom: 'Transports Meyzieu',
+  const c7 = cli({ type: 'pro', societe: 'Transports Meyzieu',
     tel: '0472334455', cp: '69330', ville: 'Meyzieu', grille: 'pro',
     notes: 'Flotte de 9 utilitaires. Entretien groupé.', codeEbp: 'TRANSPO007' });
   const c8 = cli({ type: 'part', civilite: 'M.', prenom: 'Ali', nom: 'Khaled', tel: '0655443322',
