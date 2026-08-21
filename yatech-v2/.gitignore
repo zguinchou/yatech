@@ -1,0 +1,6 @@
+# Rien à ignorer côté outil : il n'y a ni build, ni dépendance, ni fichier généré.
+# Ces entrées ne servent qu'à éviter les intrus habituels.
+node_modules/
+.DS_Store
+Thumbs.db
+*.log

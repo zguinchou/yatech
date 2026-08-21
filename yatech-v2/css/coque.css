@@ -1,0 +1,461 @@
+/* ==========================================================================
+   YATECH — la coque
+   --------------------------------------------------------------------------
+   Ce qui ne bouge jamais : le menu, la barre du haut, le cadre du contenu.
+   Deux mises en page pour un même balisage :
+     • grand écran — un rail de navigation à gauche, en permanence ;
+     • téléphone   — une barre d'onglets en bas, sous le pouce, et le reste
+                     du menu dans un tiroir.
+   Le basculement se fait à 900px, une seule fois, ici.
+   ========================================================================== */
+
+.coque {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   RAIL DE NAVIGATION (grand écran)
+   ========================================================================== */
+.rail {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: var(--rail);
+  background: var(--plan);
+  border-right: 1px solid var(--trait-fin);
+  flex-direction: column;
+  z-index: 100;
+  padding-left: var(--safe-l);
+}
+.rail__marque {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-4);
+  height: var(--barre-h);
+  flex: none;
+  border-bottom: 1px solid var(--trait-fin);
+}
+.rail__marque img { width: 26px; height: 26px; border-radius: 6px; }
+.rail__marque strong {
+  font: 600 var(--t-l)/1 var(--f-titre);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.rail__liens {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--e-3) var(--e-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rail__section {
+  padding: var(--e-4) var(--e-3) var(--e-1);
+  font: 600 var(--t-xs)/1 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--encre-3);
+}
+.rail__section:first-child { padding-top: var(--e-1); }
+.lien {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: 9px var(--e-3);
+  border-radius: var(--r-m);
+  color: var(--encre-2);
+  font: 500 var(--t-m)/1 var(--f-texte);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  position: relative;
+  transition: background var(--vite), color var(--vite);
+}
+.lien:hover { background: var(--voile); color: var(--encre); text-decoration: none; }
+.lien svg { width: 18px; height: 18px; flex: none; opacity: .85; }
+.lien span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lien[aria-current="page"] {
+  background: var(--accent-voile);
+  color: var(--accent);
+  font-weight: 600;
+}
+.lien[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -var(--e-2);
+  left: calc(var(--e-2) * -1);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 18px;
+  background: var(--accent);
+  border-radius: 0 3px 3px 0;
+}
+.rail__pied {
+  flex: none;
+  border-top: 1px solid var(--trait-fin);
+  padding: var(--e-2);
+  padding-bottom: calc(var(--e-2) + var(--safe-b));
+}
+
+/* ==========================================================================
+   BARRE DU HAUT
+   ========================================================================== */
+.barre {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  height: calc(var(--barre-h) + var(--safe-t));
+  padding: var(--safe-t) calc(var(--e-4) + var(--safe-r)) 0 calc(var(--e-4) + var(--safe-l));
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  background: color-mix(in srgb, var(--fond) 86%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--trait-fin);
+  flex: none;
+}
+/* Les navigateurs sans color-mix retombent sur le fond plein : jamais de
+   texte illisible parce qu'un effet n'a pas pris. */
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  .barre { background: var(--fond); }
+}
+.barre__titre {
+  font: 600 var(--t-l)/1.2 var(--f-titre);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.barre__marque {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+}
+.barre__marque img { width: 24px; height: 24px; border-radius: 6px; }
+.barre__recherche { flex: 1; max-width: 380px; margin: 0 auto; }
+.barre__outils { display: flex; align-items: center; gap: var(--e-1); margin-left: auto; }
+
+/* Le bouton qui ouvre la recherche générale, sur grand écran. */
+.chercher-tout {
+  display: none;
+  align-items: center;
+  gap: var(--e-2);
+  height: 34px;
+  padding: 0 var(--e-3);
+  min-width: 220px;
+  border: 1px solid var(--trait);
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+  color: var(--encre-3);
+  font-size: var(--t-s);
+  cursor: pointer;
+}
+.chercher-tout:hover { border-color: var(--encre-3); color: var(--encre-2); }
+.chercher-tout svg { width: 15px; height: 15px; }
+.chercher-tout kbd { margin-left: auto; }
+
+/* Le voyant de connexion : rouge quand l'appareil est hors ligne. */
+.voyant-hors-ligne {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--r-rond);
+  background: var(--alerte-voile);
+  color: var(--alerte);
+  font: 600 var(--t-xs)/1 var(--f-texte);
+}
+
+/* ==========================================================================
+   CONTENU
+   ========================================================================== */
+.contenu {
+  flex: 1;
+  min-width: 0;
+  padding: var(--e-4) calc(var(--e-4) + var(--safe-r)) var(--e-6) calc(var(--e-4) + var(--safe-l));
+  /* De la place sous les onglets du bas, sinon la dernière ligne est cachée. */
+  padding-bottom: calc(var(--onglets-h) + var(--e-6) + var(--safe-b));
+  width: 100%;
+  max-width: var(--large-max);
+  margin: 0 auto;
+}
+
+/* L'en-tête d'un écran : son titre, ses filtres, ses actions. */
+.tete-ecran {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--e-4);
+}
+.tete-ecran h1 { font-size: var(--t-2xl); letter-spacing: .03em; }
+.tete-ecran__sous { color: var(--encre-2); font-size: var(--t-s); margin-top: 2px; }
+.tete-ecran__actions { margin-left: auto; display: flex; gap: var(--e-2); flex-wrap: wrap; }
+
+/* Une barre de filtres qui défile horizontalement sur téléphone. */
+.filtres {
+  display: flex;
+  gap: var(--e-2);
+  overflow-x: auto;
+  padding-bottom: var(--e-1);
+  margin-bottom: var(--e-3);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.filtres::-webkit-scrollbar { display: none; }
+.filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: 0 var(--e-3);
+  height: 34px;
+  border: 1px solid var(--trait);
+  border-radius: var(--r-rond);
+  background: var(--plan);
+  color: var(--encre-2);
+  font: 600 var(--t-s)/1 var(--f-texte);
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  transition: background var(--vite), border-color var(--vite), color var(--vite);
+}
+.filtre:hover { border-color: var(--encre-3); color: var(--encre); }
+.filtre[aria-pressed="true"] {
+  background: var(--accent-voile);
+  border-color: var(--accent-trait);
+  color: var(--accent);
+}
+.filtre .compte { background: var(--plan-3); }
+.filtre[aria-pressed="true"] .compte { background: var(--accent); color: var(--accent-sur); }
+
+/* Grille de cartes qui s'adapte toute seule à la largeur disponible. */
+.grille-auto {
+  display: grid;
+  gap: var(--e-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+}
+.grille-indics {
+  display: grid;
+  gap: var(--e-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 45%), 1fr));
+}
+.deux-colonnes {
+  display: grid;
+  gap: var(--e-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1100px) {
+  .deux-colonnes { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+  .deux-colonnes--large { grid-template-columns: minmax(0, 1fr) 420px; }
+  .deux-colonnes--inverse { grid-template-columns: 340px minmax(0, 1fr); }
+}
+
+/* ==========================================================================
+   ONGLETS DU BAS (téléphone) — cinq places, pas une de plus
+   ========================================================================== */
+.onglets-bas {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 95;
+  height: calc(var(--onglets-h) + var(--safe-b));
+  padding-bottom: var(--safe-b);
+  display: flex;
+  background: color-mix(in srgb, var(--plan) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border-top: 1px solid var(--trait-fin);
+}
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  .onglets-bas { background: var(--plan); }
+}
+.onglet-bas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--encre-3);
+  font: 600 10px/1 var(--f-texte);
+  cursor: pointer;
+  position: relative;
+  min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.onglet-bas svg { width: 21px; height: 21px; }
+.onglet-bas span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+.onglet-bas[aria-current="page"] { color: var(--accent); }
+.onglet-bas__puce {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  margin-left: 4px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-rond);
+  background: var(--danger);
+  color: #fff;
+  font: 700 9px/16px var(--f-chiffre);
+  text-align: center;
+}
+
+/* ==========================================================================
+   TIROIR (téléphone) — le reste du menu
+   ========================================================================== */
+.tiroir-masque {
+  position: fixed;
+  inset: 0;
+  background: var(--masque);
+  z-index: 200;
+  animation: apparait var(--vite);
+}
+.tiroir {
+  position: fixed;
+  top: 0; bottom: 0; left: 0;
+  width: min(300px, 86vw);
+  background: var(--plan);
+  border-right: 1px solid var(--trait);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  animation: tiroir-entre var(--calme);
+  padding-left: var(--safe-l);
+}
+@keyframes tiroir-entre { from { transform: translateX(-100%); } }
+
+/* ==========================================================================
+   CARTE D'IDENTITÉ DE LA PERSONNE CONNECTÉE
+   ========================================================================== */
+.moi {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-2);
+  border-radius: var(--r-m);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+}
+.moi:hover { background: var(--voile); }
+.moi__nom { font-weight: 600; font-size: var(--t-s); }
+.moi__role { font-size: var(--t-xs); color: var(--encre-3); }
+
+/* ==========================================================================
+   RECHERCHE GÉNÉRALE (la palette)
+   ========================================================================== */
+.palette-masque {
+  position: fixed;
+  inset: 0;
+  background: var(--masque);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 550;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(8vh, var(--e-5)) var(--e-4) var(--e-4);
+  animation: apparait var(--vite);
+}
+.palette {
+  width: min(660px, 100%);
+  background: var(--plan);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-l);
+  box-shadow: var(--ombre-3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(560px, 80dvh);
+  animation: monte var(--calme);
+}
+.palette__saisie {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  border-bottom: 1px solid var(--trait-fin);
+  flex: none;
+}
+.palette__saisie svg { width: 18px; height: 18px; color: var(--encre-3); flex: none; }
+.palette__saisie input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: var(--t-l);
+  min-width: 0;
+  color: var(--encre);
+}
+.palette__saisie input::placeholder { color: var(--encre-3); }
+.palette__resultats { overflow-y: auto; padding: var(--e-2); flex: 1; }
+.palette__groupe {
+  padding: var(--e-3) var(--e-3) var(--e-1);
+  font: 600 var(--t-xs)/1 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--encre-3);
+}
+.palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  width: 100%;
+  padding: var(--e-2) var(--e-3);
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-m);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  min-height: 46px;
+}
+.palette__item:hover, .palette__item[data-vise="1"] { background: var(--accent-voile); }
+.palette__item svg { width: 17px; height: 17px; color: var(--encre-3); flex: none; }
+.palette__item mark { background: var(--accent-voile); color: var(--accent); border-radius: 3px; }
+.palette__pied {
+  display: flex;
+  gap: var(--e-4);
+  padding: var(--e-2) var(--e-4);
+  border-top: 1px solid var(--trait-fin);
+  background: var(--plan-2);
+  font-size: var(--t-xs);
+  color: var(--encre-3);
+  flex: none;
+}
+@media (max-width: 700px) { .palette__pied { display: none; } }
+
+/* ==========================================================================
+   BASCULE DE MISE EN PAGE
+   ========================================================================== */
+@media (min-width: 901px) {
+  .rail { display: flex; }
+  .coque { padding-left: var(--rail); }
+  .onglets-bas { display: none; }
+  .contenu { padding-bottom: var(--e-7); padding-left: var(--e-5); padding-right: calc(var(--e-5) + var(--safe-r)); }
+  .flottant { display: none; }
+  .chercher-tout { display: flex; }
+  .barre__marque { display: none; }
+  .messages { left: calc(50% + var(--rail) / 2); }
+}
+@media (max-width: 900px) {
+  .barre__titre { display: none; }
+}

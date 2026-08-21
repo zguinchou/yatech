@@ -1,0 +1,830 @@
+/* ==========================================================================
+   YATECH — composants
+   Les pièces détachées de l'interface. Chacune se suffit à elle-même : on la
+   pose n'importe où dans l'outil, elle a la même tête et le même
+   comportement. Aucune couleur en dur, tout vient de jetons.css.
+   ========================================================================== */
+
+/* ==========================================================================
+   BOUTONS
+   Trois niveaux seulement : l'action principale (accent plein), l'action
+   ordinaire (contour), et l'action discrète (rien du tout). Au-delà, plus
+   personne ne sait où cliquer.
+   ========================================================================== */
+.bt {
+  --bt-fond: var(--plan-2);
+  --bt-encre: var(--encre);
+  --bt-trait: var(--trait);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-2);
+  min-height: 38px;
+  padding: 0 var(--e-4);
+  border: 1px solid var(--bt-trait);
+  border-radius: var(--r-m);
+  background: var(--bt-fond);
+  color: var(--bt-encre);
+  font: 600 var(--t-m)/1 var(--f-texte);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--vite), border-color var(--vite), transform var(--vite),
+              box-shadow var(--vite), opacity var(--vite);
+}
+.bt:hover:not(:disabled) { background: var(--plan-3); }
+.bt:active:not(:disabled) { transform: translateY(1px); }
+.bt:disabled, .bt[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.bt svg { width: 17px; height: 17px; flex: none; }
+
+/* Action principale : une seule par écran, celle qu'on veut voir cliquée. */
+.bt--fort {
+  --bt-fond: var(--accent);
+  --bt-encre: var(--accent-sur);
+  --bt-trait: transparent;
+  box-shadow: var(--ombre-1);
+}
+.bt--fort:hover:not(:disabled) { background: var(--accent-fort); }
+
+/* Action ordinaire : contour, fond du panneau. */
+.bt--contour { --bt-fond: transparent; }
+.bt--contour:hover:not(:disabled) { background: var(--voile); border-color: var(--encre-3); }
+
+/* Action discrète : ni fond ni contour. Pour ce qui accompagne. */
+.bt--nu {
+  --bt-fond: transparent;
+  --bt-trait: transparent;
+  color: var(--encre-2);
+}
+.bt--nu:hover:not(:disabled) { background: var(--voile); color: var(--encre); }
+
+/* Action qui détruit. Toujours accompagnée d'une confirmation. */
+.bt--danger { --bt-encre: var(--danger); --bt-trait: var(--danger-voile); --bt-fond: var(--danger-voile); }
+.bt--danger:hover:not(:disabled) { background: var(--danger); --bt-encre: #fff; }
+
+.bt--ok { --bt-encre: var(--ok); --bt-trait: var(--ok-voile); --bt-fond: var(--ok-voile); }
+.bt--ok:hover:not(:disabled) { background: var(--ok); --bt-encre: #fff; }
+
+/* Tailles. Le format « pouce » est fait pour être touché avec un gant. */
+.bt--s  { min-height: 30px; padding: 0 var(--e-3); font-size: var(--t-s); border-radius: var(--r-s); }
+.bt--s svg { width: 14px; height: 14px; }
+.bt--l  { min-height: 46px; padding: 0 var(--e-5); font-size: var(--t-l); }
+.bt--pouce { min-height: 52px; font-size: var(--t-l); border-radius: var(--r-l); }
+.bt--plein { width: 100%; }
+
+/* Bouton carré : une icône, rien d'autre. */
+.bt--icone { width: 38px; padding: 0; }
+.bt--icone.bt--s { width: 30px; }
+.bt--icone.bt--l { width: 46px; }
+
+/* Groupe de boutons collés (un seul bloc visuel). */
+.bt-groupe { display: inline-flex; }
+.bt-groupe .bt { border-radius: 0; margin-left: -1px; }
+.bt-groupe .bt:first-child { border-radius: var(--r-m) 0 0 var(--r-m); margin-left: 0; }
+.bt-groupe .bt:last-child  { border-radius: 0 var(--r-m) var(--r-m) 0; }
+.bt-groupe .bt:only-child  { border-radius: var(--r-m); }
+
+/* Bouton flottant : l'action du pouce, en bas à droite, sur mobile. */
+.flottant {
+  position: fixed;
+  right: calc(var(--e-4) + var(--safe-r));
+  bottom: calc(var(--onglets-h) + var(--e-4) + var(--safe-b));
+  z-index: 60;
+  width: 56px; height: 56px;
+  border-radius: var(--r-rond);
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-sur);
+  box-shadow: var(--ombre-2);
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.flottant svg { width: 24px; height: 24px; }
+.flottant:active { transform: scale(.94); }
+
+/* ==========================================================================
+   INTERRUPTEUR SEGMENTÉ — choisir une vue parmi deux ou trois
+   ========================================================================== */
+.segments {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--plan-2);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-m);
+}
+.segments button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--encre-2);
+  padding: 0 var(--e-3);
+  min-height: 30px;
+  border-radius: var(--r-s);
+  font: 600 var(--t-s)/1 var(--f-texte);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--vite), color var(--vite);
+}
+.segments button:hover { color: var(--encre); }
+.segments button[aria-pressed="true"] {
+  background: var(--plan);
+  color: var(--encre);
+  box-shadow: var(--ombre-1);
+}
+.segments--plein { display: flex; width: 100%; }
+.segments--plein button { flex: 1; }
+
+/* ==========================================================================
+   CHAMPS DE SAISIE
+   ========================================================================== */
+.champ { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.champ > label,
+.etiquette {
+  font: 600 var(--t-xs)/1.3 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--encre-3);
+}
+.champ__aide { font-size: var(--t-xs); color: var(--encre-3); line-height: 1.4; }
+.champ__erreur { font-size: var(--t-xs); color: var(--danger); font-weight: 600; }
+
+.saisie {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px var(--e-3);
+  background: var(--plan-2);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-m);
+  color: var(--encre);
+  font-size: var(--t-m);
+  transition: border-color var(--vite), background var(--vite), box-shadow var(--vite);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.saisie::placeholder { color: var(--encre-3); }
+.saisie:hover:not(:disabled) { border-color: var(--encre-3); }
+.saisie:focus {
+  border-color: var(--accent);
+  background: var(--plan);
+  box-shadow: 0 0 0 3px var(--accent-voile);
+  outline: none;
+}
+.saisie:disabled { opacity: .55; cursor: not-allowed; }
+.saisie[aria-invalid="true"] { border-color: var(--danger); }
+.saisie--num { font-family: var(--f-chiffre); font-variant-numeric: tabular-nums; text-align: right; }
+.saisie--plaque {
+  font-family: var(--f-chiffre);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-weight: 600;
+}
+
+/* iOS zoome dès qu'un champ fait moins de 16px : sur petit écran, on grossit. */
+@media (max-width: 900px) {
+  .saisie, .saisie--num { font-size: 16px; }
+}
+
+select.saisie {
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237d8d99' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6.5 8 10.5l4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 15px;
+  cursor: pointer;
+}
+
+/* Un champ avec une unité collée à droite (€, h, km). */
+.champ-unite { position: relative; display: flex; align-items: center; }
+.champ-unite .saisie { padding-right: 42px; }
+.champ-unite__unite {
+  position: absolute;
+  right: var(--e-3);
+  font: 600 var(--t-s)/1 var(--f-texte);
+  color: var(--encre-3);
+  pointer-events: none;
+}
+
+/* Champ de recherche avec sa loupe. */
+.recherche { position: relative; display: flex; align-items: center; width: 100%; }
+.recherche svg {
+  position: absolute;
+  left: 11px;
+  width: 17px; height: 17px;
+  color: var(--encre-3);
+  pointer-events: none;
+}
+.recherche .saisie { padding-left: 36px; }
+.recherche__vider {
+  position: absolute; right: 6px;
+  width: 28px; height: 28px;
+  border: 0; background: transparent; color: var(--encre-3);
+  border-radius: var(--r-rond); cursor: pointer;
+  display: grid; place-items: center;
+}
+.recherche__vider:hover { background: var(--voile); color: var(--encre); }
+
+/* Case à cocher et interrupteur. */
+.coche {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 32px;
+}
+.coche input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex: none; }
+
+.bascule {
+  position: relative;
+  width: 42px; height: 24px;
+  flex: none;
+  background: var(--trait);
+  border-radius: var(--r-rond);
+  cursor: pointer;
+  transition: background var(--vite);
+  border: 0;
+  padding: 0;
+}
+.bascule::after {
+  content: "";
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  background: var(--plan);
+  border-radius: var(--r-rond);
+  box-shadow: var(--ombre-1);
+  transition: transform var(--vite);
+}
+.bascule[aria-checked="true"] { background: var(--accent); }
+.bascule[aria-checked="true"]::after { transform: translateX(18px); }
+
+/* ==========================================================================
+   PANNEAUX ET CARTES
+   ========================================================================== */
+.panneau {
+  background: var(--plan);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-l);
+  box-shadow: var(--ombre-1);
+}
+.panneau--plat { box-shadow: none; }
+.panneau__tete {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  border-bottom: 1px solid var(--trait-fin);
+  min-height: 48px;
+}
+.panneau__tete h2, .panneau__tete h3 { font-size: var(--t-m); letter-spacing: .04em; text-transform: uppercase; }
+.panneau__corps { padding: var(--e-4); }
+.panneau__pied {
+  padding: var(--e-3) var(--e-4);
+  border-top: 1px solid var(--trait-fin);
+  background: var(--plan-2);
+  border-radius: 0 0 var(--r-l) var(--r-l);
+}
+
+/* La carte cliquable : une ligne de liste, un dossier, un client. */
+.carte {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--plan);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  padding: var(--e-3);
+  cursor: pointer;
+  color: inherit;
+  transition: border-color var(--vite), background var(--vite), transform var(--vite);
+}
+.carte:hover { border-color: var(--accent-trait); background: var(--plan-2); text-decoration: none; }
+.carte:active { transform: scale(.995); }
+.carte--muette { cursor: default; }
+.carte--muette:hover { border-color: var(--trait-fin); background: var(--plan); }
+
+/* ==========================================================================
+   PASTILLES D'ÉTAT
+   Une pastille dit un état, jamais une action. La couleur porte le sens :
+   on doit pouvoir la lire sans lire le texte.
+   ========================================================================== */
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--r-rond);
+  background: var(--neutre-voile);
+  color: var(--neutre);
+  font: 600 var(--t-xs)/1.4 var(--f-texte);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.pastille::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: var(--r-rond);
+  background: currentColor;
+  flex: none;
+}
+.pastille--sans-point::before { display: none; }
+.pastille--ok      { background: var(--ok-voile);     color: var(--ok); }
+.pastille--info    { background: var(--info-voile);   color: var(--info); }
+.pastille--alerte  { background: var(--alerte-voile); color: var(--alerte); }
+.pastille--danger  { background: var(--danger-voile); color: var(--danger); }
+.pastille--violet  { background: var(--violet-voile); color: var(--violet); }
+.pastille--accent  { background: var(--accent-voile); color: var(--accent); }
+.pastille--pleine  { background: var(--accent); color: var(--accent-sur); }
+
+/* Puce de comptage sur un onglet ou une entrée de menu. */
+.compte {
+  display: inline-grid;
+  place-items: center;
+  min-width: 19px; height: 19px;
+  padding: 0 5px;
+  border-radius: var(--r-rond);
+  background: var(--plan-3);
+  color: var(--encre-2);
+  font: 700 var(--t-xs)/1 var(--f-chiffre);
+}
+.compte--alerte { background: var(--danger); color: #fff; }
+.compte--accent { background: var(--accent); color: var(--accent-sur); }
+
+/* Étiquette : un mot dans un cadre, pour classer. */
+.etiq {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--trait);
+  background: var(--plan-2);
+  color: var(--encre-2);
+  font: 600 var(--t-xs)/1.5 var(--f-texte);
+  white-space: nowrap;
+}
+.etiq--accent { border-color: var(--accent-trait); color: var(--accent); background: var(--accent-voile); }
+
+/* La plaque d'immatriculation, dessinée comme la vraie : bandes bleues. */
+.plaque {
+  display: inline-flex;
+  align-items: center;
+  font: 700 var(--t-s)/1 var(--f-chiffre);
+  letter-spacing: .09em;
+  background: #f2f3f4;
+  color: #10161c;
+  border: 1px solid #9aa5ad;
+  border-radius: 3px;
+  padding: 3px 7px 3px 13px;
+  position: relative;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.plaque::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 7px;
+  background: #063298;
+  border-radius: 2px 0 0 2px;
+}
+.plaque--l { font-size: var(--t-m); padding: 5px 10px 5px 17px; }
+.plaque--l::before { width: 10px; }
+
+/* ==========================================================================
+   AVATARS — trois personnes, on les reconnaît à leurs initiales
+   ========================================================================== */
+.tete {
+  display: inline-grid;
+  place-items: center;
+  width: 30px; height: 30px;
+  flex: none;
+  border-radius: var(--r-rond);
+  background: var(--plan-3);
+  color: var(--encre);
+  font: 700 var(--t-xs)/1 var(--f-titre);
+  letter-spacing: .04em;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tete--s { width: 22px; height: 22px; font-size: 9.5px; }
+.tete--l { width: 44px; height: 44px; font-size: var(--t-m); }
+.tetes { display: inline-flex; }
+.tetes .tete + .tete { margin-left: -8px; box-shadow: 0 0 0 2px var(--plan); }
+
+/* ==========================================================================
+   TABLEAUX
+   Sur grand écran, un vrai tableau. Sur téléphone, chaque ligne se replie en
+   fiche : les en-têtes deviennent des étiquettes devant chaque valeur.
+   ========================================================================== */
+.tableau-cadre {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--r-m);
+}
+table.grille {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-m);
+}
+table.grille th {
+  text-align: left;
+  padding: var(--e-2) var(--e-3);
+  font: 600 var(--t-xs)/1.4 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--encre-3);
+  border-bottom: 1px solid var(--trait);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--plan);
+  z-index: 2;
+}
+table.grille td {
+  padding: var(--e-3);
+  border-bottom: 1px solid var(--trait-fin);
+  vertical-align: middle;
+}
+table.grille tbody tr:last-child td { border-bottom: 0; }
+table.grille tbody tr.cliquable { cursor: pointer; }
+table.grille tbody tr.cliquable:hover { background: var(--plan-2); }
+table.grille th.num, table.grille td.num { text-align: right; }
+table.grille .serre { width: 1%; white-space: nowrap; }
+table.grille tr.total td { font-weight: 700; border-top: 2px solid var(--trait); }
+
+@media (max-width: 760px) {
+  table.grille.repliable thead { display: none; }
+  table.grille.repliable, table.grille.repliable tbody,
+  table.grille.repliable tr, table.grille.repliable td { display: block; width: 100%; }
+  table.grille.repliable tr {
+    border: 1px solid var(--trait-fin);
+    border-radius: var(--r-m);
+    padding: var(--e-2);
+    margin-bottom: var(--e-2);
+    background: var(--plan);
+  }
+  table.grille.repliable td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--e-3);
+    border: 0;
+    padding: 5px var(--e-2);
+    text-align: right;
+  }
+  table.grille.repliable td::before {
+    content: attr(data-col);
+    font: 600 var(--t-xs)/1.4 var(--f-texte);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--encre-3);
+    text-align: left;
+    flex: none;
+  }
+  table.grille.repliable td:empty { display: none; }
+}
+
+/* Liste simple : des lignes séparées par un filet, sans tableau. */
+.liste { display: flex; flex-direction: column; }
+.liste__ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-3);
+  border-bottom: 1px solid var(--trait-fin);
+  text-align: left;
+  background: transparent;
+  border-left: 0; border-right: 0; border-top: 0;
+  width: 100%;
+  color: inherit;
+  cursor: pointer;
+  min-height: 54px;
+}
+.liste__ligne:last-child { border-bottom: 0; }
+.liste__ligne:hover { background: var(--plan-2); text-decoration: none; }
+.liste__ligne--muette { cursor: default; }
+.liste__ligne--muette:hover { background: transparent; }
+
+/* ==========================================================================
+   ONGLETS
+   ========================================================================== */
+.onglets {
+  display: flex;
+  gap: var(--e-1);
+  border-bottom: 1px solid var(--trait);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.onglets::-webkit-scrollbar { display: none; }
+.onglets button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: var(--e-3) var(--e-3);
+  color: var(--encre-2);
+  font: 600 var(--t-m)/1 var(--f-texte);
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  transition: color var(--vite), border-color var(--vite);
+}
+.onglets button:hover { color: var(--encre); }
+.onglets button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ==========================================================================
+   MODALES ET FEUILLES
+   Sur grand écran : une fenêtre centrée. Sur téléphone : une feuille qui monte
+   du bas, qu'on ferme en la tirant vers le bas ou en touchant à côté.
+   ========================================================================== */
+.masque {
+  position: fixed;
+  inset: 0;
+  background: var(--masque);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--e-4);
+  animation: apparait var(--vite);
+}
+@keyframes apparait { from { opacity: 0; } }
+@keyframes monte { from { transform: translateY(14px) scale(.985); opacity: 0; } }
+@keyframes monte-feuille { from { transform: translateY(100%); } }
+
+.modale {
+  background: var(--plan);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-xl);
+  box-shadow: var(--ombre-3);
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100dvh - var(--e-6));
+  display: flex;
+  flex-direction: column;
+  animation: monte var(--calme);
+  overflow: hidden;
+}
+.modale--large { max-width: 900px; }
+.modale--immense { max-width: 1200px; }
+.modale__tete {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-4);
+  border-bottom: 1px solid var(--trait-fin);
+  flex: none;
+}
+.modale__tete h2 { font-size: var(--t-l); flex: 1; min-width: 0; }
+.modale__corps { padding: var(--e-4); overflow-y: auto; flex: 1; }
+.modale__pied {
+  display: flex;
+  gap: var(--e-2);
+  justify-content: flex-end;
+  padding: var(--e-3) var(--e-4);
+  border-top: 1px solid var(--trait-fin);
+  background: var(--plan-2);
+  flex: none;
+  padding-bottom: calc(var(--e-3) + var(--safe-b));
+}
+
+@media (max-width: 700px) {
+  .masque { padding: 0; align-items: flex-end; }
+  .modale {
+    max-width: none;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    max-height: 94dvh;
+    animation: monte-feuille var(--calme);
+    border-bottom: 0;
+  }
+  /* La poignée : elle dit qu'on peut tirer la feuille vers le bas. */
+  .modale__tete::before {
+    content: "";
+    position: absolute;
+    top: 7px; left: 50%;
+    transform: translateX(-50%);
+    width: 38px; height: 4px;
+    border-radius: var(--r-rond);
+    background: var(--trait);
+  }
+  .modale__tete { position: relative; padding-top: var(--e-5); }
+  .modale__pied { flex-direction: column-reverse; }
+  .modale__pied .bt { width: 100%; min-height: 46px; }
+}
+
+/* ==========================================================================
+   MESSAGES ÉPHÉMÈRES
+   ========================================================================== */
+.messages {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--onglets-h) + var(--e-4) + var(--safe-b));
+  z-index: 700;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  align-items: center;
+  pointer-events: none;
+  width: min(440px, calc(100vw - var(--e-6)));
+}
+@media (min-width: 901px) { .messages { bottom: var(--e-5); } }
+.message {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  background: var(--plan);
+  border: 1px solid var(--trait);
+  border-left: 3px solid var(--encre-3);
+  border-radius: var(--r-m);
+  box-shadow: var(--ombre-2);
+  font-size: var(--t-m);
+  pointer-events: auto;
+  animation: monte var(--calme);
+  width: 100%;
+}
+.message--ok     { border-left-color: var(--ok); }
+.message--alerte { border-left-color: var(--alerte); }
+.message--danger { border-left-color: var(--danger); }
+.message__action {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: var(--t-s);
+}
+.message--parti { animation: part var(--calme) forwards; }
+@keyframes part { to { opacity: 0; transform: translateY(8px); } }
+
+/* ==========================================================================
+   ÉTATS VIDES, CHARGEMENT, BANDEAUX
+   ========================================================================== */
+.vide {
+  display: grid;
+  place-items: center;
+  gap: var(--e-3);
+  padding: var(--e-7) var(--e-4);
+  text-align: center;
+  color: var(--encre-2);
+}
+.vide svg { width: 40px; height: 40px; color: var(--encre-3); opacity: .7; }
+.vide h3 { color: var(--encre); }
+.vide p { max-width: 44ch; margin: 0; font-size: var(--t-s); }
+
+.squelette {
+  background: linear-gradient(90deg, var(--plan-2) 25%, var(--plan-3) 37%, var(--plan-2) 63%);
+  background-size: 400% 100%;
+  animation: glisse 1.3s linear infinite;
+  border-radius: var(--r-s);
+  height: 14px;
+}
+@keyframes glisse { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+.bandeau {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e-3);
+  padding: var(--e-3) var(--e-4);
+  border-radius: var(--r-m);
+  background: var(--info-voile);
+  border: 1px solid transparent;
+  color: var(--encre);
+  font-size: var(--t-s);
+  line-height: 1.5;
+}
+.bandeau svg { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--info); }
+.bandeau--alerte { background: var(--alerte-voile); }
+.bandeau--alerte svg { color: var(--alerte); }
+.bandeau--danger { background: var(--danger-voile); }
+.bandeau--danger svg { color: var(--danger); }
+.bandeau--ok { background: var(--ok-voile); }
+.bandeau--ok svg { color: var(--ok); }
+
+/* Jauge : un stock, une charge d'atelier, une progression. */
+.jauge {
+  height: 6px;
+  border-radius: var(--r-rond);
+  background: var(--plan-3);
+  overflow: hidden;
+}
+.jauge i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width var(--calme);
+}
+.jauge--ok i     { background: var(--ok); }
+.jauge--alerte i { background: var(--alerte); }
+.jauge--danger i { background: var(--danger); }
+
+/* Un chiffre qui compte : le cœur des tableaux de bord. */
+.indic {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--e-3) var(--e-4);
+  background: var(--plan);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  min-width: 0;
+}
+.indic__val {
+  font: 600 var(--t-2xl)/1.1 var(--f-titre);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+}
+.indic__nom {
+  font: 600 var(--t-xs)/1.3 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--encre-3);
+}
+.indic__pied { font-size: var(--t-xs); color: var(--encre-2); }
+.indic--cliquable { cursor: pointer; }
+.indic--cliquable:hover { border-color: var(--accent-trait); }
+
+/* ==========================================================================
+   MENU CONTEXTUEL
+   ========================================================================== */
+.menu-flotte {
+  position: fixed;
+  z-index: 600;
+  min-width: 200px;
+  max-width: 280px;
+  background: var(--plan);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-m);
+  box-shadow: var(--ombre-3);
+  padding: var(--e-1);
+  animation: monte var(--vite);
+  max-height: 70dvh;
+  overflow-y: auto;
+}
+.menu-flotte button {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  width: 100%;
+  padding: var(--e-2) var(--e-3);
+  border: 0;
+  background: transparent;
+  color: var(--encre);
+  border-radius: var(--r-s);
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--t-m);
+  min-height: 38px;
+}
+.menu-flotte button:hover { background: var(--plan-2); }
+.menu-flotte button svg { width: 16px; height: 16px; color: var(--encre-3); flex: none; }
+.menu-flotte button.danger { color: var(--danger); }
+.menu-flotte button.danger svg { color: var(--danger); }
+.menu-flotte hr { margin: var(--e-1) 0; }
+.menu-flotte__titre {
+  padding: var(--e-2) var(--e-3) var(--e-1);
+  font: 600 var(--t-xs)/1 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--encre-3);
+}
+
+/* ==========================================================================
+   INFOBULLE — sur grand écran seulement, le doigt n'a pas de survol
+   ========================================================================== */
+@media (hover: hover) and (min-width: 901px) {
+  [data-bulle] { position: relative; }
+  [data-bulle]::after {
+    content: attr(data-bulle);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: var(--encre);
+    color: var(--fond);
+    font: 600 var(--t-xs)/1.3 var(--f-texte);
+    border-radius: var(--r-s);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--vite);
+    z-index: 400;
+  }
+  [data-bulle]:hover::after { opacity: 1; }
+}

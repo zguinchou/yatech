@@ -1,0 +1,183 @@
+/* ==========================================================================
+   YATECH — jetons de style
+   --------------------------------------------------------------------------
+   Une seule source pour les couleurs, les espaces et les typos. Rien d'autre
+   dans le projet n'a le droit d'écrire une couleur en dur : on change ici, et
+   tout l'outil suit — y compris la teinte d'accent choisie dans les réglages.
+
+   Direction : un tableau de bord d'atelier. Fond acier, accent ambre (la
+   couleur des panneaux de sécurité), typo condensée pour les titres et les
+   chiffres. Le vert et le rouge sont réservés aux ÉTATS — une place libre, un
+   dossier en retard — pour rester lisibles d'un coup d'œil à trois mètres.
+   ========================================================================== */
+
+:root {
+  /* --- teinte d'accent : réécrite par les réglages ---------------------- */
+  --h-accent: 38;                  /* ambre */
+  --s-accent: 100%;
+
+  /* --- typographies ----------------------------------------------------- */
+  --f-titre: Bahnschrift, "DIN Alternate", "DIN Condensed", "Roboto Condensed",
+             "Archivo Narrow", "Segoe UI Semibold", system-ui, sans-serif;
+  --f-texte: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+             Arial, sans-serif;
+  --f-chiffre: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono",
+               Consolas, monospace;
+
+  /* Échelle typographique : peu de tailles, bien écartées. */
+  --t-xs: 11px;
+  --t-s:  12.5px;
+  --t-m:  14px;
+  --t-l:  16px;
+  --t-xl: 20px;
+  --t-2xl: 26px;
+  --t-3xl: 34px;
+
+  /* --- espaces : multiples de 4, nommés par usage ------------------------ */
+  --e-1: 4px;
+  --e-2: 8px;
+  --e-3: 12px;
+  --e-4: 16px;
+  --e-5: 24px;
+  --e-6: 32px;
+  --e-7: 48px;
+
+  /* --- rayons ----------------------------------------------------------- */
+  --r-s: 5px;
+  --r-m: 9px;
+  --r-l: 14px;
+  --r-xl: 20px;
+  --r-rond: 999px;
+
+  /* --- structure -------------------------------------------------------- */
+  --rail: 236px;                   /* largeur du menu latéral, sur grand écran */
+  --barre-h: 56px;                 /* hauteur de la barre du haut */
+  --onglets-h: 60px;               /* hauteur de la barre d'onglets, sur mobile */
+  --large-max: 1560px;             /* au-delà, on arrête d'étirer le contenu */
+
+  /* --- marges de sécurité (encoche, barre gestuelle) --------------------- */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+
+  /* --- mouvement -------------------------------------------------------- */
+  --vite: 110ms cubic-bezier(.2, .8, .3, 1);
+  --calme: 220ms cubic-bezier(.2, .8, .3, 1);
+}
+
+/* ==========================================================================
+   THÈME SOMBRE — celui par défaut. L'atelier est mal éclairé, les écrans y
+   passent la journée : un fond clair fatigue et éblouit.
+   ========================================================================== */
+:root,
+[data-theme="sombre"] {
+  color-scheme: dark;
+
+  --fond:      #0f1417;            /* derrière tout */
+  --plan:      #161c21;            /* les panneaux */
+  --plan-2:    #1c242a;            /* un panneau posé sur un panneau */
+  --plan-3:    #232d34;            /* survol, case active */
+  --voile:     rgba(255,255,255,.045);
+  --trait:     #2b363e;
+  --trait-fin: #212a31;
+
+  --encre:   #e8eef3;              /* le texte qui compte */
+  --encre-2: #9aabb7;              /* les précisions */
+  --encre-3: #66788a;              /* les étiquettes, les unités */
+
+  --accent:       hsl(var(--h-accent) var(--s-accent) 62%);
+  --accent-fort:  hsl(var(--h-accent) var(--s-accent) 72%);
+  --accent-sur:   #16110a;         /* le texte posé SUR l'accent */
+  --accent-voile: hsl(var(--h-accent) 60% 62% / .14);
+  --accent-trait: hsl(var(--h-accent) 60% 62% / .34);
+
+  --ok:      #3fc07e;  --ok-voile:     rgba(63,192,126,.14);
+  --info:    #56a8e8;  --info-voile:   rgba(86,168,232,.14);
+  --alerte:  #f2a63a;  --alerte-voile: rgba(242,166,58,.14);
+  --danger:  #f0655a;  --danger-voile: rgba(240,101,90,.14);
+  --violet:  #b07cf5;  --violet-voile: rgba(176,124,245,.14);
+  --neutre:  #7d8d99;  --neutre-voile: rgba(125,141,153,.13);
+
+  --ombre-1: 0 1px 0 rgba(255,255,255,.03), 0 2px 8px -4px rgba(0,0,0,.6);
+  --ombre-2: 0 1px 0 rgba(255,255,255,.03), 0 12px 32px -16px rgba(0,0,0,.8);
+  --ombre-3: 0 30px 80px -24px rgba(0,0,0,.9);
+  --luisant: rgba(255,255,255,.06);
+  --masque:  rgba(6,9,11,.68);     /* derrière une modale */
+}
+
+/* ==========================================================================
+   THÈME CLAIR — pour le comptoir, en plein soleil, et pour l'impression.
+   ========================================================================== */
+[data-theme="clair"] {
+  color-scheme: light;
+
+  --fond:      #eef1f4;
+  --plan:      #ffffff;
+  --plan-2:    #f5f7f9;
+  --plan-3:    #e9edf1;
+  --voile:     rgba(16,22,28,.03);
+  --trait:     #d6dde3;
+  --trait-fin: #e6ebef;
+
+  --encre:   #101a21;
+  --encre-2: #55656f;
+  --encre-3: #8695a1;
+
+  --accent:       hsl(var(--h-accent) 88% 36%);
+  --accent-fort:  hsl(var(--h-accent) 92% 30%);
+  --accent-sur:   #ffffff;
+  --accent-voile: hsl(var(--h-accent) 88% 44% / .11);
+  --accent-trait: hsl(var(--h-accent) 88% 44% / .32);
+
+  --ok:      #12855a;  --ok-voile:     rgba(18,133,90,.11);
+  --info:    #1a6fb8;  --info-voile:   rgba(26,111,184,.11);
+  --alerte:  #a76a00;  --alerte-voile: rgba(167,106,0,.12);
+  --danger:  #c33325;  --danger-voile: rgba(195,51,37,.10);
+  --violet:  #6c39c9;  --violet-voile: rgba(108,57,201,.10);
+  --neutre:  #5f6f7b;  --neutre-voile: rgba(95,111,123,.10);
+
+  --ombre-1: 0 1px 2px rgba(16,22,28,.05), 0 4px 12px -8px rgba(16,22,28,.18);
+  --ombre-2: 0 1px 2px rgba(16,22,28,.06), 0 14px 34px -18px rgba(16,22,28,.28);
+  --ombre-3: 0 30px 70px -22px rgba(16,22,28,.36);
+  --luisant: rgba(255,255,255,.9);
+  --masque:  rgba(24,32,38,.4);
+}
+
+/* Le thème « auto » suit le réglage du téléphone : on ne redéfinit le clair
+   que si le système le demande, sans toucher au reste. */
+@media (prefers-color-scheme: light) {
+  [data-theme="auto"] {
+    color-scheme: light;
+    --fond: #eef1f4;  --plan: #ffffff;  --plan-2: #f5f7f9;  --plan-3: #e9edf1;
+    --voile: rgba(16,22,28,.03);  --trait: #d6dde3;  --trait-fin: #e6ebef;
+    --encre: #101a21;  --encre-2: #55656f;  --encre-3: #8695a1;
+    --accent: hsl(var(--h-accent) 88% 36%);
+    --accent-fort: hsl(var(--h-accent) 92% 30%);
+    --accent-sur: #ffffff;
+    --accent-voile: hsl(var(--h-accent) 88% 44% / .11);
+    --accent-trait: hsl(var(--h-accent) 88% 44% / .32);
+    --ok: #12855a;  --ok-voile: rgba(18,133,90,.11);
+    --info: #1a6fb8;  --info-voile: rgba(26,111,184,.11);
+    --alerte: #a76a00;  --alerte-voile: rgba(167,106,0,.12);
+    --danger: #c33325;  --danger-voile: rgba(195,51,37,.10);
+    --violet: #6c39c9;  --violet-voile: rgba(108,57,201,.10);
+    --neutre: #5f6f7b;  --neutre-voile: rgba(95,111,123,.10);
+    --ombre-1: 0 1px 2px rgba(16,22,28,.05), 0 4px 12px -8px rgba(16,22,28,.18);
+    --ombre-2: 0 1px 2px rgba(16,22,28,.06), 0 14px 34px -18px rgba(16,22,28,.28);
+    --ombre-3: 0 30px 70px -22px rgba(16,22,28,.36);
+    --luisant: rgba(255,255,255,.9);
+    --masque: rgba(24,32,38,.4);
+  }
+}
+
+/* --- densité : deux boutons dans les réglages ----------------------------
+   « Confortable » pour le comptoir et le téléphone, « compact » pour qui
+   veut voir trente lignes d'un coup sur son écran de bureau. */
+[data-densite="compact"] {
+  --e-3: 9px;
+  --e-4: 12px;
+  --e-5: 18px;
+  --e-6: 24px;
+  --barre-h: 50px;
+}

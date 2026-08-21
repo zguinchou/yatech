@@ -1,0 +1,175 @@
+/* ==========================================================================
+   YATECH — impression
+   --------------------------------------------------------------------------
+   Un devis part en PDF par le navigateur : Imprimer → « Enregistrer en PDF ».
+   À l'écran, ce bloc n'existe pas ; à l'impression, c'est le seul qui reste.
+   Tout est en noir sur blanc : l'encre de couleur coûte cher et une photocopie
+   de fond gris est illisible.
+   ========================================================================== */
+
+.impression { display: none; }
+
+@media print {
+  @page { size: A4; margin: 12mm 12mm 16mm; }
+
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+    font-family: var(--f-texte);
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  /* Tout ce qui vit à l'écran disparaît. */
+  .coque, .rail, .barre, .onglets-bas, .messages, .masque, .flottant,
+  .tiroir, .tiroir-masque, .palette-masque, .menu-flotte, .amorce { display: none !important; }
+
+  .impression { display: block !important; }
+
+  /* --- en-tête du document --------------------------------------------- */
+  .doc { color: #000; }
+  .doc__tete {
+    display: flex;
+    justify-content: space-between;
+    gap: 12mm;
+    align-items: flex-start;
+    border-bottom: 1.4pt solid #000;
+    padding-bottom: 4mm;
+    margin-bottom: 6mm;
+  }
+  .doc__emetteur strong {
+    display: block;
+    font-family: var(--f-titre);
+    font-size: 15pt;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .doc__emetteur { font-size: 9pt; line-height: 1.5; }
+  .doc__type {
+    text-align: right;
+    font-family: var(--f-titre);
+  }
+  .doc__type b { display: block; font-size: 19pt; letter-spacing: .1em; text-transform: uppercase; }
+  .doc__type span { font-size: 10pt; }
+
+  .doc__parties {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm;
+    margin-bottom: 6mm;
+  }
+  .doc__bloc {
+    border: .6pt solid #000;
+    padding: 3mm;
+    font-size: 9.5pt;
+    line-height: 1.5;
+  }
+  .doc__bloc h4 {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-bottom: 1.5mm;
+    font-family: var(--f-texte);
+  }
+
+  /* --- le tableau des lignes -------------------------------------------- */
+  .doc table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  .doc thead { display: table-header-group; }   /* l'en-tête se répète page 2 */
+  .doc tfoot { display: table-footer-group; }
+  .doc th {
+    text-align: left;
+    border-bottom: 1pt solid #000;
+    padding: 2mm 1.5mm;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+  }
+  .doc td {
+    padding: 1.8mm 1.5mm;
+    border-bottom: .4pt solid #bbb;
+    vertical-align: top;
+  }
+  .doc tr { page-break-inside: avoid; }
+  .doc .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .doc .sous-titre td {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 8.5pt;
+    letter-spacing: .06em;
+    border-bottom: .6pt solid #000;
+    padding-top: 4mm;
+  }
+
+  /* --- totaux ------------------------------------------------------------ */
+  .doc__totaux {
+    margin-top: 5mm;
+    margin-left: auto;
+    width: 78mm;
+    font-size: 10pt;
+  }
+  .doc__totaux div {
+    display: flex;
+    justify-content: space-between;
+    padding: 1.2mm 0;
+  }
+  .doc__totaux .ttc {
+    border-top: 1.2pt solid #000;
+    margin-top: 1.5mm;
+    padding-top: 2mm;
+    font-weight: 700;
+    font-size: 12pt;
+  }
+
+  /* --- bas de page ------------------------------------------------------- */
+  .doc__mentions {
+    margin-top: 8mm;
+    font-size: 7.8pt;
+    line-height: 1.5;
+    text-align: justify;
+    color: #222;
+  }
+  .doc__signature {
+    margin-top: 8mm;
+    display: grid;
+    grid-template-columns: 1fr 70mm;
+    gap: 8mm;
+    page-break-inside: avoid;
+  }
+  .doc__cadre-signature {
+    border: .6pt solid #000;
+    height: 32mm;
+    padding: 2mm;
+    font-size: 8pt;
+  }
+  .doc__pied {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    border-top: .4pt solid #999;
+    padding-top: 1.5mm;
+    font-size: 7.5pt;
+    text-align: center;
+    color: #444;
+  }
+  .saut { page-break-before: always; }
+
+  /* --- planches d'étiquettes (bacs de stock) ---------------------------- */
+  .planche {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3mm;
+  }
+  .planche .et {
+    border: .6pt solid #000;
+    border-radius: 1.5mm;
+    padding: 3mm;
+    text-align: center;
+    page-break-inside: avoid;
+    min-height: 24mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1mm;
+  }
+  .planche .et b { font-size: 14pt; letter-spacing: .08em; font-family: var(--f-chiffre); }
+  .planche .et span { font-size: 8pt; }
+}

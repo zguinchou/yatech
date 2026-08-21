@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f1417" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+<meta name="description" content="Yatech — gestion d'atelier : clients, dossiers, devis, parc, stock, électronique, planning.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Yatech">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icone-180.png">
+<link rel="stylesheet" href="css/jetons.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/composants.css">
+<link rel="stylesheet" href="css/coque.css">
+<link rel="stylesheet" href="css/ecrans.css">
+<link rel="stylesheet" href="css/utilitaires.css">
+<link rel="stylesheet" href="css/impression.css">
+<title>Yatech</title>
+</head>
+<body>
+
+<!-- Écran d'attente : remplacé dès que l'application a démarré. Sans lui,
+     un chargement lent de modules laisse une page blanche sans explication. -->
+<div id="amorce" class="amorce">
+  <div class="amorce__marque">YATECH</div>
+  <div class="amorce__barre"><i></i></div>
+  <noscript>Cet outil a besoin de JavaScript pour fonctionner.</noscript>
+</div>
+
+<!-- Racine de l'application. Tout est peint ici. -->
+<div id="app" hidden></div>
+
+<!-- Calques au-dessus de l'application : modales, messages, menu contextuel. -->
+<div id="calque-modales"></div>
+<div id="calque-messages" class="messages" aria-live="polite"></div>
+
+<!-- Document d'impression (devis / facture / étiquette). Invisible à l'écran. -->
+<div id="impression" class="impression"></div>
+
+<script type="module" src="js/main.js"></script>
+<script nomodule>
+  document.getElementById('amorce').innerHTML =
+    '<div class="amorce__marque">YATECH</div><p style="max-width:32ch;text-align:center;line-height:1.5">' +
+    'Votre navigateur est trop ancien pour cet outil. Mettez-le à jour, ou utilisez Chrome, Edge, Firefox ou Safari récent.</p>';
+</script>
+</body>
+</html>

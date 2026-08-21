@@ -1,0 +1,786 @@
+/* ==========================================================================
+   YATECH — écrans
+   Ce qui n'appartient qu'à un seul endroit de l'outil : le tableau de
+   l'atelier, la grille du planning, le plan du parc, l'éditeur de devis.
+   Tout le reste vit dans composants.css.
+   ========================================================================== */
+
+/* ==========================================================================
+   CONNEXION
+   ========================================================================== */
+.connexion {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--e-4);
+  background:
+    radial-gradient(1100px 520px at 50% -10%, var(--accent-voile), transparent 70%),
+    var(--fond);
+}
+.connexion__boite {
+  width: min(400px, 100%);
+  background: var(--plan);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-xl);
+  box-shadow: var(--ombre-2);
+  padding: var(--e-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-4);
+}
+.connexion__marque {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e-2);
+  text-align: center;
+}
+.connexion__marque img { width: 52px; height: 52px; border-radius: 12px; }
+.connexion__marque strong {
+  font: 600 var(--t-2xl)/1 var(--f-titre);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+.connexion__equipe { display: flex; flex-direction: column; gap: var(--e-2); }
+.connexion__qui {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-3);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  min-height: 58px;
+}
+.connexion__qui:hover { border-color: var(--accent-trait); }
+.connexion__qui[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-voile); }
+
+/* Le pavé de chiffres : sur téléphone, on tape son code au pouce. */
+.pave {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--e-2);
+}
+.pave button {
+  min-height: 54px;
+  border: 1px solid var(--trait);
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+  color: var(--encre);
+  font: 600 var(--t-xl)/1 var(--f-chiffre);
+  cursor: pointer;
+}
+.pave button:active { background: var(--plan-3); transform: scale(.96); }
+.pave button.pave--nu { border-color: transparent; background: transparent; font-size: var(--t-m); }
+.points { display: flex; gap: var(--e-2); justify-content: center; }
+.points i {
+  width: 12px; height: 12px;
+  border-radius: var(--r-rond);
+  border: 2px solid var(--trait);
+  transition: background var(--vite), border-color var(--vite);
+}
+.points i.plein { background: var(--accent); border-color: var(--accent); }
+.points--faux { animation: secoue 320ms; }
+@keyframes secoue {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-7px); }
+  40%, 60% { transform: translateX(7px); }
+}
+
+/* ==========================================================================
+   ATELIER — le tableau des dossiers
+   Des colonnes par état, qui défilent horizontalement. Sur téléphone, une
+   seule colonne à la fois : on choisit l'état dans la barre de filtres.
+   ========================================================================== */
+.tableau-atelier {
+  display: flex;
+  gap: var(--e-3);
+  overflow-x: auto;
+  padding-bottom: var(--e-3);
+  align-items: flex-start;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.colonne {
+  flex: 0 0 288px;
+  width: 288px;
+  background: var(--plan-2);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-l);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--barre-h) - 200px);
+  scroll-snap-align: start;
+}
+.colonne__tete {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-3);
+  border-bottom: 1px solid var(--trait-fin);
+  flex: none;
+  position: sticky;
+  top: 0;
+  background: var(--plan-2);
+  border-radius: var(--r-l) var(--r-l) 0 0;
+  z-index: 2;
+}
+.colonne__pion {
+  width: 8px; height: 8px;
+  border-radius: var(--r-rond);
+  background: var(--neutre);
+  flex: none;
+}
+.colonne__nom {
+  font: 600 var(--t-s)/1 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.colonne__corps {
+  padding: var(--e-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  overflow-y: auto;
+  min-height: 90px;
+  flex: 1;
+}
+.colonne--cible { outline: 2px dashed var(--accent); outline-offset: -3px; }
+.colonne__vide {
+  text-align: center;
+  color: var(--encre-3);
+  font-size: var(--t-xs);
+  padding: var(--e-4) var(--e-2);
+  border: 1px dashed var(--trait);
+  border-radius: var(--r-m);
+}
+
+/* La fiche d'un dossier, telle qu'elle apparaît dans une colonne. */
+.dossier {
+  background: var(--plan);
+  border: 1px solid var(--trait-fin);
+  border-left: 3px solid var(--neutre);
+  border-radius: var(--r-m);
+  padding: var(--e-3);
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-2);
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  transition: box-shadow var(--vite), transform var(--vite), border-color var(--vite);
+}
+.dossier:hover { box-shadow: var(--ombre-2); border-color: var(--trait); }
+.dossier:active { cursor: grabbing; }
+.dossier--emporte { opacity: .4; }
+.dossier--electro { border-left-color: var(--info); }
+.dossier--meca    { border-left-color: var(--alerte); }
+.dossier--mixte   { border-left-color: var(--violet); }
+.dossier--urgent  { border-left-color: var(--danger); }
+.dossier__tete { display: flex; align-items: flex-start; gap: var(--e-2); }
+.dossier__titre { font-weight: 600; font-size: var(--t-m); line-height: 1.3; flex: 1; min-width: 0; }
+.dossier__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  flex-wrap: wrap;
+  font-size: var(--t-xs);
+  color: var(--encre-2);
+}
+.dossier__pied {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding-top: var(--e-2);
+  border-top: 1px solid var(--trait-fin);
+}
+
+/* ==========================================================================
+   PLANNING
+   Une colonne par personne, les heures à gauche. Sur téléphone, une personne
+   à la fois, choisie dans la barre du haut.
+   ========================================================================== */
+.planning {
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-l);
+  overflow: hidden;
+  background: var(--plan);
+}
+.planning__jours {
+  display: flex;
+  gap: var(--e-1);
+  overflow-x: auto;
+  padding: var(--e-2);
+  border-bottom: 1px solid var(--trait-fin);
+  scrollbar-width: none;
+}
+.planning__jours::-webkit-scrollbar { display: none; }
+.jour-onglet {
+  flex: none;
+  min-width: 58px;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid transparent;
+  border-radius: var(--r-m);
+  background: transparent;
+  color: var(--encre-2);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.25;
+}
+.jour-onglet:hover { background: var(--voile); }
+.jour-onglet[aria-pressed="true"] { background: var(--accent-voile); color: var(--accent); border-color: var(--accent-trait); }
+.jour-onglet b { display: block; font: 600 var(--t-l)/1.1 var(--f-titre); }
+.jour-onglet small { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.jour-onglet--auj { box-shadow: inset 0 0 0 1px var(--accent-trait); }
+
+.planning__grille {
+  display: grid;
+  grid-template-columns: 56px repeat(var(--colonnes, 3), minmax(120px, 1fr));
+  overflow: auto;
+  max-height: calc(100dvh - 220px);
+  position: relative;
+}
+.planning__coin {
+  position: sticky;
+  top: 0; left: 0;
+  z-index: 4;
+  background: var(--plan);
+  border-right: 1px solid var(--trait-fin);
+  border-bottom: 1px solid var(--trait);
+}
+.planning__qui {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--plan);
+  border-bottom: 1px solid var(--trait);
+  border-left: 1px solid var(--trait-fin);
+  padding: var(--e-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-2);
+  font: 600 var(--t-s)/1 var(--f-texte);
+  min-height: 44px;
+}
+.planning__heures {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--plan);
+  border-right: 1px solid var(--trait-fin);
+}
+.planning__heure {
+  height: var(--h-creneau, 26px);
+  font: 500 var(--t-xs)/1 var(--f-chiffre);
+  color: var(--encre-3);
+  text-align: right;
+  padding-right: 6px;
+  transform: translateY(-6px);
+  position: relative;
+}
+.planning__colonne {
+  position: relative;
+  border-left: 1px solid var(--trait-fin);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--trait-fin) 0, var(--trait-fin) 1px,
+    transparent 1px, transparent var(--h-creneau, 26px)
+  );
+}
+.planning__colonne--week-end { background-color: var(--voile); }
+.creneau-vide {
+  position: absolute;
+  left: 2px; right: 2px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+.creneau-vide:hover { background: var(--accent-voile); }
+.rdv {
+  position: absolute;
+  left: 3px; right: 3px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--trait);
+  border-left: 3px solid var(--accent);
+  background: var(--plan-2);
+  padding: 3px 6px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--t-xs);
+  line-height: 1.25;
+  color: inherit;
+  box-shadow: var(--ombre-1);
+  z-index: 1;
+}
+.rdv:hover { z-index: 3; box-shadow: var(--ombre-2); }
+.rdv b { display: block; font-weight: 600; font-size: var(--t-xs); }
+.rdv--electro { border-left-color: var(--info); background: var(--info-voile); }
+.rdv--meca    { border-left-color: var(--alerte); background: var(--alerte-voile); }
+.rdv--absence { border-left-color: var(--neutre); background: var(--neutre-voile); color: var(--encre-2); }
+.rdv--fait    { opacity: .58; }
+.rdv--fait b  { text-decoration: line-through; }
+.trait-maintenant {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: var(--danger);
+  z-index: 5;
+  pointer-events: none;
+}
+.trait-maintenant::before {
+  content: "";
+  position: absolute;
+  left: -3px; top: -3px;
+  width: 8px; height: 8px;
+  border-radius: var(--r-rond);
+  background: var(--danger);
+}
+
+/* ==========================================================================
+   PARC — le plan du parking
+   ========================================================================== */
+.parc {
+  background: var(--plan-2);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-l);
+  padding: var(--e-4);
+  overflow: auto;
+}
+.parc__plan {
+  display: grid;
+  gap: var(--e-2);
+  min-width: min-content;
+  margin: 0 auto;
+}
+.place {
+  position: relative;
+  aspect-ratio: 62 / 96;
+  min-width: 62px;
+  border: 2px dashed var(--trait);
+  border-radius: var(--r-s);
+  background: transparent;
+  cursor: pointer;
+  padding: 5px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--encre-3);
+  overflow: hidden;
+  text-align: center;
+  transition: transform var(--vite), border-color var(--vite);
+}
+.place:hover { transform: translateY(-2px); border-color: var(--encre-3); }
+.place__num {
+  position: absolute;
+  top: 3px; left: 5px;
+  font: 700 9px/1 var(--f-chiffre);
+  color: var(--encre-3);
+  letter-spacing: .05em;
+}
+.place__plaque {
+  font: 700 10px/1.1 var(--f-chiffre);
+  letter-spacing: .04em;
+  word-break: break-all;
+}
+.place__modele { font-size: 9px; line-height: 1.15; opacity: .85; }
+.place__jours {
+  position: absolute;
+  bottom: 3px; right: 4px;
+  font: 700 9px/1 var(--f-chiffre);
+}
+.place--prise {
+  border-style: solid;
+  border-color: var(--trait);
+  background: var(--plan);
+  color: var(--encre);
+}
+.place--meca    { border-color: var(--alerte); background: var(--alerte-voile); }
+.place--electro { border-color: var(--info);   background: var(--info-voile); }
+.place--gros    { border-color: var(--violet); background: var(--violet-voile); }
+.place--pret    { border-color: var(--ok);     background: var(--ok-voile); }
+.place--retard  { border-color: var(--danger); background: var(--danger-voile); }
+.place--perso   { border-color: var(--neutre); background: var(--neutre-voile); }
+.place--hs {
+  border-style: solid;
+  border-color: var(--trait);
+  background: repeating-linear-gradient(45deg,
+    transparent, transparent 5px, var(--trait-fin) 5px, var(--trait-fin) 10px);
+  cursor: not-allowed;
+  opacity: .6;
+}
+.place--pont::after {
+  content: "PONT";
+  position: absolute;
+  bottom: 3px; left: 4px;
+  font: 700 8px/1 var(--f-titre);
+  letter-spacing: .08em;
+  color: var(--accent);
+}
+.parc__legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-3);
+  margin-top: var(--e-4);
+  font-size: var(--t-xs);
+  color: var(--encre-2);
+}
+.parc__legende span { display: inline-flex; align-items: center; gap: 5px; }
+.parc__legende i { width: 11px; height: 11px; border-radius: 3px; border: 2px solid currentColor; }
+.parc__rangee-nom {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font: 600 var(--t-xs)/1 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--encre-3);
+  display: grid;
+  place-items: center;
+}
+
+/* ==========================================================================
+   STOCK — les emplacements
+   ========================================================================== */
+.rayon {
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  overflow: hidden;
+  background: var(--plan);
+}
+.rayon__tete {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  padding: var(--e-2) var(--e-3);
+  background: var(--plan-2);
+  border-bottom: 1px solid var(--trait-fin);
+  font: 600 var(--t-s)/1 var(--f-titre);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.bacs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 1px;
+  background: var(--trait-fin);
+}
+.bac {
+  background: var(--plan);
+  border: 0;
+  padding: var(--e-2);
+  min-height: 62px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: inherit;
+}
+.bac:hover { background: var(--plan-2); }
+.bac__code { font: 700 var(--t-xs)/1 var(--f-chiffre); color: var(--encre-3); letter-spacing: .05em; }
+.bac__n { font: 600 var(--t-l)/1 var(--f-titre); }
+.bac--vide { color: var(--encre-3); }
+.bac--vide .bac__n { color: var(--encre-3); }
+.bac--bas .bac__n { color: var(--alerte); }
+.bac--zero .bac__n { color: var(--danger); }
+
+/* La pastille de quantité, dans la liste des pièces. */
+.qte {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  padding: 4px 8px;
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+  border: 1px solid var(--trait);
+  font: 700 var(--t-m)/1 var(--f-chiffre);
+}
+.qte--bas   { border-color: var(--alerte); color: var(--alerte); background: var(--alerte-voile); }
+.qte--zero  { border-color: var(--danger); color: var(--danger); background: var(--danger-voile); }
+.qte--reserve { border-style: dashed; }
+
+/* ==========================================================================
+   DEVIS — l'éditeur de lignes
+   ========================================================================== */
+.lignes { display: flex; flex-direction: column; gap: var(--e-2); }
+.ligne {
+  display: grid;
+  gap: var(--e-2);
+  align-items: center;
+  padding: var(--e-2);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  background: var(--plan);
+  grid-template-columns:
+    28px                     /* poignée */
+    minmax(0, 1fr)           /* désignation */
+    72px                     /* quantité */
+    104px                    /* prix unitaire */
+    72px                     /* remise */
+    104px                    /* total */
+    32px;                    /* menu */
+}
+.ligne--titre {
+  background: var(--plan-2);
+  grid-template-columns: 28px minmax(0, 1fr) 32px;
+}
+.ligne__poignee {
+  cursor: grab;
+  color: var(--encre-3);
+  display: grid;
+  place-items: center;
+  height: 100%;
+  touch-action: none;
+}
+.ligne__poignee:active { cursor: grabbing; }
+.ligne--emportee { opacity: .35; }
+.ligne--survolee { box-shadow: inset 0 2px 0 var(--accent); }
+.ligne__total { font: 700 var(--t-m)/1 var(--f-chiffre); text-align: right; }
+.lignes__entetes {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 72px 104px 72px 104px 32px;
+  gap: var(--e-2);
+  padding: 0 var(--e-2);
+  font: 600 var(--t-xs)/1 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--encre-3);
+}
+.lignes__entetes span:nth-child(n+3) { text-align: right; }
+
+@media (max-width: 860px) {
+  .lignes__entetes { display: none; }
+  .ligne {
+    grid-template-columns: 28px minmax(0, 1fr) 32px;
+    grid-template-areas:
+      "poignee design menu"
+      ".       chiffres chiffres";
+  }
+  .ligne--titre { grid-template-areas: "poignee design menu"; }
+  .ligne__poignee { grid-area: poignee; align-self: start; padding-top: 8px; }
+  .ligne__design  { grid-area: design; }
+  .ligne__menu    { grid-area: menu; align-self: start; }
+  .ligne__chiffres {
+    grid-area: chiffres;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: var(--e-2);
+    align-items: center;
+  }
+}
+@media (min-width: 861px) {
+  .ligne__chiffres { display: contents; }
+}
+
+/* Le récapitulatif des totaux, collé en bas. */
+.totaux {
+  display: grid;
+  gap: 6px;
+  margin-left: auto;
+  width: min(320px, 100%);
+  font-size: var(--t-s);
+}
+.totaux__ligne { display: flex; justify-content: space-between; gap: var(--e-4); }
+.totaux__ligne b { font-family: var(--f-chiffre); }
+.totaux__ttc {
+  border-top: 2px solid var(--trait);
+  margin-top: 4px;
+  padding-top: 8px;
+  font-size: var(--t-l);
+  font-weight: 700;
+}
+.totaux__ttc b { font-size: var(--t-xl); color: var(--accent); }
+
+/* ==========================================================================
+   FICHE — l'en-tête d'un client, d'un véhicule, d'un dossier
+   ========================================================================== */
+.fiche-tete {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e-4);
+  flex-wrap: wrap;
+  padding: var(--e-4);
+  background: var(--plan);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-l);
+  margin-bottom: var(--e-4);
+}
+.fiche-tete__identite { flex: 1; min-width: 220px; }
+.fiche-tete__identite h1 { font-size: var(--t-2xl); }
+.fiche-tete__lignes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2) var(--e-4);
+  margin-top: var(--e-2);
+  font-size: var(--t-s);
+  color: var(--encre-2);
+}
+.fiche-tete__lignes a { color: var(--encre-2); }
+.fiche-tete__lignes a:hover { color: var(--accent); }
+.fiche-tete__actions { display: flex; gap: var(--e-2); flex-wrap: wrap; }
+
+/* Une paire étiquette / valeur, alignée en colonnes. */
+.paires {
+  display: grid;
+  gap: var(--e-3) var(--e-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+}
+.paire { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.paire dt {
+  font: 600 var(--t-xs)/1.3 var(--f-texte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--encre-3);
+}
+.paire dd { margin: 0; font-size: var(--t-m); word-break: break-word; }
+
+/* ==========================================================================
+   FIL DES ÉVÉNEMENTS — l'histoire d'un dossier, d'un véhicule
+   ========================================================================== */
+.fil { display: flex; flex-direction: column; }
+.fil__item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: var(--e-3);
+  padding-bottom: var(--e-4);
+  position: relative;
+}
+.fil__item::before {
+  content: "";
+  position: absolute;
+  left: 12px; top: 24px; bottom: 0;
+  width: 1px;
+  background: var(--trait);
+}
+.fil__item:last-child { padding-bottom: 0; }
+.fil__item:last-child::before { display: none; }
+.fil__pion {
+  width: 26px; height: 26px;
+  border-radius: var(--r-rond);
+  background: var(--plan-2);
+  border: 1px solid var(--trait);
+  display: grid;
+  place-items: center;
+  z-index: 1;
+}
+.fil__pion svg { width: 13px; height: 13px; color: var(--encre-2); }
+.fil__quoi { font-size: var(--t-s); line-height: 1.45; }
+.fil__quand { font-size: var(--t-xs); color: var(--encre-3); }
+
+/* ==========================================================================
+   ÉLECTRONIQUE — le compteur de crédits Autotuner
+   ========================================================================== */
+.credits {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-4);
+  border-radius: var(--r-l);
+  background: linear-gradient(135deg, var(--accent-voile), transparent 65%), var(--plan);
+  border: 1px solid var(--accent-trait);
+}
+.credits__n {
+  font: 600 var(--t-3xl)/1 var(--f-titre);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* ==========================================================================
+   PORTAIL PROFESSIONNEL — ce que voit un confrère
+   ========================================================================== */
+.portail {
+  min-height: 100dvh;
+  background: var(--fond);
+  padding: var(--e-4) var(--e-4) var(--e-7);
+}
+.portail__cadre { width: min(880px, 100%); margin: 0 auto; }
+.portail__tete {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-4) 0;
+  margin-bottom: var(--e-4);
+  border-bottom: 1px solid var(--trait);
+}
+
+/* ==========================================================================
+   RÉGLAGES
+   ========================================================================== */
+.reglages {
+  display: grid;
+  gap: var(--e-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1000px) {
+  .reglages { grid-template-columns: 210px minmax(0, 1fr); align-items: start; }
+  .reglages__menu { position: sticky; top: calc(var(--barre-h) + var(--e-4)); }
+}
+.reglages__menu { display: flex; flex-direction: column; gap: 2px; }
+.reglages__menu .lien { font-size: var(--t-s); }
+@media (max-width: 999px) {
+  .reglages__menu {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: var(--e-2);
+    scrollbar-width: none;
+    padding-bottom: var(--e-1);
+  }
+  .reglages__menu::-webkit-scrollbar { display: none; }
+  .reglages__menu .lien { flex: none; width: auto; }
+}
+.reglage-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-3) 0;
+  border-bottom: 1px solid var(--trait-fin);
+}
+.reglage-ligne:last-child { border-bottom: 0; }
+.reglage-ligne__texte { flex: 1; min-width: 0; }
+.reglage-ligne__texte b { display: block; font-size: var(--t-m); font-weight: 600; }
+.reglage-ligne__texte small { color: var(--encre-2); font-size: var(--t-xs); line-height: 1.45; display: block; }
+.reglage-ligne__action { flex: none; }
+
+/* Les pastilles de choix de teinte. */
+.teintes { display: flex; gap: var(--e-2); flex-wrap: wrap; }
+.teinte {
+  width: 32px; height: 32px;
+  border-radius: var(--r-rond);
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.teinte[aria-pressed="true"] { border-color: var(--encre); box-shadow: 0 0 0 2px var(--plan) inset; }
+
+/* ==========================================================================
+   IMPRESSION D'ÉTIQUETTES (bacs de stock)
+   ========================================================================== */
+.etiquettes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--e-2);
+}
+.etiquette {
+  border: 1px solid var(--trait);
+  border-radius: var(--r-s);
+  padding: var(--e-2);
+  background: var(--plan);
+  text-align: center;
+}
+.etiquette__code { font: 700 var(--t-l)/1 var(--f-chiffre); letter-spacing: .08em; }
+.etiquette__lib { font-size: var(--t-xs); color: var(--encre-2); }

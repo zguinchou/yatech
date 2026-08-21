@@ -1,0 +1,53 @@
+/* ==========================================================================
+   YATECH — utilitaires
+   --------------------------------------------------------------------------
+   Une poignée de classes de disposition, et rien d'autre. Elles se chargent
+   EN DERNIER, volontairement : quand on écrit `.carte.rang`, c'est le rang
+   qu'on veut, et il doit gagner sur la mise en page par défaut de la carte.
+   Une classe posée à la main dit toujours l'intention la plus récente.
+
+   La liste est courte exprès. Une feuille d'utilitaires qui grossit finit par
+   remplacer le CSS, et on ne sait plus à quoi ressemble un composant sans
+   lire son balisage.
+   ========================================================================== */
+
+/* --- utilitaires de mise en page, comptés sur les doigts d'une main ------ */
+.pile      { display: flex; flex-direction: column; gap: var(--e-3); }
+.pile-s    { display: flex; flex-direction: column; gap: var(--e-2); }
+.rang      { display: flex; align-items: center; gap: var(--e-3); }
+.rang-s    { display: flex; align-items: center; gap: var(--e-2); }
+.rang-haut { align-items: flex-start; }
+.rang-fin  { justify-content: flex-end; }
+.entre     { justify-content: space-between; }
+.enroule   { flex-wrap: wrap; }
+.pousse    { margin-left: auto; }
+.grandit   { flex: 1; min-width: 0; }
+.centre    { text-align: center; }
+.droite    { text-align: right; }
+.rien      { display: none !important; }
+.coupe {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.coupe-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.faible   { color: var(--encre-2); }
+.tres-faible { color: var(--encre-3); }
+.petit    { font-size: var(--t-s); }
+.minus    { font-size: var(--t-xs); }
+.gras     { font-weight: 600; }
+.titre-typo { font-family: var(--f-titre); }
+.majuscule {
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--encre-3);
+}
