@@ -14,6 +14,7 @@ import * as util from '../js/core/util.js';
 import { sha256, verrou, verifier } from '../js/core/crypto.js';
 import { versCsv, depuisCsv, csvEnObjets } from '../js/core/fichiers.js';
 import { normaliser, neuf, nouvelleLigne, prochainNumero } from '../js/domain/schema.js';
+import { S, maj, annuler, refaire, peutAnnuler } from '../js/core/store.js';
 
 let passes = 0, echecs = 0;
 const groupes = [];
@@ -353,6 +354,47 @@ groupe('Empreintes', () => {
   /* Deux personnes avec le même code doivent avoir deux empreintes différentes :
      sinon une table pré-calculée les ouvre toutes les deux d'un coup. */
   vrai('le sel rend les empreintes uniques', verrou('1234').emp !== verrou('1234').emp);
+});
+
+/* ==========================================================================
+   LE MAGASIN — modifier, annuler, refaire
+   ========================================================================== */
+
+groupe('Modifications et annulation', () => {
+  S.etat = neuf();
+  S.moi = { id: 'u1', nom: 'Essai' };
+
+  maj('Client créé', (e) => { e.clients.push({ id: 'c1', nom: 'Dupuis' }); });
+  verifie('la modification est appliquée', S.etat.clients.length, 1);
+  verifie('le geste est journalisé', S.etat.journal[S.etat.journal.length - 1].quoi, 'Client créé');
+  vrai('on peut annuler', peutAnnuler());
+
+  annuler();
+  verifie('l’annulation remet l’état d’avant', S.etat.clients.length, 0);
+  refaire();
+  verifie('on peut refaire', S.etat.clients.length, 1);
+
+  /* Une modification sans libellé — une lettre tapée dans une désignation —
+     ne doit ni encombrer le journal ni photographier tout l'état. */
+  const journalAvant = S.etat.journal.length;
+  const annulablesAvant = peutAnnuler();
+  maj(null, (e) => { e.clients[0].nom = 'Dupuis-Martin'; }, { journal: false });
+  verifie('une frappe ne va pas au journal', S.etat.journal.length, journalAvant);
+  verifie('une frappe ne s’annule pas séparément', peutAnnuler(), annulablesAvant);
+  verifie('mais elle est bien appliquée', S.etat.clients[0].nom, 'Dupuis-Martin');
+
+  /* Une modification qui casse en plein milieu ne doit rien laisser à moitié
+     écrit : soit tout, soit rien. */
+  const avant = JSON.stringify(S.etat.clients);
+  let leve = false;
+  try {
+    maj('Modification bancale', (e) => {
+      e.clients.push({ id: 'c2', nom: 'Perdu' });
+      throw new Error('panne au milieu');
+    });
+  } catch (err) { leve = true; }
+  vrai('l’erreur remonte à l’appelant', leve);
+  verifie('l’état est remis comme avant', JSON.stringify(S.etat.clients), avant);
 });
 
 /* ==========================================================================

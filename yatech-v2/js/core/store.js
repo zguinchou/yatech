@@ -71,7 +71,14 @@ export function maj(quoi, faire, opts) {
   if (!S.etat) return null;
   const o = opts || {};
 
-  const avant = o.annulable === false ? null : JSON.stringify(S.etat);
+  /* Une modification sans libellé est un geste de saisie : une lettre tapée
+     dans une désignation, un prix corrigé au clavier. Prendre une photo
+     complète de l'état à chaque frappe ferait ramer l'outil sur téléphone dès
+     que le garage a quelques centaines de dossiers — et le champ de saisie
+     sait déjà annuler tout seul. On ne photographie que les gestes nommés,
+     sauf si l'appelant demande explicitement le contraire. */
+  const photographier = o.annulable === undefined ? !!quoi : o.annulable !== false;
+  const avant = photographier ? JSON.stringify(S.etat) : null;
 
   let retour;
   try {
@@ -103,6 +110,11 @@ export function maj(quoi, faire, opts) {
  *  déplié, une colonne triée. Ça change l'état, pas le travail. */
 export function majLegere(faire) {
   return maj(null, faire, { annulable: false, journal: false });
+}
+
+/** Une modification annulable dont on ne veut pas la trace au journal. */
+export function majAnnulable(quoi, faire, opts) {
+  return maj(quoi, faire, Object.assign({ annulable: true, journal: false }, opts));
 }
 
 /** Revenir en arrière d'un cran. */

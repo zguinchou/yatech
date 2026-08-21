@@ -1176,3 +1176,47 @@ table.grille tbody tr.devis-relance:hover { background: var(--alerte-voile); }
   min-width: 190px;
   min-height: 74px;
 }
+
+/* ==========================================================================
+   FACTURES — le suivi des encaissements
+   ========================================================================== */
+
+/* Une facture dont l'échéance est passée doit sauter aux yeux dans une liste
+   par ailleurs uniforme. Le survol repeint le fond du tableau : sans la
+   seconde règle, la ligne perdrait sa couleur dès le passage de la souris. */
+table.grille tbody tr.factures-retard { background: var(--danger-voile); }
+table.grille tbody tr.factures-retard:hover { background: var(--danger-voile); }
+
+/* Le récapitulatif des six mois : six barres, pas un graphique. La colonne du
+   milieu est la seule à s'étirer, pour que les mois s'alignent verticalement
+   et se comparent d'un coup d'œil. */
+.factures-mois { display: flex; flex-direction: column; gap: var(--e-2); }
+.factures-mois__ligne {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--e-3);
+}
+.factures-mois__barre {
+  height: 10px;
+  border-radius: var(--r-rond);
+  background: var(--voile);
+  overflow: hidden;
+}
+.factures-mois__part {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: var(--r-rond);
+  background: var(--encre-3);
+}
+/* Le mois en cours n'est pas terminé : il se compare mal aux autres. On le
+   distingue plutôt que de laisser croire à une chute d'activité. */
+.factures-mois__part--courant { background: var(--accent); }
+
+/* Sur téléphone, l'étiquette du mois passe au-dessus : trois colonnes de 62 px
+   sur 380 px d'écran ne laissent plus rien à la barre. */
+@media (max-width: 480px) {
+  .factures-mois__ligne { grid-template-columns: minmax(0, 1fr) auto; }
+  .factures-mois__ligne > .majuscule { grid-column: 1 / -1; }
+}

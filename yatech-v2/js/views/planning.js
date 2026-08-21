@@ -184,7 +184,11 @@ function libelle(cadre) {
   const jours = joursDeLaSemaine(cadre);
   const premier = jours[0];
   const dernier = jours[jours.length - 1];
-  return 'Semaine du ' + fmt.date(premier, 'jourMois') + ' au ' + fmt.date(dernier, 'jourMois');
+  /* « du 17 au 22 août » plutôt que « du 17 août au 22 août » : on ne répète
+     le mois que si la semaine en chevauche deux. */
+  const memeMois = new Date(premier).getMonth() === new Date(dernier).getMonth();
+  return 'Semaine du ' + (memeMois ? String(new Date(premier).getDate()) : fmt.date(premier, 'jourMois'))
+    + ' au ' + fmt.date(dernier, 'jourMois');
 }
 
 /** Une journée en vue Jour, une semaine en vue Semaine. En vue Jour on saute
@@ -544,9 +548,9 @@ function vueJour(cadre, amener) {
     grille.appendChild(colonne(cadre, siens, jourDebut, u.id, false));
   }
 
-  if (estAujourdhui(jourDebut)) traitMaintenant(cadre, grille);
+  if (estAujourdhui(jourDebut)) traitMaintenant(cadre, grille, -1);
   brancherGlisser(cadre, grille);
-  if (amener) amenerSurLHeure(cadre, grille, jourDebut);
+  if (amener) amenerSurLHeure(cadre, grille);
 
   return h('div.planning', grille);
 }
@@ -592,9 +596,9 @@ function vueSemaine(cadre, amener) {
   }
 
   const aujourdhui = jours.findIndex(t => estAujourdhui(t));
-  if (aujourdhui >= 0) traitMaintenant(cadre, grille);
+  if (aujourdhui >= 0) traitMaintenant(cadre, grille, aujourdhui);
   brancherGlisser(cadre, grille);
-  if (amener) amenerSurLHeure(cadre, grille, jours[0]);
+  if (amener) amenerSurLHeure(cadre, grille);
 
   return h('div.planning', grille);
 }
@@ -603,32 +607,42 @@ function vueSemaine(cadre, amener) {
    LE TRAIT DE L'HEURE COURANTE
    ========================================================================== */
 
-function traitMaintenant(cadre, grille) {
+/** `colonneVisee` : l'index de la colonne à barrer, ou -1 pour toute la
+ *  largeur. En vue Semaine, un trait qui traverserait les six jours dirait
+ *  qu'il est la même heure lundi et samedi. */
+function traitMaintenant(cadre, grille, colonneVisee) {
   const d = new Date();
   const min = d.getHours() * 60 + d.getMinutes();
   if (min < cadre.minDebut || min > cadre.minFin) return;
 
-  /* Le trait se pose en absolu dans la grille, sous la ligne d'en-têtes : sa
-     hauteur dépend du texte et n'est connue qu'une fois le navigateur passé.
-     On la mesure sur la première colonne plutôt que de la deviner. */
   const trait = h('div.trait-maintenant', {
     title: 'Il est ' + minutesEnHeure(min),
     style: { left: '56px' }
   });
   grille.appendChild(trait);
+
+  /* Le trait se pose en absolu dans la grille, sous la ligne d'en-têtes, dont
+     la hauteur dépend du texte : on la mesure une fois le navigateur passé
+     plutôt que de la deviner. */
   apres(() => {
-    const premiere = grille.querySelector('.planning__colonne');
-    if (!premiere) return;
-    trait.style.top = (premiere.offsetTop + (min - cadre.minDebut) * cadre.px) + 'px';
+    const colonnes = grille.querySelectorAll('.planning__colonne');
+    const reference = colonnes[Math.max(0, colonneVisee === undefined ? 0 : colonneVisee)];
+    if (!reference) return;
+    trait.style.top = (reference.offsetTop + (min - cadre.minDebut) * cadre.px) + 'px';
+    if (colonneVisee >= 0) {
+      trait.style.left = reference.offsetLeft + 'px';
+      trait.style.right = 'auto';
+      trait.style.width = reference.offsetWidth + 'px';
+    }
   });
 }
 
 /** À l'ouverture, la grille se cale une heure avant maintenant : on arrive
  *  sur ce qui se passe, pas sur l'ouverture du garage. */
-function amenerSurLHeure(cadre, grille, jourDebut) {
+function amenerSurLHeure(cadre, grille) {
+  if (!estAujourdhui(pref.jour)) return;
   const d = new Date();
   const min = d.getHours() * 60 + d.getMinutes();
-  if (!estAujourdhui(jourDebut) && !estAujourdhui(pref.jour)) return;
   apres(() => {
     grille.scrollTop = Math.max(0, (min - 60 - cadre.minDebut) * cadre.px);
   });

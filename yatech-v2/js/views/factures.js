@@ -102,7 +102,7 @@ export function peindre(ctx) {
        dessous un grand panneau « il n'y a rien » : il y a quelque chose. */
     const sectionPorte = dossiers.length && FILTRES_AVEC_DOSSIERS.includes(filtre);
     poser(zoneListe, liste.length
-      ? tableau(e, liste, requete, refaireTout)
+      ? tableau(liste, requete, refaireTout)
       : (sectionPorte ? null : rienTrouve(e, requete, filtre)));
   }
 
@@ -323,7 +323,7 @@ function sectionAFacturer(e, dossiers, refaireTout) {
    LE TABLEAU DES FACTURES
    ========================================================================== */
 
-function tableau(e, liste, requete, refaireTout) {
+function tableau(liste, requete, refaireTout) {
   return h('div.tableau-cadre', h('table.grille.repliable', [
     h('thead', h('tr', [
       h('th', 'Numéro'),
@@ -338,11 +338,11 @@ function tableau(e, liste, requete, refaireTout) {
       h('th', 'EBP'),
       h('th.serre', 'Encaisser')
     ])),
-    h('tbody', liste.map(x => ligne(e, x, requete, refaireTout)))
+    h('tbody', liste.map(x => ligne(x, requete, refaireTout)))
   ]));
 }
 
-function ligne(e, x, requete, refaireTout) {
+function ligne(x, requete, refaireTout) {
   const f = x.facture;
   const t = x.totaux;
   const aller = () => { location.hash = '#/facture/' + f.id; };
@@ -386,7 +386,7 @@ function ligne(e, x, requete, refaireTout) {
 
     h('td.serre', { donnees: { col: 'Statut' } }, pastilleFacture(f.statut)),
 
-    h('td.serre', { donnees: { col: 'EBP' } }, celluleEbp(e, f, refaireTout)),
+    h('td.serre', { donnees: { col: 'EBP' } }, celluleEbp(f, refaireTout)),
 
     h('td.serre', { donnees: { col: 'Encaisser' } }, t.reste > 0.005 && f.statut !== 'attente'
       ? h('button.bt.bt--contour.bt--s', {
@@ -394,7 +394,7 @@ function ligne(e, x, requete, refaireTout) {
           'aria-label': 'Encaisser la facture ' + (f.numero || ''),
           onclick: (ev) => {
             ev.stopPropagation();
-            modaleEncaissement(e, x, refaireTout);
+            modaleEncaissement(x, refaireTout);
           }
         }, [icone('euro', { taille: 14 }), h('span', 'Encaisser')])
       : null)
@@ -416,7 +416,7 @@ function echeance(f, enRetard) {
    Reporté ou pas : c'est la seule chose qu'on veut lire d'un coup d'œil.
    ========================================================================== */
 
-function celluleEbp(e, f, refaireTout) {
+function celluleEbp(f, refaireTout) {
   if (f.ebp) {
     return h('span.pastille.pastille--ok.pastille--sans-point', {
       title: 'Reporté dans EBP le ' + fmt.date(f.ebp, 'normal')
@@ -452,7 +452,7 @@ function celluleEbp(e, f, refaireTout) {
    Le client est au comptoir, la carte à la main : deux champs, pas trois.
    ========================================================================== */
 
-function modaleEncaissement(e, x, refaireTout) {
+function modaleEncaissement(x, refaireTout) {
   const f = x.facture;
   const reste = x.totaux.reste;
 
@@ -553,7 +553,7 @@ async function exporterVersEbp(e, refaireTout) {
    page web n'envoie rien toute seule, c'est le téléphone qui envoie.
    ========================================================================== */
 
-function modaleRelances(e, refaireTout) {
+function modaleRelances(e) {
   const maintenant = Date.now();
   const retards = [];
 
@@ -621,8 +621,7 @@ function modaleRelances(e, refaireTout) {
       ]),
       corps
     ]),
-    actions: [{ texte: 'Fermer', ton: 'contour' }],
-    surFermeture: () => refaireTout()
+    actions: [{ texte: 'Fermer', ton: 'contour' }]
   });
 }
 
