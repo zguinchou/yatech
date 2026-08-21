@@ -152,7 +152,19 @@ export function jeuDemo() {
   e.fournisseurs = [f1, f2, f3, f4];
 
   /* --- clients ------------------------------------------------------------ */
-  const cli = (champs) => { const c = nouveauClient(champs); e.clients.push(c); return c; };
+  /* Les clients ne sont pas tous arrivés le même jour, et la plupart existent
+     déjà dans EBP : sans ça, l'écran EBP annonce dix fiches à reporter alors
+     qu'un garage installé n'en a qu'une ou deux en retard. */
+  let ancienneteClient = 900;
+  const cli = (champs) => {
+    const c = nouveauClient(champs);
+    ancienneteClient -= 60 + Math.floor(Math.random() * 50);
+    c.cree = ilYa(Math.max(2, ancienneteClient));
+    c.maj = ilYa(Math.max(1, Math.floor(ancienneteClient / 3)));
+    if (c.codeEbp) c.ebp = c.cree + 2 * JOUR;
+    e.clients.push(c);
+    return c;
+  };
 
   const c1 = cli({ type: 'part', civilite: 'M.', prenom: 'Jean-Marc', nom: 'Dupuis', tel: '0612345678',
     email: 'jm.dupuis@example.fr', adresse: '4 allée des Tilleuls', cp: '69100', ville: 'Villeurbanne',
@@ -181,10 +193,22 @@ export function jeuDemo() {
     cp: '69100', ville: 'Villeurbanne', grille: 'pro', remise: 0,
     notes: 'Ancien collègue : tarif confrère à titre personnel.', codeEbp: 'PETIT009' });
   const c10 = cli({ type: 'part', civilite: 'Mme', prenom: 'Sylvie', nom: 'Marchand', tel: '0688776655',
-    cp: '69200', ville: 'Vénissieux', codeEbp: 'MARCHAN010' });
+    cp: '69200', ville: 'Vénissieux' });
+  /* Deux fiches ouvertes cette semaine, pas encore passées dans EBP : c'est
+     exactement ce que la passerelle doit rattraper. */
+  c10.cree = ilYa(3); c10.ebp = null;
+  c8.ebp = null; c8.cree = ilYa(6);
 
   /* --- véhicules ---------------------------------------------------------- */
-  const veh = (champs) => { const v = nouveauVehicule(champs); e.vehicules.push(v); return v; };
+  const veh = (champs) => {
+    const v = nouveauVehicule(champs);
+    const prop = e.clients.find(c => c.id === v.clientId);
+    /* Un véhicule est enregistré au premier passage de son propriétaire. */
+    v.cree = prop ? prop.cree + JOUR : ilYa(200);
+    v.maj = v.cree;
+    e.vehicules.push(v);
+    return v;
+  };
 
   const v1 = veh({ clientId: c1.id, immat: 'EJ456QT', marque: 'Peugeot', modele: '308',
     motorisation: '1.6 BlueHDi 120', energie: 'diesel', boite: 'manuelle', annee: 2017,
