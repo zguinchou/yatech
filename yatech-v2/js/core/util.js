@@ -51,10 +51,40 @@ export function initiales(nom, prenom) {
 /** Majuscule à la première lettre, le reste intact. */
 export const cap = (s) => { const t = String(s || ''); return t ? t[0].toUpperCase() + t.slice(1) : ''; };
 
-/** Accord du pluriel : `pluriel(n, 'pièce')` -> « 3 pièces ». */
+/* Les petits mots qui ne s'accordent pas : sans cette liste, « place de
+   parking » deviendrait « places des parkings ». */
+const MOTS_LIENS = new Set(['de', 'du', 'des', 'd', 'a', 'au', 'aux', 'en', 'et', 'sur',
+  'par', 'pour', 'le', 'la', 'les', 'un', 'une', 'sans', 'avec', 'chez', 'ou']);
+
+/**
+ * Accord du pluriel : `pluriel(3, 'pièce')` -> « 3 pièces ».
+ *
+ * Le groupe entier s'accorde, pas seulement le premier mot :
+ * `pluriel(34, 'prestation active')` rend « 34 prestations actives », et non
+ * « 34 prestation actives ». C'est la faute qu'on ne voit plus au bout de
+ * trois relectures et que le garagiste verra du premier coup d'œil.
+ *
+ * Les pluriels irréguliers se passent en troisième argument :
+ * `pluriel(n, 'travail en cours', 'travaux en cours')`.
+ */
 export function pluriel(n, singulier, plurielMot) {
-  const mot = n > 1 ? (plurielMot || singulier + 's') : singulier;
-  return n + ' ' + mot;
+  if (n <= 1) return n + ' ' + singulier;
+  if (plurielMot) return n + ' ' + plurielMot;
+
+  /* On accorde jusqu'au premier petit mot, et on s'arrête là : ce qui suit
+     une préposition est un complément, et il reste au singulier.
+     « place de parking » -> « places de parking », pas « des parkings ». */
+  let stop = false;
+  const accorde = String(singulier).split(' ').map(mot => {
+    if (stop) return mot;
+    const nu_ = nu(mot).replace(/[’']/g, '');
+    if (MOTS_LIENS.has(nu_)) { stop = true; return mot; }
+    if (/[sxz]$/i.test(mot)) return mot;          // devis, prix, nez : déjà pluriels
+    if (/(au|eu)$/i.test(mot)) return mot + 'x';  // créneau -> créneaux
+    if (/al$/i.test(mot)) return mot.slice(0, -2) + 'aux';   // journal -> journaux
+    return mot + 's';
+  }).join(' ');
+  return n + ' ' + accorde;
 }
 
 /** Coupe un texte trop long en gardant une fin lisible. */

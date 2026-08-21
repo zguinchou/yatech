@@ -254,7 +254,7 @@ export function jeuDemo() {
     ['CLI-G-002', 'Gaz R1234yf bouteille 5kg',      'Climatisation','R6-A-02', 1, 1, 460.00, 0, 'Consommable atelier'],
     ['CON-N-001', 'Nettoyant frein aérosol 500ml',  'Consommables','R7-A-01', 9, 4, 2.90, 8.50, 'Atelier'],
     ['CON-D-001', 'Dégrippant 400ml',               'Consommables','R7-A-02', 6, 3, 3.40, 9.90, 'Atelier'],
-    ['CON-J-001', 'Joints cuivre vidange (lot 50)', 'Consommables','R7-B-01', 2, 1, 8.00, 1.00, 'Atelier'],
+    ['CON-J-001', 'Joints cuivre vidange (lot 50)', 'Consommables','R7-B-01', 2, 1, 8.00, 0, 'Atelier — refacturé dans le forfait'],
     ['CON-G-001', 'Gants nitrile (boîte 100)',      'Consommables','R7-B-02', 4, 2, 7.50, 0, 'Atelier'],
     ['ECU-S-001', 'Support calculateur bench',      'Électronique','R8-A-01', 2, 1, 45.00, 0, 'Outillage'],
     ['ECU-F-001', 'Faisceau bench EDC17 universel', 'Électronique','R8-A-02', 1, 1, 210.00, 0, 'Outillage'],

@@ -54,6 +54,20 @@ groupe('Lecture des nombres tapés à la main', () => {
   verifie('arrondi vers le haut', util.cts(2.345), 2.35);
 });
 
+groupe('Accord du pluriel', () => {
+  verifie('un seul', util.pluriel(1, 'pièce'), '1 pièce');
+  verifie('plusieurs', util.pluriel(3, 'pièce'), '3 pièces');
+  verifie('zéro reste au singulier', util.pluriel(0, 'pièce'), '0 pièce');
+  verifie('le groupe entier s’accorde', util.pluriel(34, 'prestation active'), '34 prestations actives');
+  verifie('les petits mots ne s’accordent pas', util.pluriel(4, 'place de parking'), '4 places de parking');
+  verifie('un mot déjà en s ne bouge pas', util.pluriel(2, 'devis envoyé'), '2 devis envoyés');
+  verifie('créneau prend un x', util.pluriel(2, 'créneau libre'), '2 créneaux libres');
+  verifie('journal fait journaux', util.pluriel(2, 'journal'), '2 journaux');
+  verifie('pluriel irrégulier fourni', util.pluriel(2, 'travail', 'travaux'), '2 travaux');
+  verifie('complément invariable', util.pluriel(3, 'dossier à facturer'), '3 dossiers à facturer');
+  verifie('groupe long', util.pluriel(2, 'demande de créneau'), '2 demandes de créneau');
+});
+
 groupe('Immatriculations', () => {
   verifie('SIV en minuscules', util.plaqueJolie('ej456qt'), 'EJ-456-QT');
   verifie('SIV déjà formaté', util.plaqueJolie('EJ-456-QT'), 'EJ-456-QT');
