@@ -17,9 +17,14 @@ import {
   nouvellePrestation, nouvelleIntervention, nouvelAppel, neuf
 } from './schema.js';
 import { verrou } from '../core/crypto.js';
-import { plusJours, jour0, id, JOUR, HEURE } from '../core/util.js';
+import { plusJours, jour0, lundi, id, JOUR, HEURE } from '../core/util.js';
 
-const j = (n, h) => jour0() + n * JOUR + (h === undefined ? 9 : h) * HEURE;
+/* Le planning de démonstration s'accroche à la SEMAINE en cours, pas à
+   « aujourd'hui + n jours » : selon le jour où l'on ouvre l'outil, la moitié
+   des rendez-vous tomberait le dimanche et disparaîtrait de l'écran.
+   `j(1, 8.5)` = lundi de cette semaine, 8 h 30. */
+const j = (jourSemaine, h) => lundi(Date.now()) + (jourSemaine - 1) * JOUR
+  + (h === undefined ? 9 : h) * HEURE;
 const ilYa = (n) => Date.now() - n * JOUR;
 
 /* ==========================================================================
@@ -117,6 +122,12 @@ export function jeuDemo() {
     tauxHoraire: 68,
     tauxHorairePro: 54,
     remiseProDefaut: 18,
+    /* Quatre rangées de six : la rangée D accueille les véhicules qui dorment,
+       et le jeu de démonstration en a besoin pour montrer une ventouse. */
+    parcColonnes: 6,
+    parcRangees: 4,
+    nomsRangees: { A: 'Devant l’atelier', B: 'Côté portail', C: 'Sous abri', D: 'Fond de cour' },
+    typesPlaces: { A1: 'pont', A2: 'pont', C1: 'couvert', C2: 'couvert', C3: 'couvert', D6: 'hs' },
     demoChargee: true
   });
 
@@ -270,6 +281,9 @@ export function jeuDemo() {
     const d = nouveauDossier(Object.assign({
       numero: 'OR-' + new Date().getFullYear() + '-' + String(numero++).padStart(4, '0')
     }, champs));
+    /* Un dossier créé « à l'instant » alors qu'il est entré il y a huit jours
+       trahit la démonstration : les fils d'événements deviennent absurdes. */
+    if (d.entree) { d.cree = d.entree; d.maj = Math.min(Date.now(), d.entree + 3600000); }
     e.dossiers.push(d);
     return d;
   };
@@ -429,14 +443,14 @@ export function jeuDemo() {
     numero: 'DV-' + new Date().getFullYear() + '-0001',
     dossierId: d4.id, clientId: c8.id, vehiculeId: v5.id,
     statut: 'envoye', lignes: d4.lignes.map(l => Object.assign({}, l)),
-    objet: 'Turbo + injecteur', emisLe: ilYa(7), envoyeLe: ilYa(6),
+    objet: 'Turbo + injecteur', emisLe: ilYa(7), envoyeLe: ilYa(6), cree: ilYa(7), maj: ilYa(6),
     valableJusquau: plusJours(ilYa(7), 30)
   });
   const dv2 = nouveauDevis({
     numero: 'DV-' + new Date().getFullYear() + '-0002',
     dossierId: d6.id, clientId: c3.id, vehiculeId: v8.id,
     statut: 'accepte', lignes: d6.lignes.map(l => Object.assign({}, l)),
-    objet: 'Intervention calculateur', emisLe: ilYa(2), envoyeLe: ilYa(2), repondeLe: ilYa(1),
+    objet: 'Intervention calculateur', emisLe: ilYa(2), envoyeLe: ilYa(2), repondeLe: ilYa(1), cree: ilYa(2), maj: ilYa(1),
     valableJusquau: plusJours(ilYa(2), 30),
     signature: { nom: 'Garage du Pont', quand: ilYa(1) }
   });
@@ -457,7 +471,7 @@ export function jeuDemo() {
     numero: 'FA-' + new Date().getFullYear() + '-0001',
     dossierId: d10.id, clientId: c7.id, vehiculeId: v10.id,
     statut: 'emise', lignes: d10.lignes.map(l => Object.assign({}, l)),
-    emiseLe: ilYa(4), echeanceLe: plusJours(ilYa(4), 30),
+    emiseLe: ilYa(4), echeanceLe: plusJours(ilYa(4), 30), cree: ilYa(4), maj: ilYa(4),
     numeroEbp: 'FC2600184', ebp: ilYa(4)
   });
   const fa2 = nouvelleFacture({
@@ -469,13 +483,13 @@ export function jeuDemo() {
   const fa3 = nouvelleFacture({
     numero: 'FA-' + (new Date().getFullYear()) + '-0003',
     clientId: c1.id, vehiculeId: v1.id,
-    statut: 'emise', emiseLe: ilYa(52), echeanceLe: ilYa(22),
+    statut: 'emise', emiseLe: ilYa(52), echeanceLe: ilYa(22), cree: ilYa(52), maj: ilYa(52),
     lignes: [nouvelleLigne({ type: 'forfait', libelle: 'Révision + géométrie', qte: 1, prixHT: 254 })]
   });
   const fa4 = nouvelleFacture({
     numero: 'FA-' + new Date().getFullYear() + '-0004',
     clientId: c6.id, vehiculeId: v4.id,
-    statut: 'reglee', emiseLe: ilYa(30), echeanceLe: ilYa(0),
+    statut: 'reglee', emiseLe: ilYa(30), echeanceLe: ilYa(0), cree: ilYa(30), maj: ilYa(29),
     lignes: [nouvelleLigne({ type: 'forfait', libelle: 'Vidange + filtre à huile', qte: 1, prixHT: 79 })],
     reglements: [{ id: id('reg'), quand: ilYa(29), montant: 94.80, mode: 'cb' }]
   });
@@ -526,28 +540,36 @@ export function jeuDemo() {
       id: id('cre'), userId, dossierId: dossierId || null,
       titre, type: type || 'travaux',
       debut: j(jour, hDebut), fin: j(jour, hDebut) + minutes * 60000,
-      fait: jour < 0, cree: Date.now()
+      /* Ce qui est déjà passé dans la semaine est coché : un planning de
+         démonstration entièrement « à faire » ne ressemble à rien. */
+      fait: j(jour, hDebut) + minutes * 60000 < Date.now(),
+      cree: Date.now()
     });
   };
-  cre('usr_tech', 0, 8, 120, 'Diagnostic C3 — voyant moteur', 'travaux');
-  cre('usr_tech', 0, 10.5, 90, 'Démarreur Clio (dès réception)', 'travaux');
-  cre('usr_tech', 0, 14, 180, 'Révision Sandero', 'travaux');
-  cre('usr_patron', 0, 8.5, 150, 'Bench Mercedes — écriture', 'electro', d6.id);
-  cre('usr_patron', 0, 14, 60, 'Essai routier Ford Focus', 'essai', d8.id);
-  cre('usr_patron', 0, 15.5, 120, 'Devis distribution Golf', 'travaux', d3.id);
-  cre('usr_sec', 0, 9, 60, 'Relances devis + impayés', 'autre');
-  cre('usr_tech', 1, 8, 240, 'Distribution Golf VII', 'travaux', d3.id);
-  cre('usr_patron', 1, 9, 120, 'Reprogrammation A4 (si carte réparée)', 'electro');
-  cre('usr_tech', 2, 8, 480, 'Embrayage Golf VII', 'travaux', d3.id);
-  cre('usr_patron', 2, 14, 90, 'Rendez-vous client — 308', 'rdv');
-  cre('usr_sec', 3, 8, 480, 'Congé', 'absence');
-  cre('usr_patron', 4, 8, 180, 'Turbo BMW (si accord)', 'travaux');
+  cre('usr_tech',   1, 8,    120, 'Diagnostic C3 — voyant moteur', 'travaux');
+  cre('usr_tech',   1, 10.5,  90, 'Démarreur Clio (dès réception)', 'travaux');
+  cre('usr_tech',   1, 14,   180, 'Révision Sandero', 'travaux');
+  cre('usr_patron', 1, 8.5,  150, 'Bench Mercedes — écriture', 'electro', d6.id);
+  cre('usr_patron', 1, 14,    60, 'Essai routier Ford Focus', 'essai', d8.id);
+  cre('usr_patron', 1, 15.5, 120, 'Devis distribution Golf', 'travaux', d3.id);
+  cre('usr_sec',    1, 9,     60, 'Relances devis + impayés', 'autre');
+  cre('usr_tech',   2, 8,    240, 'Distribution Golf VII', 'travaux', d3.id);
+  cre('usr_patron', 2, 9,    120, 'Reprogrammation A4 (si carte réparée)', 'electro');
+  cre('usr_sec',    2, 10,    90, 'Facturation flotte Meyzieu', 'autre');
+  cre('usr_tech',   3, 8,    480, 'Embrayage Golf VII', 'travaux', d3.id);
+  cre('usr_patron', 3, 14,    90, 'Rendez-vous client — 308', 'rdv');
+  cre('usr_patron', 3, 9,    120, 'Lecture calculateur BMW', 'electro');
+  cre('usr_sec',    4, 8,    480, 'Congé', 'absence');
+  cre('usr_patron', 4, 8,    180, 'Turbo BMW (si accord)', 'travaux');
+  cre('usr_tech',   4, 13.5, 150, 'Géométrie + freins Focus', 'travaux');
+  cre('usr_tech',   5, 8,    240, 'Rattrapage — entretien flotte', 'travaux');
+  cre('usr_patron', 5, 8,    120, 'Reprises et essais', 'essai');
   /* Une demande venue du portail confrère, pas encore acceptée. */
   e.creneaux.push({
     id: id('cre'), userId: null, clientId: c3.id,
     titre: 'Demande Garage du Pont — lecture calculateur Golf',
     type: 'electro', demande: true,
-    debut: j(2, 10), fin: j(2, 12), cree: ilYa(0)
+    debut: j(3, 10), fin: j(3, 12), cree: ilYa(0)
   });
 
   /* --- appels et pense-bêtes -------------------------------------------------- */
