@@ -16,15 +16,15 @@
    l'écran qui l'héberge décide où les ranger.
    ========================================================================== */
 
-import { h, poser, vider } from '../core/dom.js';
+import { h, poser } from '../core/dom.js';
 import { icone } from '../core/icones.js';
-import { modale, menu, message, confirmer } from '../core/ui.js';
+import { modale, menu } from '../core/ui.js';
 import * as fmt from '../core/fmt.js';
-import { nombre, cts, attend, id, score } from '../core/util.js';
+import { nombre, attend, id, score } from '../core/util.js';
 import { TYPES_LIGNE, nouvelleLigne } from '../domain/schema.js';
 import { ligneChiffree, totaux, prixPrestation, prixPiece } from '../domain/calculs.js';
 import * as lit from '../domain/selecteurs.js';
-import { champ, grilleChamps, blocTotaux, plaque } from './widgets.js';
+import { champ, blocTotaux } from './widgets.js';
 
 /**
  * @param {object} o
@@ -122,21 +122,6 @@ export function editeurLignes(o) {
       !lecture && (l.ref || l.detail) ? h('div.minus.tres-faible.coupe',
         [l.ref, l.detail].filter(Boolean).join(' — ')) : null
     ]);
-
-    const num = (valeur, surSaisie, suffixe) => lecture
-      ? h('div.num.droite', valeur)
-      : h('div.champ-unite', [
-          h('input.saisie.saisie--num', {
-            value: valeur,
-            inputmode: 'decimal',
-            onfocus: (ev) => ev.target.select(),
-            oninput: attend((ev) => surSaisie(ev.target.value), 180),
-            onchange: (ev) => { surSaisie(ev.target.value); ev.target.value = lireChamp(ev.target); }
-          }),
-          suffixe ? h('span.champ-unite__unite', suffixe) : null
-        ]);
-
-    const lireChamp = () => '';   // remplacé plus bas selon le champ
 
     const champQte = lecture
       ? h('div.num.droite', fmt.nb(l.qte, 2) + (l.unite ? ' ' + l.unite : ''))

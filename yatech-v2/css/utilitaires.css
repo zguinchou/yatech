@@ -51,3 +51,49 @@
   font-weight: 600;
   color: var(--encre-3);
 }
+
+/* ==========================================================================
+   GARDE-FOU : la page ne doit JAMAIS défiler de côté
+   --------------------------------------------------------------------------
+   Plusieurs éléments défilent horizontalement à l'intérieur d'eux-mêmes : la
+   barre de filtres, un tableau large, les colonnes de l'atelier, la grille du
+   planning. Pour que ce soit vrai, il faut que chacun de leurs ancêtres
+   accepte de rétrécir.
+
+   Or un enfant de conteneur souple (flex ou grid) a par défaut
+   `min-width: auto` : il refuse de descendre sous la largeur de son contenu.
+   Un seul ancêtre dans ce cas et ce n'est plus le tableau qui défile, c'est
+   toute la page qui part de côté — sur téléphone, on perd le menu du bas et
+   on ne comprend pas pourquoi.
+
+   On l'écrit une fois ici plutôt que dans chaque écran : le défaut est trop
+   facile à réintroduire pour compter sur la vigilance.
+   ========================================================================== */
+
+.filtres,
+.tableau-cadre,
+.onglets,
+.tableau-atelier,
+.planning__grille,
+.planning__jours,
+.reglages__menu {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* L'ancêtre direct d'un de ces éléments doit pouvoir rétrécir. */
+.contenu :has(> .filtres),
+.contenu :has(> .tableau-cadre),
+.contenu :has(> .onglets),
+.contenu :has(> .tableau-atelier),
+.contenu :has(> .planning__grille) {
+  min-width: 0;
+}
+
+/* Filet de dernier recours : même si un écran invente une disposition qu'on
+   n'a pas prévue, le corps de la page ne débordera pas. `clip` plutôt que
+   `hidden` : `hidden` ferait de .contenu un conteneur de défilement et
+   casserait les en-têtes collants qui vivent dedans. */
+@supports (overflow-x: clip) {
+  .contenu { overflow-x: clip; }
+}

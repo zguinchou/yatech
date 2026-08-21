@@ -20,14 +20,27 @@
     line-height: 1.45;
   }
 
-  /* Tout ce qui vit à l'écran disparaît. */
+  /* Tout ce qui vit à l'écran disparaît. On cache la RACINE de l'application
+     plutôt que ses morceaux un par un : un écran qui ne passe pas par la coque
+     — la connexion, le portail confrère — s'imprimerait sinon par-dessous le
+     document, et le devis partirait au client avec l'écran de connexion en
+     première page. */
+  #app, #calque-modales, #calque-messages,
   .coque, .rail, .barre, .onglets-bas, .messages, .masque, .flottant,
   .tiroir, .tiroir-masque, .palette-masque, .menu-flotte, .amorce { display: none !important; }
 
   .impression { display: block !important; }
 
   /* --- en-tête du document --------------------------------------------- */
-  .doc { color: #000; }
+  .doc {
+    color: #000;
+    width: 100%;
+    max-width: 100%;
+    /* Un mot trop long (une référence, un VIN) ne doit pas pousser le tableau
+       hors de la feuille : il se coupe. */
+    overflow-wrap: anywhere;
+  }
+  .doc table { table-layout: fixed; }
   .doc__tete {
     display: flex;
     justify-content: space-between;

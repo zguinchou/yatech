@@ -9,15 +9,14 @@
 
 import { h, poser } from '../core/dom.js';
 import { icone } from '../core/icones.js';
-import { modale, confirmer, message, menu, vide } from '../core/ui.js';
-import { S, maj } from '../core/store.js';
+import { modale, confirmer, message } from '../core/ui.js';
+import { maj } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
-import { jour0, JOUR, telJoli, nombre, plusJours } from '../core/util.js';
+import { jour0, telJoli, nombre } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
-import { ETAPES } from '../domain/schema.js';
 import {
-  enTete, indic, carteDossier, plaque, tete, tetes, champ, pastilleEtape, lienTel, menuEnvoi
+  enTete, indic, plaque, champ, pastilleEtape, menuEnvoi
 } from '../ui/widgets.js';
 import { nouveauDossierModale } from './dossier-nouveau.js';
 
@@ -170,10 +169,19 @@ function maJournee(e, moi, refaire) {
           const v = d ? lit.vehicule(e, d.vehiculeId) : null;
           const passe = c.fin < maintenant;
           const encours = c.debut <= maintenant && c.fin > maintenant;
-          return h('button.liste__ligne', {
-            type: 'button',
+          /* Une div plutôt qu'un bouton : la ligne contient déjà un bouton
+             « fait », et un bouton dans un bouton n'est ni valide ni navigable
+             au clavier. */
+          return h('div.liste__ligne', {
+            role: 'link',
+            tabindex: 0,
             style: encours ? { background: 'var(--accent-voile)' } : null,
-            onclick: () => { location.hash = d ? '#/dossier/' + d.id : '#/planning'; }
+            onclick: () => { location.hash = d ? '#/dossier/' + d.id : '#/planning'; },
+            onkeydown: (ev) => {
+              if (ev.key !== 'Enter' && ev.key !== ' ') return;
+              ev.preventDefault();
+              location.hash = d ? '#/dossier/' + d.id : '#/planning';
+            }
           }, [
             h('div', { style: { minWidth: '52px' } }, [
               h('div.gras.num', fmt.heure(c.debut)),

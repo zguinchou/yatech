@@ -180,24 +180,32 @@ function tableau(doc, ctx) {
     }
     const x = ligneChiffree(l, ctx);
     corps.push(h('tr', [
-      h('td', { style: { width: '18mm' } }, l.ref || ''),
+      h('td', l.ref || ''),
       h('td', [
         h('div', l.libelle || ''),
         l.detail ? h('div', { style: { fontSize: '8pt', color: '#444' } }, l.detail) : null
       ]),
-      h('td.num', { style: { width: '16mm' } },
-        fmt.nb(l.qte, 2) + (l.unite ? ' ' + l.unite : '')),
-      h('td.num', { style: { width: '20mm' } }, fmt.montant(l.prixHT)),
-      h('td.num', { style: { width: '14mm' } }, nombre(l.remise) ? nombre(l.remise) + ' %' : ''),
-      h('td.num', { style: { width: '22mm' } }, fmt.montant(x.ht))
+      h('td.num', fmt.nb(l.qte, 2) + (l.unite ? ' ' + l.unite : '')),
+      h('td.num', fmt.montant(l.prixHT)),
+      h('td.num', nombre(l.remise) ? nombre(l.remise) + ' %' : ''),
+      h('td.num', fmt.montant(x.ht))
     ]));
   }
   if (!corps.length) corps.push(h('tr', h('td', { colspan: 6 }, 'Aucune ligne.')));
 
+  /* Les largeurs se posent sur l'EN-TÊTE, pas sur les cellules : en mise en
+     page fixe (table-layout: fixed), seule la première rangée est consultée.
+     Posées sur les td, elles seraient ignorées et les six colonnes
+     partageraient la largeur à parts égales — la désignation se retrouverait
+     à l'étroit pendant que « Réf. » prendrait toute la place. */
   return h('table', [
     h('thead', h('tr', [
-      h('th', 'Réf.'), h('th', 'Désignation'), h('th.num', 'Qté'),
-      h('th.num', 'P.U. HT'), h('th.num', 'Rem.'), h('th.num', 'Total HT')
+      h('th', { style: { width: '18mm' } }, 'Réf.'),
+      h('th', 'Désignation'),
+      h('th.num', { style: { width: '17mm' } }, 'Qté'),
+      h('th.num', { style: { width: '21mm' } }, 'P.U. HT'),
+      h('th.num', { style: { width: '14mm' } }, 'Rem.'),
+      h('th.num', { style: { width: '23mm' } }, 'Total HT')
     ])),
     h('tbody', corps)
   ]);

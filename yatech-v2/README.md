@@ -1,0 +1,252 @@
+# Yatech — gestion d'atelier
+
+Outil de gestion pour un garage automobile : mécanique et électronique embarquée.
+Clients, dossiers, devis, facturation (avec passerelle EBP), parc de véhicules,
+stock de pièces, planning, tarifs particuliers et professionnels, interventions
+Autotuner.
+
+Il tourne dans un navigateur, sur téléphone comme sur ordinateur, et continue de
+fonctionner sans réseau.
+
+---
+
+## Mettre en ligne
+
+Il n'y a **rien à construire** : ni `npm install`, ni compilation, ni serveur.
+Le dossier `yatech-v2/` est le site.
+
+**Cloudflare Pages** (ce qui est utilisé aujourd'hui)
+1. Déposer le contenu de `yatech-v2/` à la racine du projet Pages.
+2. Laisser la commande de build vide et le dossier de sortie à la racine.
+3. Les fichiers `_headers` et `_redirects` sont déjà là et font le nécessaire.
+
+**Autre hébergeur statique** (Netlify, GitHub Pages, un simple Apache)
+Copier le dossier. Une seule exigence : le site doit être servi en **https**
+(ou en `http://localhost`), sinon le navigateur refuse d'installer l'application
+et de garder les données de façon durable.
+
+**En local, pour essayer**
+```
+cd yatech-v2
+npx http-server -p 8080 -c-1
+```
+puis ouvrir `http://localhost:8080`.
+Ouvrir le fichier directement (`file://`) ne marche pas : les modules
+JavaScript ont besoin d'un vrai serveur.
+
+**Installer sur le téléphone**
+Ouvrir le site, puis « Ajouter à l'écran d'accueil ». L'outil s'ouvre alors en
+plein écran, comme une application, et fonctionne sans réseau.
+
+---
+
+## Où sont les données
+
+**Dans le navigateur de chaque appareil**, dans une base IndexedDB. Elles ne
+partent nulle part : aucun serveur, aucun compte, aucun abonnement.
+
+Conséquences, à connaître :
+
+- **Deux appareils = deux bases.** Le téléphone de l'atelier et le PC du bureau
+  ne se parlent pas tout seuls. Pour transporter les données : Réglages →
+  Données → Sauvegarder, puis Restaurer sur l'autre appareil.
+- **Faites des sauvegardes.** L'outil affiche un avertissement quand la dernière
+  remonte à plus d'une semaine. Une sauvegarde est un fichier `.json` : gardez-le
+  sur un disque, un cloud, une clé — pas seulement sur l'appareil.
+- Vider les données du navigateur efface tout. L'outil demande au navigateur de
+  rendre le stockage persistant, ce qui protège d'un effacement automatique,
+  mais pas d'un effacement volontaire.
+
+Si le partage entre postes devient nécessaire, c'est le seul morceau à écrire :
+tout passe par `js/core/db.js`, et le reste de l'outil n'a pas à changer.
+
+---
+
+## Comment c'est fait
+
+Pas de framework, pas de dépendance, pas d'outil de build. Des modules
+JavaScript natifs que le navigateur charge directement. C'est un choix : dans
+cinq ans, ce code s'ouvrira encore et se modifiera encore, sans avoir à
+ressusciter une chaîne d'outils.
+
+```
+yatech-v2/
+  index.html            la coquille, une vingtaine de lignes
+  manifest.webmanifest  ce qui fait de la page une application installable
+  sw.js                 le cache qui permet de travailler sans réseau
+  _headers _redirects   la configuration de l'hébergeur
+
+  css/
+    jetons.css          couleurs, espaces, typographies — TOUT part d'ici
+    base.css            remise à zéro et réglages typographiques
+    composants.css      boutons, champs, cartes, pastilles, modales, tableaux
+    coque.css           le menu, la barre du haut, les onglets du bas
+    ecrans.css          ce qui n'appartient qu'à un écran (parc, planning…)
+    utilitaires.css     .rang, .pile, .coupe — chargés en dernier, exprès
+    impression.css      les documents papier et PDF
+
+  js/
+    main.js             démarrage, routes, session, raccourcis clavier
+    coque.js            menu, recherche générale, thème, état du réseau
+
+    core/               la mécanique, sans rien connaître du métier
+      dom.js            h() : construire des éléments sans innerHTML
+      store.js          l'état, maj(), l'annulation, le journal
+      db.js             IndexedDB, avec repli localStorage
+      routeur.js        les adresses (#/dossier/42)
+      ui.js             messages, modales, confirmations, menus
+      icones.js         les icônes, dessinées ici
+      fmt.js            euros, dates, durées, kilomètres
+      util.js           dates, plaques, téléphones, recherche floue
+      fichiers.js       CSV, téléchargements, photos
+      crypto.js         empreintes des codes d'accès
+
+    domain/             le métier, sans rien connaître de l'affichage
+      schema.js         la forme des données, les vocabulaires, les migrations
+      calculs.js        LE moteur de prix : grilles, remises, TVA, totaux
+      selecteurs.js     les questions qu'on pose aux données
+      actions.js        les gestes qui modifient (le seul chemin autorisé)
+      ebp.js            la passerelle EBP
+      demo.js           le jeu de démonstration
+
+    ui/                 les briques partagées entre écrans
+      widgets.js        champs, pastilles, cartes, sélecteurs
+      lignes.js         l'éditeur de lignes de devis
+
+    views/              un fichier par écran
+  tests/
+    verifs.mjs          les vérifications de calcul : node tests/verifs.mjs
+```
+
+---
+
+## Modifier quelque chose
+
+**Changer une couleur, une taille, un espacement**
+→ `css/jetons.css`, tout en haut. Rien d'autre n'écrit de couleur en dur.
+
+**Changer un taux horaire, une mention légale, un modèle de message**
+→ dans l'outil : Réglages. Rien à toucher dans le code.
+
+**Renommer une colonne de l'atelier** (« Attente accord » → « Attente client »)
+→ dans l'outil : Réglages → Atelier.
+
+**Ajouter un champ à une fiche**
+→ `js/domain/schema.js` : l'ajouter dans la fabrique concernée
+(`nouveauVehicule`, `nouvellePiece`…) et dans `normaliser()` pour que les
+sauvegardes anciennes le reçoivent. Puis l'afficher dans l'écran concerné.
+
+**Ajouter un écran**
+→ créer `js/views/mon-ecran.js` qui exporte `peindre(ctx)` et rend un nœud,
+l'enregistrer dans `ECRANS` et `ROUTES` de `js/main.js`, et l'ajouter au `MENU`
+de `js/coque.js`.
+
+**Changer un calcul de prix**
+→ `js/domain/calculs.js`, et nulle part ailleurs. Puis relancer
+`node tests/verifs.mjs`.
+
+Trois règles à tenir si vous modifiez :
+1. Jamais `innerHTML` avec une donnée saisie — on construit avec `h()`.
+2. Jamais une couleur en dur — toujours `var(--quelque-chose)`.
+3. Jamais modifier l'état directement — toujours `maj()` ou `domain/actions.js`.
+
+---
+
+## Comment le prix se forme
+
+Trois étages, pas un de plus, pour qu'un montant soit toujours explicable :
+
+1. **Le prix de base** vient du catalogue, à la grille du client
+   (particulier ou confrère).
+2. **La remise de ligne**, en pourcentage, se voit sur le document.
+3. **La remise globale**, en pourcentage, s'applique au total hors taxes.
+
+La remise inscrite sur la fiche d'un client *pré-remplit* l'étage 2 quand on
+ajoute une ligne. Elle ne s'applique jamais toute seule au total : une remise
+invisible est une remise qu'on accorde deux fois.
+
+Une prestation dont le prix est à 0 dans le catalogue se calcule au temps
+(heures × taux horaire de la grille).
+
+---
+
+## La passerelle EBP
+
+EBP tient la facturation officielle : les numéros légaux, la comptabilité,
+l'export au comptable. Yatech capte au téléphone, chiffre, suit l'atelier, puis
+repasse à EBP ce qu'il lui faut.
+
+Le lien tient à **une seule chose** : le même code client des deux côtés.
+
+- Écran EBP → « À reporter » : ce qui attend d'être passé dans EBP.
+- Export en CSV français (point-virgule, accents corrects) que le module
+  d'import d'EBP sait lire.
+- Ou « Copier la fiche » : le résumé à recopier à la main, souvent plus rapide.
+- Import des clients depuis un fichier EBP, avec repérage des doublons et
+  **aperçu obligatoire** avant que quoi que ce soit ne soit écrit.
+
+Les intitulés de colonnes attendus par EBP varient d'une version à l'autre :
+ils sont affichés dans l'écran EBP, à vérifier au premier import.
+
+---
+
+## Les crédits Autotuner
+
+Une lecture ou une écriture de calculateur consomme des crédits achetés à
+l'avance. L'outil tient le compte :
+
+- le solde est affiché en permanence sur l'écran Électronique et sur l'accueil ;
+- une intervention marquée « réussie » débite ses crédits automatiquement,
+  une seule fois ;
+- « Recharger » ajoute des crédits et enregistre leur coût, ce qui donne le
+  prix moyen d'un crédit ;
+- « Corriger le solde » aligne l'outil sur ce qu'affiche l'appareil — c'est
+  l'appareil qui fait foi.
+
+Les fichiers binaires (lectures d'origine, fichiers modifiés) ne sont **pas**
+stockés ici : ils restent sur le PC de l'atelier. L'outil garde la trace de ce
+qui a été lu et écrit, ce qui suffit à retrouver une sauvegarde.
+
+---
+
+## L'espace professionnel
+
+Depuis la fiche d'un client professionnel : « Ouvrir un accès ». L'outil génère
+un lien et un code court à lui transmettre une fois.
+
+Le confrère y trouve, depuis son téléphone :
+- **ses** tarifs, à jour, sans avoir à appeler ;
+- l'avancement des véhicules qu'il a confiés ;
+- de quoi **demander** un créneau — une demande, pas un rendez-vous : rien
+  n'entre au planning tant que le garage ne l'a pas acceptée ;
+- ses factures.
+
+Il ne voit ni les notes internes, ni les marges, ni les prix d'achat.
+
+---
+
+## Ce que l'outil ne fait pas
+
+Dit franchement, pour éviter les mauvaises surprises :
+
+- **Il n'envoie ni SMS, ni e-mail, ni WhatsApp tout seul.** Une page hébergée
+  ne le peut pas sans un service payant. Il *prépare* le message et l'ouvre
+  dans l'application du téléphone : l'envoi part de la personne, en un geste.
+- **Il n'est pas un logiciel de comptabilité.** C'est EBP qui l'est.
+- **Il ne partage pas les données entre appareils** (voir plus haut).
+- **Le code d'accès n'est pas un coffre-fort.** Il sépare les rôles et évite
+  qu'un client au comptoir lise les chiffres par-dessus l'épaule. Ce qui vit
+  dans un navigateur reste lisible par qui a la main sur l'appareil : le vrai
+  verrou, c'est celui du téléphone.
+
+---
+
+## Vérifier que tout va bien
+
+```
+node tests/verifs.mjs
+```
+
+Vérifie les montants, la TVA à plusieurs taux, les remises, les arrondis au
+centime, les dates (changement d'heure, fin de mois), les plaques, le CSV, la
+numérotation qui ne recule jamais, et les empreintes des codes d'accès.

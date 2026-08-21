@@ -37,7 +37,14 @@ export function h(sel, props, enfants) {
 
 /** Pose les propriétés sur un nœud existant. */
 export function appliquer(noeud, props) {
+  /* `type` passe en premier : changer le type d'un champ APRÈS lui avoir donné
+     sa valeur peut la faire effacer par le navigateur. */
+  if (props.type !== undefined && noeud.tagName === 'INPUT') {
+    try { noeud.type = props.type; } catch (e) { noeud.setAttribute('type', props.type); }
+  }
+
   for (const cle in props) {
+    if (cle === 'type' && noeud.tagName === 'INPUT') continue;
     const val = props[cle];
     if (val === null || val === undefined || val === false) continue;
 

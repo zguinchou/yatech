@@ -8,13 +8,13 @@
 
 import { h, poser } from '../core/dom.js';
 import { icone } from '../core/icones.js';
-import { modale, menu, message } from '../core/ui.js';
+import { menu, message } from '../core/ui.js';
 import * as fmt from '../core/fmt.js';
 import {
   nombre, plaqueJolie, plaqueNue, telJoli, telNu, initiales, attend, isoJour,
-  depuisIsoJour, minutesEnHeure, heureEnMinutes, correspond, score
+  depuisIsoJour, minutesEnHeure, heureEnMinutes, score
 } from '../core/util.js';
-import { ETAPES, NATURES, PRIORITES, STATUTS_DEVIS, STATUTS_FACTURE, TYPES_LIGNE } from '../domain/schema.js';
+import { ETAPES, NATURES, PRIORITES, STATUTS_DEVIS, STATUTS_FACTURE } from '../domain/schema.js';
 import * as lit from '../domain/selecteurs.js';
 
 /* ==========================================================================
@@ -82,9 +82,12 @@ export function champ(o) {
         const t = typeof op === 'object' ? op.texte : op;
         entree.appendChild(h('option', { value: v, texte: t }));
       }
-      entree.value = commun.value === '' && opts.options && opts.options.length && opts.vide === false
-        ? (typeof opts.options[0] === 'object' ? opts.options[0].valeur : opts.options[0])
-        : commun.value;
+      /* Poser une valeur qui ne correspond à aucune option laisse la liste
+         visuellement vide, et la personne croit avoir choisi quelque chose.
+         On ne l'écrit que si l'option existe ; sinon on laisse le navigateur
+         sélectionner la première, ce qui est toujours vrai à l'œil. */
+      const valeurs = Array.from(entree.options).map(o => o.value);
+      if (valeurs.includes(String(commun.value))) entree.value = commun.value;
       break;
 
     case 'coche':

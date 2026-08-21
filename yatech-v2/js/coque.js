@@ -9,7 +9,7 @@
 
 import { h, poser, q, vider } from './core/dom.js';
 import { icone } from './core/icones.js';
-import { menu, message, modale, confirmer } from './core/ui.js';
+import { menu, message } from './core/ui.js';
 import * as routeur from './core/routeur.js';
 import { S, ecoute, annuler, peutAnnuler, dernierGeste } from './core/store.js';
 import { chercher, nomClient, nomVehicule, alertes } from './domain/selecteurs.js';
@@ -26,7 +26,9 @@ import { ROLES } from './domain/schema.js';
 
 export const MENU = [
   { section: 'Atelier' },
-  { chemin: '/',            nom: "Aujourd'hui", icone: 'accueil',  onglet: true },
+  /* `court` : le nom sous l'icône, en bas de l'écran du téléphone. Cinq
+     onglets sur 390 px, il faut des mots courts sous peine de « Aujourd'… ». */
+  { chemin: '/',            nom: "Aujourd'hui", court: 'Accueil', icone: 'accueil',  onglet: true },
   { chemin: '/atelier',     nom: 'Atelier',     icone: 'atelier',  onglet: true, compte: 'atelier' },
   { chemin: '/planning',    nom: 'Planning',    icone: 'planning', onglet: true },
   { chemin: '/parc',        nom: 'Parc',        icone: 'parc',     compte: 'parc' },
@@ -223,7 +225,7 @@ function majOngletsBas() {
     onclick: () => routeur.aller(m.chemin)
   }, [
     icone(m.icone),
-    h('span', m.nom),
+    h('span', m.court || m.nom),
     m.compte && n[m.compte] ? h('span.onglet-bas__puce', String(n[m.compte])) : null
   ]));
 
@@ -297,7 +299,13 @@ function menuMoi(ancre) {
     peutAnnuler() ? {
       texte: 'Annuler : ' + (dernierGeste() || 'dernier geste'),
       icone: 'retour',
-      faire: () => { const q = annuler(); message(q ? 'Annulé : ' + q : 'Rien à annuler'); }
+      faire: () => {
+        const geste = annuler();
+        message(geste ? 'Annulé : ' + geste : 'Rien à annuler');
+        /* L'écran affiche encore l'état d'avant l'annulation : sans ce repeint,
+           on croit que rien ne s'est passé. */
+        if (geste) routeur.repeindre();
+      }
     } : null,
     null,
     { texte: 'Réglages', icone: 'reglages', faire: () => routeur.aller('/reglages') },

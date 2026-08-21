@@ -90,7 +90,9 @@ export function question(cles, options) {
   const q = Object.assign({}, courante.query, cles);
   for (const k in q) if (q[k] === null || q[k] === undefined || q[k] === '') delete q[k];
   const s = new URLSearchParams(q).toString();
-  aller(courante.chemin + (s ? '?' + s : ''), { remplace: options && options.remplace !== false });
+  /* Par défaut on REMPLACE : sans ça, chaque filtre coché ajoute une étape
+     dans l'historique et le bouton retour du téléphone en fait le tour. */
+  aller(courante.chemin + (s ? '?' + s : ''), { remplace: !options || options.remplace !== false });
 }
 
 export const actuelle = () => courante;

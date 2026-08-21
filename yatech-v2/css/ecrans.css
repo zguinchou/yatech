@@ -784,3 +784,263 @@
 }
 .etiquette__code { font: 700 var(--t-l)/1 var(--f-chiffre); letter-spacing: .08em; }
 .etiquette__lib { font-size: var(--t-xs); color: var(--encre-2); }
+
+/* ==========================================================================
+   FICHE DOSSIER — le peu qui n'existe que sur cet écran
+   ========================================================================== */
+
+/* Une ligne de pièce déjà sortie du stock. Sans marque, le technicien retourne
+   au rayon chercher quelque chose qu'il a déjà sur son établi. */
+.dossier-ligne-servie { background: var(--ok-voile); border-color: var(--ok-voile); }
+
+.dossier-photos {
+  display: grid;
+  gap: var(--e-2);
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 45%), 1fr));
+}
+.dossier-photo {
+  position: relative;
+  appearance: none;
+  display: block;
+  padding: 0;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+  overflow: hidden;
+  cursor: pointer;
+}
+.dossier-photo:hover { border-color: var(--accent-trait); }
+.dossier-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dossier-photo__pied {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 4px 6px;
+  background: var(--plan);
+  color: var(--encre-2);
+  font-size: var(--t-xs);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* La photo agrandie tient dans la fenêtre sans la faire déborder : une photo
+   de téléphone est plus haute que large, et l'écran ne l'est pas. */
+.dossier-photo__grande {
+  width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+}
+
+/* ==========================================================================
+   VÉHICULES — la recherche avant tout
+   On ne lit pas cette liste, on y cherche une plaque. Le champ est donc plus
+   grand que partout ailleurs : c'est la première chose que le doigt trouve.
+   ========================================================================== */
+.vehicules-chercher { margin-bottom: var(--e-3); }
+.vehicules-chercher .saisie {
+  min-height: 52px;
+  padding-left: 46px;
+  font-size: var(--t-l);
+  background: var(--plan);
+  border-color: var(--accent-trait);
+}
+.vehicules-chercher svg { left: 15px; width: 20px; height: 20px; }
+.vehicules-chercher .recherche__vider { right: 10px; }
+
+.vehicules-outils { display: flex; align-items: flex-start; gap: var(--e-3); flex-wrap: wrap; }
+.vehicules-outils .filtres { flex: 1; min-width: 0; }
+
+/* Le tri au doigt : sur téléphone les en-têtes du tableau disparaissent, il
+   faut donc un autre moyen de ranger la liste. */
+.vehicules-tri-mobile { display: none; gap: 5px; flex-direction: column; }
+@media (max-width: 760px) {
+  .vehicules-tri-mobile { display: flex; }
+}
+
+/* Un en-tête de colonne qui trie : il garde la typographie du tableau. */
+.vehicules-tri {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.vehicules-tri:hover { color: var(--encre); }
+.vehicules-tri svg { width: 13px; height: 13px; opacity: .35; }
+.vehicules-tri--actif { color: var(--accent); }
+.vehicules-tri--actif svg { opacity: 1; }
+
+/* Le bloc « calculateur » de la fiche véhicule : replié tant qu'on fait de la
+   mécanique, ouvert dès qu'on touche à l'électronique. */
+.vehicules-repli {
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+}
+.vehicules-repli > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 44px;
+  padding: var(--e-2) var(--e-3);
+  cursor: pointer;
+  font: 600 var(--t-m)/1 var(--f-texte);
+  list-style: none;
+}
+.vehicules-repli > summary::-webkit-details-marker { display: none; }
+.vehicules-repli > summary svg { width: 16px; height: 16px; color: var(--encre-3); }
+.vehicules-repli__corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  padding: 0 var(--e-3) var(--e-3);
+}
+
+/* ==========================================================================
+   ATELIER — deux ajouts propres à cet écran
+   ========================================================================== */
+
+/* Le choix d'une colonne unique n'a de sens que sur téléphone : sur grand
+   écran, le mur entier tient déjà à l'écran. */
+.atelier-etapes { display: none; }
+@media (max-width: 900px) {
+  .atelier-etapes { display: flex; }
+}
+
+/* L'en-tête triable de la vue liste : un vrai bouton (donc accessible au
+   clavier) qui emprunte la typographie de sa cellule. */
+.atelier-tri {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.atelier-tri:hover { color: var(--encre); }
+.atelier-tri svg { width: 12px; height: 12px; }
+
+/* ==========================================================================
+   FICHE VÉHICULE — le carnet d'entretien
+   ========================================================================== */
+
+/* Le calculateur : sur cette fiche, c'est l'information qu'on vient chercher
+   en premier quand on a les mains dans le moteur. Un liseré d'accent le fait
+   trouver sans avoir à lire les titres. */
+.vehicule-ecu { border-left: 3px solid var(--accent); }
+
+/* Un passage à l'atelier : replié, il tient sur une ligne ; déplié, il montre
+   les travaux. `details` fait le travail sans une ligne de JavaScript, et
+   reste accessible au clavier. */
+.vehicule-passage {
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  background: var(--plan);
+}
+.vehicule-passage + .vehicule-passage { margin-top: var(--e-2); }
+.vehicule-passage > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e-2) var(--e-3);
+  padding: var(--e-3);
+  min-height: 38px;
+  cursor: pointer;
+  border-radius: var(--r-m);
+  list-style: none;
+}
+/* Safari dessine son propre triangle par un pseudo-élément à lui. */
+.vehicule-passage > summary::-webkit-details-marker { display: none; }
+.vehicule-passage > summary:hover { background: var(--plan-2); }
+.vehicule-passage[open] > summary {
+  border-bottom: 1px solid var(--trait-fin);
+  border-radius: var(--r-m) var(--r-m) 0 0;
+}
+.vehicule-passage__corps { padding: var(--e-3); }
+
+/* Les photos : des vignettes régulières, assez grandes pour reconnaître une
+   rayure au doigt sur un téléphone. */
+.vehicule-photos {
+  display: grid;
+  gap: var(--e-2);
+  grid-template-columns: repeat(auto-fill, minmax(min(104px, 46%), 1fr));
+}
+.vehicule-photo {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--plan-2);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+}
+.vehicule-photo:hover { border-color: var(--accent-trait); }
+.vehicule-photo img { width: 100%; height: 100%; object-fit: cover; }
+.vehicule-photo__legende {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 6px;
+  text-align: left;
+  font-size: var(--t-xs);
+  color: var(--encre-2);
+  background: var(--plan);
+  border-top: 1px solid var(--trait-fin);
+}
+
+/* ==========================================================================
+   DEVIS — la liste de ce qui n'est pas encore gagné
+   Un devis qui dort ne se voit pas dans une liste uniforme. Ceux qui ont
+   dépassé le délai de relance prennent donc un fond « alerte » assez discret
+   pour ne pas crier, assez net pour se repérer au premier coup d'œil.
+   ========================================================================== */
+.devis-outils { display: flex; align-items: flex-start; gap: var(--e-3); flex-wrap: wrap; }
+.devis-outils .filtres { flex: 1; min-width: 0; }
+
+/* Le tri au doigt : sur téléphone les en-têtes du tableau disparaissent, il
+   faut donc un autre moyen de ranger la liste. */
+.devis-tri-mobile { display: none; gap: 5px; flex-direction: column; }
+@media (max-width: 760px) {
+  .devis-tri-mobile { display: flex; }
+}
+
+/* Un en-tête de colonne qui trie : il garde la typographie du tableau. */
+.devis-tri {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.devis-tri:hover { color: var(--encre); }
+.devis-tri svg { width: 13px; height: 13px; opacity: .35; }
+.devis-tri--actif { color: var(--accent); }
+.devis-tri--actif svg { opacity: 1; }
+
+/* Le survol du tableau repeint le fond : sans cette seconde règle, une ligne
+   à relancer perdrait sa couleur dès qu'on passe la souris dessus. */
+table.grille tbody tr.devis-relance { background: var(--alerte-voile); }
+table.grille tbody tr.devis-relance:hover { background: var(--alerte-voile); }

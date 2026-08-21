@@ -201,6 +201,15 @@
 .tete-ecran__sous { color: var(--encre-2); font-size: var(--t-s); margin-top: 2px; }
 .tete-ecran__actions { margin-left: auto; display: flex; gap: var(--e-2); flex-wrap: wrap; }
 
+/* Sur téléphone, le titre et l'action se disputent la ligne : le titre se
+   casse en deux et le bouton se retrouve coincé. On les empile, et l'action
+   principale prend toute la largeur — c'est de toute façon là que va le pouce. */
+@media (max-width: 620px) {
+  .tete-ecran { flex-direction: column; align-items: stretch; gap: var(--e-3); }
+  .tete-ecran__actions { margin-left: 0; }
+  .tete-ecran__actions > .bt { flex: 1 1 auto; min-height: 44px; }
+}
+
 /* Une barre de filtres qui défile horizontalement sur téléphone. */
 .filtres {
   display: flex;

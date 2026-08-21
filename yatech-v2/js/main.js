@@ -414,15 +414,17 @@ function brancherServiceWorker() {
   if (location.protocol === 'file:') return;      // inutile hors serveur
   navigator.serviceWorker.register('sw.js').then((inscription) => {
     inscription.addEventListener('updatefound', () => {
-      const neuf = inscription.installing;
-      if (!neuf) return;
-      neuf.addEventListener('statechange', () => {
-        if (neuf.state === 'installed' && navigator.serviceWorker.controller) {
+      /* Surtout pas nommé `neuf` : ce nom est déjà celui de la fabrique
+         d'état importée plus haut, et le masquer ici brouille la lecture. */
+      const arrivant = inscription.installing;
+      if (!arrivant) return;
+      arrivant.addEventListener('statechange', () => {
+        if (arrivant.state === 'installed' && navigator.serviceWorker.controller) {
           message('Une nouvelle version est prête', {
             duree: 0,
             action: {
               texte: 'Recharger',
-              faire: () => { neuf.postMessage('maintenant'); location.reload(); }
+              faire: () => { arrivant.postMessage('maintenant'); location.reload(); }
             }
           });
         }
