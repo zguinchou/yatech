@@ -3108,6 +3108,51 @@ const SANS_CODE = true;
 
 /* Le compte qu'on ouvre tout seul quand la porte est ouverte : celui du
    dernier passage, sinon le premier de l'équipe. */
+/* ==========================================================================
+   Administrateur ou salarié
+   --------------------------------------------------------------------------
+   Deux choses cohabitent dans les paramètres : ce qui appartient à l'atelier
+   — ses tarifs, ses textes, son parc, son équipe — et ce qui appartient à la
+   personne qui regarde l'écran : ses compteurs, ses couleurs, sa voix.
+
+   Les premiers se règlent une fois pour tout le monde : les changer par
+   mégarde se paie sur chaque devis qui part. Ils demandent donc d'être
+   administrateur. Les seconds ne regardent personne d'autre, et chacun y
+   touche librement.
+
+   Ce n'est pas une sécurité — qui a l'appareil en main peut de toute façon
+   ouvrir le navigateur. C'est un garde-fou : on ne modifie pas les prix du
+   garage en cherchant à changer la couleur de son écran.
+   ========================================================================== */
+const ROLES_ACCES = {
+  admin:   { nom: 'Administrateur', court: 'Admin',   ton: 'info',
+             aide: 'Règle l\'atelier : tarifs, textes, équipe, parc, données.' },
+  salarie: { nom: 'Salarié',        court: 'Salarié', ton: 'neutre',
+             aide: 'Travaille dans l\'outil et règle son propre écran.' }
+};
+
+const estAdmin = (u) => !!(u && u.admin);
+
+/** La personne devant l'écran est-elle administratrice ? */
+function jeSuisAdmin() {
+  return estAdmin(DB.utilisateur(S.userId));
+}
+
+/* Un garde à poser au début d'une action réservée. Les boutons sont déjà
+   cachés — ceci répond à ce qui passerait quand même : un raccourci clavier,
+   une commande vocale, une fenêtre restée ouverte pendant un changement de
+   personne. */
+function exigeAdmin(quoi) {
+  if (jeSuisAdmin()) return true;
+  toast((quoi || 'Ce réglage') + ' est réservé aux administrateurs');
+  return false;
+}
+
+/** Combien d'administrateurs restent : on n'enlève pas le dernier. */
+function nbAdmins() {
+  return DB.etat.utilisateurs.filter(estAdmin).length;
+}
+
 function compteParDefaut() {
   const qui = stock.lire('atelier.qui');
   if (qui && DB.utilisateur(qui)) return qui;
@@ -3130,9 +3175,9 @@ function codeTemporaire() {
 
 /* --- utilisateurs -------------------------------------------------------- */
 const UTILISATEURS = [
-  { id: 'u1', nom: 'Allan',  fonction: 'Gérant · électro-mécanicien', role: 'gerant',      init: 'A', teinte: 38,  tel: '', email: 'auric.allan.aa@gmail.com' },
-  { id: 'u2', nom: 'Yoann',  fonction: 'Électro-mécanicien',          role: 'mecanicien',  init: 'Y', teinte: 195, tel: '', email: 'yoann@garage.fr' },
-  { id: 'u3', nom: 'Laura',  fonction: 'Secrétariat · accueil',       role: 'secretariat', init: 'L', teinte: 320, tel: '', email: 'laura@garage.fr' }
+  { id: 'u1', nom: 'Allan',  fonction: 'Gérant · électro-mécanicien', role: 'gerant',      admin: true,  init: 'A', teinte: 38,  tel: '', email: 'auric.allan.aa@gmail.com' },
+  { id: 'u2', nom: 'Yoann',  fonction: 'Électro-mécanicien',          role: 'mecanicien',  admin: true,  init: 'Y', teinte: 195, tel: '', email: 'yoann@garage.fr' },
+  { id: 'u3', nom: 'Laura',  fonction: 'Secrétariat · accueil',       role: 'secretariat', admin: false, init: 'L', teinte: 320, tel: '', email: 'laura@garage.fr' }
 ];
 
 /* --- planning ------------------------------------------------------------ */
@@ -3635,6 +3680,14 @@ const DB = {
       if (avantPause && e.reglages.heureDebut === '08:00') e.reglages.heureDebut = d.heureDebut;
     }
     if (!Array.isArray(e.appels)) e.appels = [];
+    /* Les droits n'existaient pas : on les pose une fois. L'accueil n'est pas
+       administrateur par défaut — le reste de l'équipe l'est, et cela se
+       change ensuite dans L'équipe. Un atelier sans aucun administrateur ne
+       pourrait plus rien régler : le premier compte en devient un. */
+    if (Array.isArray(e.utilisateurs) && e.utilisateurs.length) {
+      e.utilisateurs.forEach(u => { if (u.admin === undefined) u.admin = u.role !== 'secretariat'; });
+      if (!e.utilisateurs.some(u => u.admin)) e.utilisateurs[0].admin = true;
+    }
     /* Les places libres et la rue sont passées dans l'écran Parc. On les retire
        une fois de l'accueil de chacun — sans y toucher ensuite, pour que celui
        qui les y remet les garde. */
@@ -9370,6 +9423,19 @@ function blocReglagesEquipe(r) {
                        value="${esc(u.tel || '')}" placeholder="06 12 34 56 78"></div>
             </div>
             <div class="champ" style="grid-column:1/-1">
+              <label>Ce qu'il ou elle peut régler</label>
+              <div class="segments" style="max-width:360px">
+                ${Object.keys(ROLES_ACCES).map(k => `<button data-act="role-acces" data-id="${u.id}"
+                    data-role="${k}" class="${(k === 'admin') === estAdmin(u) ? 'on' : ''}"
+                    ${(k === 'salarie' && estAdmin(u) && nbAdmins() < 2) ? 'disabled' : ''}>
+                  ${esc(ROLES_ACCES[k].nom)}</button>`).join('')}
+              </div>
+              <span class="aide">${esc(ROLES_ACCES[estAdmin(u) ? 'admin' : 'salarie'].aide)}${
+                estAdmin(u) && nbAdmins() < 2
+                  ? ' <b>Seul administrateur de l\'atelier</b> — il en faut au moins un.' : ''}</span>
+            </div>
+
+            <div class="champ" style="grid-column:1/-1">
               <label>E-mail de connexion</label>
               <input class="saisie" type="email" data-champ-user="email" data-id="${u.id}"
                      value="${esc(u.email || '')}" placeholder="prenom@garage.fr" autocomplete="off">
@@ -9895,9 +9961,18 @@ function vueReglages() {
 
   const meca = PLACES.filter(p => p.nature === 'meca').length;
 
-  return entete('Paramètres', 'Tout ce que vous pouvez régler vous-même, sans passer par moi') + `
+  /* Deux moitiés, et une frontière nette : l'atelier d'un côté, la personne de
+     l'autre. Un salarié voit la seconde en entier, et sait que la première
+     existe — la cacher sans rien dire ferait croire à une panne. */
+  const admin = jeSuisAdmin();
+  const moiMeme = DB.utilisateur(S.userId);
+
+  return entete('Paramètres',
+    admin ? 'Tout ce que vous pouvez régler vous-même, sans passer par moi'
+          : 'Votre écran, vos avertissements, votre voix — le reste appartient à l\'atelier') + `
   <div class="corps large grille g-2">
 
+    ${admin ? `
     ${blocReglagesEquipe(r)}
 
     ${blocReglagesPro()}
@@ -10050,43 +10125,67 @@ function vueReglages() {
 
     ${blocReglagesTextes(r)}
 
+    ` : `<section class="carte" style="grid-column:1/-1">
+      <div class="carte-tete"><h2>Les réglages de l'atelier</h2>
+        <span class="badge t-neutre">administrateurs</span>
+      </div>
+      <div class="carte-corps pile">
+        <p class="aide" style="margin:0">Les tarifs, les textes envoyés aux clients, le parc, l'équipe,
+        le téléphone de l'atelier et les données se règlent une fois pour tout le monde. Les changer par
+        mégarde se paierait sur chaque devis qui part : ils demandent d'être administrateur.</p>
+        <div class="encart">
+          ${(() => {
+            const chefs = DB.etat.utilisateurs.filter(estAdmin).map(u => esc(u.nom));
+            return chefs.length
+              ? `Demandez à <b>${chefs.join('</b> ou <b>')}</b> — ${chefs.length > 1 ? 'ils y ont' : 'il ou elle y a'} accès.`
+              : 'Aucun administrateur n\'est déclaré pour l\'instant.';
+          })()}
+        </div>
+        <p class="aide" style="margin:0">Tout ce qui suit est à vous, et à vous seul${
+          moiMeme && /e$/i.test(moiMeme.nom) ? 'e' : ''} : vos collègues gardent le leur.</p>
+      </div>
+    </section>`}
+
     <section class="carte">
       <div class="carte-tete"><h2>L'allure de l'outil</h2><span class="badge t-info">Vos réglages à vous</span></div>
       <div class="carte-corps pile">
-        <div class="champ">
+        ${admin ? `<div class="champ">
           <label>Nom affiché en haut</label>
           <input class="saisie" data-champ-reglage="nomOutil" value="${esc(r.nomOutil)}" placeholder="Atelier">
-        </div>
+          <span class="aide">Celui-là appartient à l'atelier : tout le monde le voit.</span>
+        </div>` : ''}
         <div class="champ">
           <label>Clair ou sombre</label>
           <div class="segments" style="max-width:340px">
             ${(() => {
               // la feuille de style ne connaît que « light » et « dark »
-              const choisi = stock.lire('atelier.theme') || 'auto';
+              const choisi = monTheme();
               return [['light', 'Clair'], ['dark', 'Sombre'], ['auto', 'Comme l\'appareil']]
                 .map(([v, t]) => `<button data-act="theme-choix" data-id="${v}"
                        class="${choisi === v ? 'on' : ''}">${t}</button>`).join('');
             })()}
           </div>
-          <span class="aide">Ce choix ne vaut que pour cet appareil — vos collègues gardent le leur.
-          « Comme l'appareil » suit le réglage jour/nuit de votre téléphone ou de votre ordinateur.</span>
+          <span class="aide">Ce choix est le vôtre et vous suit d'un poste à l'autre — vos collègues
+          gardent le leur. « Comme l'appareil » suit le réglage jour/nuit de votre téléphone ou de
+          votre ordinateur.</span>
         </div>
         <div>
           <div class="etiq" style="margin-bottom:7px">Vos couleurs</div>
           <div class="grille-mots">
-            ${COULEURS_REGLABLES.map(x => `<div class="champ">
+            ${(() => { const miennes = mesCouleurs(); return COULEURS_REGLABLES.map(x => `<div class="champ">
               <label>${esc(x.nom)}</label>
               <div class="rangee-couleur">
                 <input type="color" class="saisie-couleur" data-champ-couleur="${x.cle}"
-                       value="${esc(r.couleurs[x.cle] || teinteActuelle(x.cle))}">
+                       value="${esc(miennes[x.cle] || teinteActuelle(x.cle))}">
                 <button class="btn nu" data-act="couleur-defaut" data-id="${x.cle}"
-                        ${r.couleurs[x.cle] ? '' : 'disabled'}>D'origine</button>
+                        ${miennes[x.cle] ? '' : 'disabled'}>D'origine</button>
               </div>
               ${x.aide ? `<span class="aide">${esc(x.aide)}</span>` : ''}
-            </div>`).join('')}
+            </div>`).join(''); })()}
           </div>
-          <p class="aide" style="margin-top:8px">Le vert et le rouge servent à lire le parc d'un coup d'œil
-          depuis l'autre bout de l'atelier — changez-les en connaissance de cause.</p>
+          <p class="aide" style="margin-top:8px">Ces couleurs sont les vôtres : vos collègues gardent les
+          leurs sur le même appareil. Le vert et le rouge servent à lire le parc d'un coup d'œil depuis
+          l'autre bout de l'atelier — changez-les en connaissance de cause.</p>
         </div>
       </div>
     </section>
@@ -10178,7 +10277,7 @@ function vueReglages() {
       </div>
     </section>
 
-    <section class="carte">
+    ${admin ? `<section class="carte">
       <div class="carte-tete"><h2>Le planning</h2></div>
       <div class="carte-corps pile">
         <div class="champ">
@@ -10246,12 +10345,12 @@ function vueReglages() {
         ${tranchesOuverture(r).map(([a, b]) => `de <b>${esc(enHeure(a))}</b> à <b>${esc(enHeure(b))}</b>`).join(' et ')},
         soit ${heuresFr(heuresOuvertes(r))} d'atelier par jour.</p>
       </div>
-    </section>
+    </section>` : ''}
 
     ${/* Le standard n'a rien à savoir de Yatech : il ouvre une adresse, on y
           lit le numéro. C'est le seul réglage qui demande d'aller voir
           ailleurs — autant écrire ici exactement quoi y coller. */ ''}
-    <section class="carte">
+    ${admin ? `<section class="carte">
       <div class="carte-tete"><h2>Le téléphone de l'atelier</h2>
         <span class="badge t-neutre">appel entrant</span>
       </div>
@@ -10319,7 +10418,7 @@ function vueReglages() {
         <b class="num">0612345678</b> par la ligne désigne le même client : la comparaison ne s'arrête pas
         à l'écriture.</div>
       </div>
-    </section>
+    </section>` : ''}
 
     <section class="carte">
       <div class="carte-tete"><h2>La voix</h2>
@@ -10398,6 +10497,8 @@ function vueReglages() {
     </section>
 
     ${blocReglagesNotifs(r)}
+
+    ${admin ? `
 
     <section class="carte" style="grid-column:1/-1">
       <div class="carte-tete">
@@ -10488,6 +10589,7 @@ function vueReglages() {
         </div>
       </div>
     </section>
+    ` : ''}
   </div>`;
 }
 
@@ -12268,6 +12370,7 @@ function verifierRappelEbp() {
    la porte à qui tomberait sur l'adresse, et c'est ce qu'on lui demande.
    ========================================================================== */
 function ouvrirSession(userId) {
+  stock.effacer('atelier.rendu');
   S.userId = userId;
   S.connexionPour = null;
   S.erreurCode = null;
@@ -12351,8 +12454,32 @@ function teinteActuelle(cle) {
   return '#888888';
 }
 
+/* Les couleurs de qui regarde l'écran. Un panneau qui s'annonce « vos réglages
+   à vous » ne peut pas repeindre l'atelier entier : chacun a les siennes, et
+   l'atelier garde les siennes comme point de départ pour les nouveaux. */
+function mesCouleurs(userId) {
+  const u = DB.etat && DB.utilisateur(userId || S.userId);
+  const perso = u && u.prefs && u.prefs.couleurs;
+  if (perso) return perso;
+  return (DB.etat && DB.etat.reglages && DB.etat.reglages.couleurs) || {};
+}
+
+/* Clair, sombre, ou comme l'appareil. Le choix suit la personne d'un poste à
+   l'autre ; l'appareil en garde une copie, pour que l'écran de connexion —
+   où personne n'est encore identifié — s'ouvre dans la bonne teinte. */
+function monTheme(userId) {
+  const u = DB.etat && DB.utilisateur(userId || S.userId);
+  const perso = u && u.prefs && u.prefs.theme;
+  return perso || stock.lire('atelier.theme') || 'auto';
+}
+
+function poserTheme(valeur) {
+  if (valeur === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', valeur);
+}
+
 function appliquerCouleurs() {
-  const c = (DB.etat && DB.etat.reglages && DB.etat.reglages.couleurs) || {};
+  const c = mesCouleurs();
   const style = document.documentElement.style;
   COULEURS_REGLABLES.forEach(({ cle }) => {
     const v = c[cle];
@@ -12587,6 +12714,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function apresRendu() {
+  poserTheme(monTheme());
   appliquerCouleurs();
   brancherRangements();
   temoinEnregistrement();
@@ -14518,6 +14646,11 @@ document.addEventListener('click', (e) => {
     },
 
     verrouiller() {
+      /* Verrouiller, c'est dire « ce n'est plus moi ». À la réouverture, on
+         redemande donc qui est là plutôt que de reprendre le premier compte de
+         la liste — sinon on retrouverait l'écran de quelqu'un d'autre, et ses
+         réglages avec. */
+      stock.ecrire('atelier.rendu', '1');
       S.userId = null; S.connexionPour = null; S.erreurCode = null;
       S.proConnecte = null; S.grilleToken = null;
       S.modale = null; S.placeId = null;
@@ -14871,6 +15004,7 @@ document.addEventListener('click', (e) => {
       toast(n ? `${n} ligne${n > 1 ? 's' : ''} remise${n > 1 ? 's' : ''} au tarif du client` : 'Les tarifs étaient déjà bons');
     },
     'suppr-devis'() {
+      if (!exigeAdmin('Supprimer un dossier')) return;
       const d = DB.devis(id);
       if (!d) return;
       const i = infosDevis(d);
@@ -14898,10 +15032,27 @@ document.addEventListener('click', (e) => {
       d.maj = Date.now(); DB.sauver(); rendre();
     },
 
+    /* Promouvoir ou rétrograder. Le dernier administrateur ne se rétrograde
+       pas : plus personne ne pourrait rouvrir les réglages de l'atelier. */
+    'role-acces'() {
+      if (!exigeAdmin('Le rôle de l\'équipe')) return;
+      const u = DB.utilisateur(id);
+      if (!u) return;
+      const veut = cible.dataset.role === 'admin';
+      if (!veut && estAdmin(u) && nbAdmins() < 2) {
+        toast('Il faut au moins un administrateur dans l\'atelier');
+        return;
+      }
+      u.admin = veut;
+      enregistrer(`${u.nom} : ${veut ? 'administrateur' : 'salarié'}`);
+      toast(`${u.nom} passe ${veut ? 'administrateur' : 'salarié'}`);
+    },
+
     'ajouter-personne'() {
+      if (!exigeAdmin('Ajouter quelqu\'un')) return;
       const u = {
         id: DB.nouvelId('u'), nom: 'Nouveau', fonction: 'À préciser',
-        role: 'mecanicien', init: 'N', teinte: DB.teinteLibre(), tel: ''
+        role: 'mecanicien', admin: false, init: 'N', teinte: DB.teinteLibre(), tel: ''
       };
       DB.etat.utilisateurs.push(u);
       // il entre avec le code de première connexion, et choisira le sien
@@ -14914,6 +15065,7 @@ document.addEventListener('click', (e) => {
       if (u) { u.teinte = Number(cible.dataset.teinte); DB.sauver(); rendre(); }
     },
     'suppr-personne'() {
+      if (!exigeAdmin('Retirer quelqu\'un de l\'équipe')) return;
       const u = DB.utilisateur(id);
       if (!u || DB.etat.utilisateurs.length < 2) return;
       const memos = DB.memosDe(id).length;
@@ -15025,7 +15177,8 @@ document.addEventListener('click', (e) => {
         }
       });
     },
-    'nouveau-pro'() { S.erreurCode = null; S.modale = { type: 'nouveau-pro' }; rendre(); },
+    'nouveau-pro'() {
+      if (!exigeAdmin('Ouvrir un accès professionnel')) return; S.erreurCode = null; S.modale = { type: 'nouveau-pro' }; rendre(); },
 
     /* Refermer la porte d'un confrère sans effacer son historique : la fiche,
        ses véhicules et ses devis restent, seul l'accès disparaît. */
@@ -15138,7 +15291,8 @@ document.addEventListener('click', (e) => {
 
     'couleur-defaut'() {
       const r = DB.etat.reglages;
-      if (r.couleurs) delete r.couleurs[id];
+      const mien = prefsDe();
+      if (mien && mien.couleurs) delete mien.couleurs[id];
       DB.sauver(); appliquerCouleurs(); rendre();
       toast('Couleur d\'origine rétablie');
     },
@@ -15307,6 +15461,7 @@ document.addEventListener('click', (e) => {
        véhicules, ses dossiers, ses créneaux, sa place sur le parc. On énumère
        avant, parce qu'une fois parti rien ne revient — sauf par la sauvegarde. */
     'suppr-client'() {
+      if (!exigeAdmin('Supprimer un client')) return;
       const c = DB.client(id);
       if (!c) return;
       const nom = DB.estPro(c) ? c.nom : (c.prenom + ' ' + c.nom).trim();
@@ -15407,6 +15562,7 @@ document.addEventListener('click', (e) => {
     'descendre-presta'() { deplacerPresta(id, +1); },
 
     'suppr-famille'() {
+      if (!exigeAdmin('Supprimer une section du catalogue')) return;
       const lignes = DB.etat.catalogue.filter(p => p.famille === id);
       const autres = [...new Set(DB.etat.catalogue.map(p => p.famille))].filter(f => f !== id);
       if (!autres.length) { toast('C\'est votre dernière section : elle ne peut pas partir.'); return; }
@@ -15449,6 +15605,7 @@ document.addEventListener('click', (e) => {
       toast('Section créée — tapez son nom en haut du bloc');
     },
     'suppr-presta'() {
+      if (!exigeAdmin('Supprimer une prestation')) return;
       DB.etat.catalogue = DB.etat.catalogue.filter(p => p.id !== id);
       DB.sauver(); rendre();
     },
@@ -15520,13 +15677,11 @@ document.addEventListener('click', (e) => {
        pour cet appareil-là : ce n'est pas une donnée du garage, c'est un confort
        de lecture — l'atelier est lumineux le jour, la loupe se pose la nuit. */
     'theme-choix'() {
-      if (id === 'auto') {
-        document.documentElement.removeAttribute('data-theme');
-        stock.effacer('atelier.theme');
-      } else {
-        document.documentElement.setAttribute('data-theme', id);
-        stock.ecrire('atelier.theme', id);
-      }
+      const p = prefsDe();
+      if (p) { p.theme = id; DB.sauver(); }
+      // l'appareil en garde une copie pour l'écran de connexion
+      if (id === 'auto') stock.effacer('atelier.theme'); else stock.ecrire('atelier.theme', id);
+      poserTheme(id);
       appliquerCouleurs();
       rendre();
     },
@@ -16004,6 +16159,7 @@ document.addEventListener('click', (e) => {
        garder ou non le catalogue, parce qu'on peut vouloir repartir des tarifs
        d'exemple pour les corriger plutôt que tout retaper. */
     'vider-donnees'() {
+      if (!exigeAdmin('Effacer les données')) return;
       const n = {
         clients: DB.etat.clients.length, vehicules: DB.etat.vehicules.length,
         devis: DB.etat.devis.length, planning: DB.etat.planning.length,
@@ -16031,6 +16187,7 @@ document.addEventListener('click', (e) => {
 
     /* Vider seulement le travail, en gardant les tarifs déjà saisis. */
     'vider-dossiers'() {
+      if (!exigeAdmin('Effacer les dossiers')) return;
       confirmer({
         titre: 'Effacer les dossiers ?',
         texte: 'Clients, véhicules, dossiers, planning, parc et pense-bêtes seront effacés.'
@@ -16266,10 +16423,13 @@ document.addEventListener('input', (e) => {
     return;
   }
 
+  /* Une couleur se pose sur la personne, pas sur l'atelier : c'est son écran
+     qu'elle repeint, pas celui de ses collègues. */
   if (t.dataset.champCouleur) {
-    const r = DB.etat.reglages;
-    r.couleurs = r.couleurs || {};
-    r.couleurs[t.dataset.champCouleur] = t.value;
+    const p = prefsDe();
+    if (!p) return;
+    p.couleurs = Object.assign({}, mesCouleurs(), p.couleurs || {});
+    p.couleurs[t.dataset.champCouleur] = t.value;
     DB.sauver(); appliquerCouleurs();
     const bouton = document.querySelector(`[data-act="couleur-defaut"][data-id="${t.dataset.champCouleur}"]`);
     if (bouton) bouton.disabled = false;
@@ -16618,7 +16778,11 @@ setInterval(() => { try { verifierVerrou(); } catch (e) { /* jamais bloquant */ 
     if (qui && DB.utilisateur(qui)) S.userId = qui;
 
     // porte ouverte : on n'attend personne devant l'écran de connexion
-    if (SANS_CODE && !S.userId && !enVuePublique()) S.userId = compteParDefaut();
+    /* Porte ouverte : on n'attend personne devant l'écran de connexion — sauf
+       si quelqu'un vient justement de rendre la main. */
+    if (SANS_CODE && !S.userId && !enVuePublique() && stock.lire('atelier.rendu') !== '1') {
+      S.userId = compteParDefaut();
+    }
 
     rendre();
   } catch (e) {
@@ -17125,7 +17289,7 @@ const TITRES2 = {
   memos:     ['Mon pense-bête', null],
   clients:   ['Clients', null],
   catalogue: ['Tarifs', 'Grilles particulier et professionnel'],
-  reglages:  ['Paramètres', 'Tout ce que vous pouvez régler vous-même'],
+  reglages:  null,          // son sous-titre dépend de ce qu'on a le droit de régler
   devis:     ['Tous les devis', null]
 };
 
@@ -17154,6 +17318,11 @@ function titreEcran(vue) {
     const qui = S.planningQui ? DB.utilisateur(S.planningQui) : null;
     return ['Planning', libelleSemaine(s.lundi, s.lundi + ouvres * JOUR)
             + (qui ? ` · ${qui.nom} seulement` : '')];
+  }
+  if (vue === 'reglages') {
+    return ['Paramètres', jeSuisAdmin()
+      ? 'Tout ce que vous pouvez régler vous-même'
+      : 'Votre écran, vos avertissements, votre voix'];
   }
   return TITRES2[vue] || null;
 }
@@ -17280,6 +17449,14 @@ function nomEcran(vue) {
 
 /** Les boutons propres à chaque écran, remontés dans le titre. */
 function actionsEcran(vue) {
+  /* Sur les paramètres, on rappelle à quel titre on les ouvre : c'est ce qui
+     explique pourquoi la moitié des panneaux n'est pas là. */
+  if (vue === 'reglages') {
+    const chef = jeSuisAdmin();
+    return `<span class="badge t-${chef ? 'info' : 'neutre'}" title="${
+      esc(ROLES_ACCES[chef ? 'admin' : 'salarie'].aide)}">${
+      chef ? ic('cadenas') + ' Administrateur' : 'Salarié'}</span>`;
+  }
   // les réglages de vue vivent désormais dans le cadre du plan
   if (vue === 'parking') {
     return `<button class="btn plein" data-act="tour-parc">${ic('check')} Tour du parc</button>`;
@@ -17433,8 +17610,10 @@ document.addEventListener('click', (e) => {
       stock.effacer('atelier.pro');
     }
 
-    // porte ouverte : on n'attend personne devant l'écran de connexion
-    if (SANS_CODE && !S.userId && !S.proConnecte && !S.clientToken && !S.grilleToken) {
+    /* Porte ouverte : on n'attend personne devant l'écran de connexion — sauf
+       si quelqu'un vient justement de rendre la main en verrouillant. */
+    if (SANS_CODE && !S.userId && !S.proConnecte && !S.clientToken && !S.grilleToken
+        && stock.lire('atelier.rendu') !== '1') {
       S.userId = compteParDefaut();
     }
 
