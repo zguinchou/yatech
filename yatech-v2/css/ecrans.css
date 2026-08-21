@@ -1220,3 +1220,25 @@ table.grille tbody tr.factures-retard:hover { background: var(--danger-voile); }
   .factures-mois__ligne { grid-template-columns: minmax(0, 1fr) auto; }
   .factures-mois__ligne > .majuscule { grid-column: 1 / -1; }
 }
+
+/* ==========================================================================
+   FICHE FACTURE — la fiche à recopier dans EBP
+   --------------------------------------------------------------------------
+   Un bloc préformaté : les colonnes du résumé sont alignées à l'espace, une
+   police proportionnelle les décalerait. Il défile dans son cadre plutôt que
+   d'étirer la page — sur téléphone, une ligne de vingt références pousse
+   sinon tout l'écran de côté.
+   ========================================================================== */
+.facture-fiche__ebp {
+  margin: 0;
+  padding: var(--e-3);
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre;
+  font: var(--t-xs)/1.6 var(--f-chiffre);
+  color: var(--encre-2);
+  background: var(--plan-2);
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  -webkit-overflow-scrolling: touch;
+}

@@ -352,7 +352,7 @@ function colonneHeures(cadre) {
 /** Une colonne de la grille : les cases vides, puis les créneaux par-dessus.
  *  `jourDebut` est minuit du jour que la colonne montre ; `userId` n'est posé
  *  que dans la vue Jour, où déposer un créneau change aussi de personne. */
-function colonne(cadre, creneaux, jourDebut, userId, avecTete) {
+function colonne(cadre, creneaux, jourDebut, userId, avecPersonne) {
   const col = h('div.planning__colonne', {
     donnees: { jour: String(jourDebut), user: userId || '' },
     style: { minHeight: (cadre.cases * cadre.hauteur) + 'px' }
@@ -395,7 +395,7 @@ function colonne(cadre, creneaux, jourDebut, userId, avecTete) {
       hauteur: geo.hauteur,
       gauche: 'calc(' + (100 / n * i) + '% + 3px)',
       largeur: 'calc(' + (100 / n) + '% - 6px)'
-    }, avecTete));
+    }, avecPersonne));
   }
 
   return col;
@@ -476,16 +476,18 @@ function vehiculeDe(e, c) {
   return d ? lit.vehicule(e, d.vehiculeId) : null;
 }
 
-function carteCreneau(cadre, c, geo, avecTete) {
+function carteCreneau(cadre, c, geo, avecPersonne) {
   const e = cadre.e;
   const u = c.userId ? lit.utilisateur(e, c.userId) : null;
   const v = vehiculeDe(e, c);
   const t = TYPES_CRENEAU[c.type];
 
+  /* En vue Semaine la colonne dit déjà le jour mais pas qui travaille : on
+     écrit le prénom à la place de la plaque, qui ne tiendrait pas de toute
+     façon dans une colonne de jour. */
   const seconde = [
     fmt.heure(c.debut),
-    avecTete ? null : (v ? v.immat : null),
-    avecTete && u ? (u.prenom || lit.nomUtilisateur(u)) : null
+    avecPersonne ? (u ? (u.prenom || lit.nomUtilisateur(u)) : null) : (v ? v.immat : null)
   ].filter(Boolean).join(' · ');
 
   return h('button' + classeCreneau(e, c), {
@@ -513,7 +515,7 @@ function carteCreneau(cadre, c, geo, avecTete) {
     onclick: () => modaleCreneau(cadre, c, {})
   }, [
     h('b.coupe', titreCreneau(e, c)),
-    h('span.minus.coupe', { style: { display: 'block' } }, seconde)
+    h('div.minus.coupe', seconde)
   ]);
 }
 
@@ -752,7 +754,11 @@ function brancherGlisser(cadre, grille) {
       prise: t.clientY - carte.getBoundingClientRect().top,
       pris: false
     };
+    /* On retient CE geste-ci : si un autre doigt arrive entre-temps, le
+       minuteur du premier ne doit pas saisir la carte du second. */
+    const geste = touche;
     touche.minuteur = setTimeout(() => {
+      if (touche !== geste) return;
       touche.pris = true;
       carte.style.opacity = '.6';
       /* La carte suit le doigt : sans la rendre transparente aux événements,

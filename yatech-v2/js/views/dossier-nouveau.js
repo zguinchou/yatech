@@ -26,7 +26,7 @@ import { champ, grilleChamps, plaque } from '../ui/widgets.js';
 
 /**
  * @param {object} e        l'état
- * @param {function} apres  rappelé avec le dossier créé
+ * @param {function} apres  rappelé avec le dossier créé, AVANT d'y naviguer
  * @param {object} [depart] { clientId, vehiculeId } pour pré-remplir
  */
 export function nouveauDossierModale(e, apres, depart) {
@@ -344,7 +344,12 @@ export function nouveauDossierModale(e, apres, depart) {
 
           message('Dossier ' + dossier.numero + ' ouvert', { ton: 'ok' });
           if (apres) apres(dossier);
-          else location.hash = '#/dossier/' + dossier.id;
+          /* On emmène TOUJOURS sur le dossier neuf. La suite du geste, c'est
+             d'y écrire ce que dit le client et de chiffrer : rester sur
+             l'écran d'où l'on vient oblige à retrouver le dossier à la main,
+             et on ne sait même pas où il est parti. L'écran appelant garde le
+             droit de se rafraîchir au passage, d'où le rappel juste au-dessus. */
+          location.hash = '#/dossier/' + dossier.id;
         }
       }
     ]
