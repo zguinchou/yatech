@@ -2053,6 +2053,15 @@ body {
   height: auto; min-height: calc(var(--tete) + var(--sur-haut));
 }
 .commande .fin { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+/* La porte de sortie : première chose de la barre, toujours à la même place,
+   pour qu'on la trouve sans la chercher. Un cadre plein pour qu'elle se
+   distingue du bouton du menu, qui lui est juste à côté. */
+.retour-accueil {
+  flex: none; padding: 8px 10px; min-height: 40px;
+  border: 1px solid var(--trait); background: var(--plan-2); color: var(--encre-2);
+}
+.retour-accueil:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-voile); }
+.retour-accueil svg { width: 20px; height: 20px; }
 
 /* la zone de travail */
 .plateau { flex: 1; padding: 20px; }
@@ -2573,6 +2582,9 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
   }
   /* le bouton du menu garde son nom d'écran : c'est le seul repère du haut */
   .btn.tout { font-size: 13.5px; padding: 8px 12px 8px 10px; min-height: 42px; }
+  /* Au doigt, elle se touche sans viser — c'est le geste le plus fréquent
+     après avoir consulté un écran. */
+  .retour-accueil { min-height: 42px; min-width: 44px; padding: 8px 11px; justify-content: center; }
   .commande .fin { margin-left: auto; gap: 4px; }
   /* en haut à droite il ne reste que la loupe : le libellé mangerait la place */
   .cherche-vite span { display: none; }
@@ -2601,6 +2613,8 @@ thead th { font-size: 10.5px; letter-spacing: .11em; }
     .commande .fin { gap: 2px; }
     .btn.tout { min-width: 0; padding: 8px 9px; }
     .btn.tout span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .retour-accueil { min-width: 40px; padding: 8px; }
+    .retour-accueil svg { width: 19px; height: 19px; }
   }
   .titre-page { margin-bottom: 14px; }
   .titre-page h1 { font-size: 23px; }
@@ -4278,6 +4292,8 @@ function depuisTexte(ts) {
 /* --- pictogrammes --------------------------------------------------------- */
 const ICO = {
   jauge:    '<path d="M3 13a9 9 0 0118 0"/><path d="M12 13l4.5-3.5"/><circle cx="12" cy="13" r="1.4" fill="currentColor" stroke="none"/><path d="M3 13v4h18v-4"/>',
+  /* un toit et une porte : le retour à la première page se reconnaît sans mot */
+  maison:   '<path d="M3.5 10.5L12 3.5l8.5 7"/><path d="M5.5 9.4V20h13V9.4"/><path d="M9.8 20v-5.6h4.4V20"/>',
   devis:    '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
   parking:  '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V8h3.5a2.75 2.75 0 010 5.5H9"/>',
   clients:  '<path d="M16 20v-1.5a3.5 3.5 0 00-3.5-3.5h-5A3.5 3.5 0 004 18.5V20"/><circle cx="10" cy="8" r="3.2"/><path d="M20 20v-1.5a3.5 3.5 0 00-2.6-3.4"/><path d="M15.5 5.2a3.2 3.2 0 010 5.6"/>',
@@ -17362,6 +17378,11 @@ rendre = function rendreV2() {
       ${/* Une seule porte vers tous les écrans : la barre du haut ne sert plus
             qu'à ce qui doit rester sous la main — chercher, parler, être averti. */ ''}
       <header class="commande">
+        ${/* Partout ailleurs qu'à l'atelier, une porte de retour d'un seul
+              clic. Sur l'atelier elle n'aurait rien à faire : on y est déjà,
+              et elle prendrait la place de ce qui sert. */ ''}
+        ${vue === 'atelier' ? '' : `<button class="btn nu retour-accueil" data-act="aller" data-vue="atelier"
+          title="Revenir à l'atelier" aria-label="Revenir à l'atelier">${ic('maison', 1.9)}</button>`}
         <button class="btn tout" data-act="menu-plus" title="Tous les écrans">
           ${ic('plus-menu', 2)}<span>${esc(nomEcran(vue))}</span>
           ${(() => {
