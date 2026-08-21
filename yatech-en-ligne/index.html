@@ -77,12 +77,15 @@
 /* --- jetons : thème sombre ----------------------------------------------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --fond:        #0d1114;
-    --plan:        #161b20;
-    --plan-2:      #1b2127;
-    --relief:      #222930;
-    --trait:       #2b333b;
-    --trait-fin:   #212830;
+    /* Un noir pur écrase tout : les cartes ne se détachent plus, les bords
+       disparaissent. On remonte le fond d'un cran et on éclaircit le plan
+       d'autant — chaque carte redevient un objet posé sur un établi. */
+    --fond:        #10151a;
+    --plan:        #1a2027;
+    --plan-2:      #20272e;
+    --relief:      #283038;
+    --trait:       #313a43;
+    --trait-fin:   #262e36;
     --encre:       #e7edf2;
     --encre-2:     #97a4b0;
     --encre-3:     #667381;
@@ -120,8 +123,8 @@
 
 /* le sélecteur du visualiseur doit gagner dans les deux sens */
 :root[data-theme="dark"] {
-  --fond:#0d1114; --plan:#161b20; --plan-2:#1b2127; --relief:#222930;
-  --trait:#2b333b; --trait-fin:#212830;
+  --fond:#10151a; --plan:#1a2027; --plan-2:#20272e; --relief:#283038;
+  --trait:#313a43; --trait-fin:#262e36;
   --encre:#e7edf2; --encre-2:#97a4b0; --encre-3:#667381;
   --accent:#ffb020; --accent-vif:#ffc44d; --accent-sur:#1a1204; --accent-voile:#2c2413;
   --libre:#3fc07e; --libre-voile:#14301f; --occupe:#ef5f52; --occupe-voile:#331715;
@@ -325,11 +328,18 @@ h1, h2, h3, h4 { font-family: var(--din); font-weight: 600; margin: 0; text-wrap
   pointer-events: none; box-shadow: inset 0 1px 0 var(--luisant);
 }
 .carte-tete {
-  padding: 13px 16px; border-bottom: 1px solid var(--trait-fin);
+  padding: 12px 16px; border-bottom: 1px solid var(--trait-fin);
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  min-height: 46px;
 }
-.carte-tete h2 { white-space: nowrap; }
-.carte-tete h2 { font-size: 15px; letter-spacing: .012em; }
+/* Le titre d'une carte est une étiquette, pas un titre de chapitre : petite
+   capitale espacée, comme sur un panneau de machine. Toutes les cartes le
+   portent pareil — l'œil apprend une fois où regarder. */
+.carte-tete h2 {
+  white-space: nowrap;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--encre-2);
+}
 .carte-tete .pousse { margin-left: auto; }
 .carte-corps { padding: 16px; }
 
@@ -1503,6 +1513,24 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
 .puce-ton[data-ton="fini"]    { background: var(--mort); }
 
 /* le nom d'une famille de tarifs se retape sur place */
+/* --- la grille tarifaire ---------------------------------------------------
+   Vingt lignes, trois champs chacune : encadrer les soixante en faisait un mur
+   de rectangles gris où plus aucun prix ne ressortait. Un champ s'y lit comme
+   du texte et ne montre son cadre qu'au moment où on va y toucher — la grille
+   redevient une grille, et reste modifiable au même endroit. */
+.tarifs .saisie {
+  background: transparent; border-color: transparent;
+  transition: background .1s, border-color .1s;
+}
+.tarifs tr:hover .saisie { border-color: var(--trait-fin); background: var(--plan-2); }
+.tarifs .saisie:hover { border-color: var(--trait); background: var(--plan-2); }
+.tarifs .saisie:focus { border-color: var(--accent); background: var(--plan); }
+/* Le prix est ce qu'on vient lire : il porte les chiffres de l'atelier. */
+.tarifs .td-part .saisie, .tarifs .td-pro .saisie {
+  font-family: var(--chiffre); font-weight: 700; font-size: 14px; color: var(--encre);
+}
+.tarifs .td-lib .saisie { font-weight: 500; }
+
 .titre-famille {
   font-family: var(--din); font-size: 15px; font-weight: 600; color: var(--encre);
   border-color: transparent; background: transparent; padding: 4px 7px;
@@ -2023,8 +2051,10 @@ body {
     /* et son reflet froid, qui remonte du sol */
     radial-gradient(95% 55% at 12% 108%,
       color-mix(in srgb, var(--actif) 8%, transparent), transparent 60%);
-  background-size: auto, 340px 340px, auto, auto, auto;
-  background-position: center, right -70px bottom -80px, center, center, center;
+  background-size: auto, 300px 300px, auto, auto, auto;
+  /* l'écrou tient entier dans le coin : à cheval sur le bord, il ressemblait
+     à un morceau d'image mal chargé */
+  background-position: center, right 28px bottom 28px, center, center, center;
   background-repeat: no-repeat, no-repeat, repeat, no-repeat, no-repeat;
   background-attachment: fixed;
   font-size: 14.5px;
@@ -2064,15 +2094,19 @@ body {
 .retour-accueil svg { width: 20px; height: 20px; }
 
 /* la zone de travail */
-.plateau { flex: 1; padding: 20px; }
-.plateau.centre { max-width: 1240px; margin: 0 auto; width: 100%; }
+/* Une largeur de lecture, partout. Sans elle, sur un grand écran d'atelier,
+   une ligne de dossier courait sur quatorze cents pixels : l'œil perd le fil
+   entre le nom à gauche et le montant à droite, et la page a l'air vide au
+   milieu. */
+.plateau { flex: 1; padding: 22px; max-width: 1380px; margin: 0 auto; width: 100%; }
+.plateau.centre { max-width: 1240px; }
 
 .titre-page { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .titre-page h1 {
-  font-family: var(--din); font-size: 30px; font-weight: 700;
-  letter-spacing: -.012em; line-height: 1;
+  font-family: var(--din); font-size: 32px; font-weight: 700;
+  letter-spacing: -.018em; line-height: 1;
 }
-.titre-page .sous { font-size: 13px; color: var(--encre-3); }
+.titre-page .sous { font-size: 13px; color: var(--encre-3); margin-top: 5px; }
 .titre-page .fin { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* ==========================================================================
@@ -2086,10 +2120,14 @@ body {
 /* séparés par un autre bloc, chacun reprend toute la largeur */
 .duo-avant.seul { grid-template-columns: 1fr; }
 
-/* un filet de couleur sur l'arête haute : ces deux-là passent devant */
-.carte.avant { border-top: 3px solid var(--ton, var(--accent)); }
-.carte.avant .carte-tete h2 {
-  font-size: 15px; color: var(--encre); letter-spacing: .02em; text-transform: none;
+/* Ces deux-là passent devant. Un filet de trois pixels en travers de la carte
+   criait comme une alarme ; un point de couleur devant le titre le dit sans
+   élever la voix. */
+.carte.avant .carte-tete h2 { color: var(--encre); }
+.carte.avant .carte-tete h2::before {
+  content: ""; display: inline-block; vertical-align: .08em;
+  width: 7px; height: 7px; margin-right: 8px; border-radius: 50%;
+  background: var(--ton, var(--accent));
 }
 .compte {
   font-family: var(--chiffre); font-size: 12px; font-weight: 700;
@@ -2280,6 +2318,9 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
 /* Deux lignes suffisent : à 14ch, « places électronique libres » en prenait
    trois et le compteur grandissait pour rien. */
 .brief-item .leg { font-size: 11.5px; color: var(--encre-2); line-height: 1.25; max-width: 17ch; }
+/* Un intitulé sur deux lignes rendait sa case plus haute que ses voisines, et
+   la rangée ondulait. Toutes tiennent la même hauteur. */
+.brief-item { min-height: 52px; }
 .brief-item.calme .val { color: var(--encre-3); }
 /* Un compteur qui appelle une action bat, tant qu'il n'est pas à zéro : le
    chiffre pulse et le bord s'allume. Ni le clignotement d'un néon ni un rouge
@@ -17239,15 +17280,17 @@ function vueTableauAtelier() {
 
   /* Les appels et les pense-bêtes se mettent côte à côte quand ils se suivent :
      deux colonnes valent mieux que deux bandeaux l'un sous l'autre. */
+  /* Deux blocs courts qui se suivent se mettent côte à côte : une liste de
+     trois lignes étalée sur toute la largeur d'un écran d'atelier laisse un
+     grand vide à droite, et l'œil perd le fil entre le nom et le montant. */
+  const APPARIABLES = ['appels', 'memos', 'journal', 'facturer', 'pros'];
   const morceaux = [];
   for (let i = 0; i < ordre.length; i++) {
     const k = ordre[i], suivant = ordre[i + 1];
-    if ((k === 'appels' && suivant === 'memos') || (k === 'memos' && suivant === 'appels')
-        || (k === 'journal' && suivant === 'memos') || (k === 'memos' && suivant === 'journal')
-        || (k === 'journal' && suivant === 'appels') || (k === 'appels' && suivant === 'journal')) {
+    if (APPARIABLES.includes(k) && APPARIABLES.includes(suivant)) {
       morceaux.push(`<div class="duo-avant">${blocs[k]()}${blocs[suivant]()}</div>`);
       i++;
-    } else if (k === 'appels' || k === 'memos' || k === 'journal') {
+    } else if (APPARIABLES.includes(k)) {
       morceaux.push(`<div class="duo-avant seul">${blocs[k]()}</div>`);
     } else {
       morceaux.push(blocs[k]());
