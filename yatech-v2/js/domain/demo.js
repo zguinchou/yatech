@@ -270,7 +270,11 @@ export function jeuDemo() {
     pie(Object.assign({
       ref, libelle, famille, emplacement, qte, qteMin, prixAchat, prixVente, compatible,
       fournisseurId: famille === 'Occasion' ? f4.id : (famille === 'Électronique' ? f2.id : f1.id),
-      inventorieLe: ilYa(120 + Math.floor(Math.random() * 60))
+      inventorieLe: ilYa(120 + Math.floor(Math.random() * 60)),
+      /* Un stock « créé à l'instant » sur toutes les références trahit la
+         démonstration : on l'étale sur les deux dernières années. */
+      cree: ilYa(180 + Math.floor(Math.random() * 540)),
+      maj: ilYa(Math.floor(Math.random() * 40))
     }, extra || {})));
 
   const parRef = (r) => piecesCreees.find(p => p.ref === r);

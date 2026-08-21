@@ -11,6 +11,7 @@
 
 import * as calc from '../js/domain/calculs.js';
 import * as util from '../js/core/util.js';
+import { quand as fmtQuand } from '../js/core/fmt.js';
 import { sha256, verrou, verifier } from '../js/core/crypto.js';
 import { versCsv, depuisCsv, csvEnObjets } from '../js/core/fichiers.js';
 import { normaliser, neuf, nouvelleLigne, prochainNumero } from '../js/domain/schema.js';
@@ -109,6 +110,19 @@ groupe('Dates', () => {
   verifie('heure invalide', util.heureEnMinutes('25:00'), null);
   verifie('aller-retour de date ISO',
     util.isoJour(util.depuisIsoJour('2026-03-18')), '2026-03-18');
+});
+
+groupe('Dates en clair', () => {
+  const j = 86400000;
+  verifie('demain', fmtQuand(Date.now() + j, { avecHeure: false }), 'demain');
+  verifie('hier', fmtQuand(Date.now() - j, { avecHeure: false }), 'hier');
+  verifie('la semaine passée', fmtQuand(Date.now() - 10 * j), 'il y a 1 sem.');
+  /* Au-delà du mois on continue en mois : la date exacte est presque toujours
+     affichée juste à côté, et « 27/02/26 (27/02/26) » n'apprend rien. */
+  verifie('deux mois', fmtQuand(Date.now() - 60 * j), 'il y a 2 mois');
+  verifie('un an et demi', fmtQuand(Date.now() - 540 * j), 'il y a un an');
+  vrai('jamais la date brute au-delà du mois',
+    !/\d{2}\/\d{2}/.test(fmtQuand(Date.now() - 200 * j)));
 });
 
 groupe('Recherche', () => {

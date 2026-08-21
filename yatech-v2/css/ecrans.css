@@ -1413,3 +1413,35 @@ table.grille tbody tr.factures-retard:hover { background: var(--danger-voile); }
 }
 .tarifs-groupe__ligne:last-child { border-bottom: 0; }
 .tarifs-groupe__prix { flex: none; font-family: var(--f-chiffre); }
+
+/* ==========================================================================
+   EBP — le volet « correspondance des colonnes »
+   --------------------------------------------------------------------------
+   Quatorze listes déroulantes qu'on ouvre une fois, au premier import d'un
+   fichier venu d'EBP, et qu'on ne rouvre plus jamais ensuite : elles restent
+   repliées pour ne pas noyer l'aperçu, qui est ce qu'on vient lire.
+   ========================================================================== */
+.ebp-repli {
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+}
+.ebp-repli > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 44px;
+  padding: var(--e-2) var(--e-3);
+  cursor: pointer;
+  font: 600 var(--t-m)/1 var(--f-texte);
+  list-style: none;
+}
+/* Safari dessine son propre triangle par un pseudo-élément à lui. */
+.ebp-repli > summary::-webkit-details-marker { display: none; }
+.ebp-repli > summary svg { width: 16px; height: 16px; color: var(--encre-3); flex: none; }
+.ebp-repli__corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e-3);
+  padding: 0 var(--e-3) var(--e-3);
+}

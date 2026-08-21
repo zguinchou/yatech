@@ -123,7 +123,19 @@ export function quand(t, options) {
   if (jours < -1 && jours > -7) return 'il y a ' + Math.abs(jours) + ' jours';
   if (jours >= 7 && jours < 31) return 'dans ' + Math.round(jours / 7) + ' sem.';
   if (jours <= -7 && jours > -31) return 'il y a ' + Math.round(Math.abs(jours) / 7) + ' sem.';
-  return date(t, 'court');
+
+  /* Au-delà du mois, on continue en mois puis en années plutôt que de rendre
+     la date : celle-ci est presque toujours affichée juste à côté, et on se
+     retrouvait avec « 27/02/26 (27/02/26) ». Ce qu'on veut savoir à cette
+     distance, c'est l'ordre de grandeur, pas le jour exact. */
+  const mois = Math.round(Math.abs(jours) / 30.4);
+  if (mois < 12) {
+    const texte = mois <= 1 ? 'un mois' : mois + ' mois';
+    return jours < 0 ? 'il y a ' + texte : 'dans ' + texte;
+  }
+  const ans = Math.floor(Math.abs(jours) / 365);
+  const texte = ans <= 1 ? 'un an' : ans + ' ans';
+  return jours < 0 ? 'il y a ' + texte : 'dans ' + texte;
 }
 
 /** Une durée d'immobilisation : « 3 j », « 5 h », « 40 min ». */
