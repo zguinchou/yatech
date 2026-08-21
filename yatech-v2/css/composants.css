@@ -426,6 +426,23 @@ select.saisie {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--r-m);
+  /* Ce qui décide si un tableau tient, ce n'est pas la largeur de l'écran mais
+     celle de la colonne où il est posé. Un tableau à neuf colonnes dans un
+     panneau de 700 px se fait rogner sur un écran de 1400 px, et personne ne
+     devine qu'il faut le faire défiler. On mesure donc le CONTENEUR. */
+  container-type: inline-size;
+  container-name: tableau;
+
+  /* Ombres de bord : elles n'apparaissent que s'il reste quelque chose à
+     faire défiler, et disparaissent quand on arrive au bout. C'est la seule
+     façon honnête de dire « il y a des colonnes à droite » sans occuper de
+     place ni mentir quand le tableau tient déjà. Les dégradés `local`
+     recouvrent les ombres `scroll` tant qu'on est collé au bord. */
+  background:
+    linear-gradient(to right, var(--plan) 40%, transparent) left / 26px 100% no-repeat local,
+    linear-gradient(to left,  var(--plan) 40%, transparent) right / 26px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--bord-ombre), transparent) left / 13px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--bord-ombre), transparent) right / 13px 100% no-repeat scroll;
 }
 table.grille {
   width: 100%;
@@ -458,6 +475,43 @@ table.grille th.num, table.grille td.num { text-align: right; }
 table.grille .serre { width: 1%; white-space: nowrap; }
 table.grille tr.total td { font-weight: 700; border-top: 2px solid var(--trait); }
 
+/* Les règles de repliage sont écrites une fois, puis appelées par les deux
+   déclencheurs : le conteneur là où il est mesurable, l'écran ailleurs. */
+@container tableau (max-width: 700px) {
+  table.grille.repliable thead { display: none; }
+  table.grille.repliable, table.grille.repliable tbody,
+  table.grille.repliable tr, table.grille.repliable td { display: block; width: 100%; }
+  table.grille.repliable tr {
+    border: 1px solid var(--trait-fin);
+    border-radius: var(--r-m);
+    padding: var(--e-2);
+    margin-bottom: var(--e-2);
+    background: var(--plan);
+  }
+  table.grille.repliable td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--e-3);
+    border: 0;
+    padding: 5px var(--e-2);
+    text-align: right;
+  }
+  table.grille.repliable td::before {
+    content: attr(data-col);
+    font: 600 var(--t-xs)/1.4 var(--f-texte);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--encre-3);
+    text-align: left;
+    flex: none;
+  }
+  table.grille.repliable td:empty { display: none; }
+}
+
+/* Repli pour les navigateurs sans requêtes de conteneur : on retombe sur la
+   largeur de l'écran, qui reste juste dans la grande majorité des cas. */
+@supports not (container-type: inline-size) {
 @media (max-width: 760px) {
   table.grille.repliable thead { display: none; }
   table.grille.repliable, table.grille.repliable tbody,
@@ -488,6 +542,7 @@ table.grille tr.total td { font-weight: 700; border-top: 2px solid var(--trait);
     flex: none;
   }
   table.grille.repliable td:empty { display: none; }
+}
 }
 
 /* Liste simple : des lignes séparées par un filet, sans tableau. */

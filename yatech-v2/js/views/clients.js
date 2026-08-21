@@ -23,7 +23,7 @@ import { modale, message, menu, vide } from '../core/ui.js';
 import { maj, change } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
 import {
-  nu, par, pluriel, surligne, plaqueNue, telNu, telJoli, emailValide,
+  nu, par, pluriel, surligne, plaqueNue, telNu, emailValide,
   nombre, borne, attend
 } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
@@ -93,7 +93,7 @@ export function peindre(ctx) {
   /** Repeint filtres et tableau, mais ni l'en-tête ni la barre de recherche :
    *  le curseur doit rester dans le champ où l'on est en train de taper. */
   function refaireListe() {
-    const base = (e.clients || []).filter(c => !requete || correspondClient(e, c, requete, plaques));
+    const base = (e.clients || []).filter(c => !requete || correspondClient(c, requete, plaques));
 
     poser(zoneFiltres, filtres(
       FILTRES.map(f => ({
@@ -108,7 +108,7 @@ export function peindre(ctx) {
     visibles = base.filter(c => f.garde(c, dus)).sort(comparateur(tri, sens, passages, dus));
 
     poser(zoneListe, visibles.length
-      ? tableau(e, visibles, requete, { plaques, passages, dus }, { tri, sens, surTri: changerTri })
+      ? tableau(visibles, requete, { plaques, passages, dus }, { tri, sens, surTri: changerTri })
       : rienTrouve(e, requete, filtre, refaireTout));
   }
 
@@ -249,7 +249,7 @@ function dusParClient(e) {
  * (« 0612 » doit tomber sur « 06 12 34 56 78 »), et une plaque est comparée
  * sous sa forme nue des deux côtés (« ej456 » doit tomber sur « EJ-456-QT »).
  */
-function correspondClient(e, c, requete, plaques) {
+function correspondClient(c, requete, plaques) {
   const texte = nu([
     lit.nomClient(c), c.nom, c.prenom, c.societe, c.email,
     c.ville, c.cp, c.adresse, c.codeEbp, c.siret, c.tvaIntra
@@ -278,7 +278,7 @@ function comparateur(tri, sens, passages, dus) {
    LE TABLEAU
    ========================================================================== */
 
-function tableau(e, liste, requete, tables, triage) {
+function tableau(liste, requete, tables, triage) {
   /* Au clavier comme à la souris, on trie en cliquant la colonne ; le doigt,
      lui, passe par la liste déroulante de la barre d'outils — sur téléphone
      les en-têtes du tableau n'existent plus. */
@@ -305,11 +305,11 @@ function tableau(e, liste, requete, tables, triage) {
       enteteTriable('passage', 'Dernier passage'),
       enteteTriable('du', 'Dû', '.num')
     ])),
-    h('tbody', liste.map(c => ligne(e, c, requete, tables)))
+    h('tbody', liste.map(c => ligne(c, requete, tables)))
   ]));
 }
 
-function ligne(e, c, requete, tables) {
+function ligne(c, requete, tables) {
   const immats = tables.plaques.get(c.id) || [];
   const passage = tables.passages.get(c.id) || null;
   const du = tables.dus.get(c.id) || 0;
@@ -451,11 +451,17 @@ export function modaleClient(e, client, apres) {
 
   /* --- les coordonnées --------------------------------------------------- */
 
-  const tel = champ({ etiquette: 'Téléphone', type: 'tel', valeur: c.tel || '', exemple: '06 12 34 56 78' });
-  const tel2 = champ({ etiquette: 'Second téléphone', type: 'tel', valeur: c.tel2 || '', exemple: 'Fixe, atelier…' });
+  const tel = champ({
+    etiquette: 'Téléphone', type: 'tel', valeur: c.tel || '', exemple: '06 12 34 56 78'
+  });
+  const tel2 = champ({
+    etiquette: 'Second téléphone', type: 'tel', valeur: c.tel2 || '', exemple: 'Fixe, atelier…'
+  });
   const email = champ({ etiquette: 'E-mail', type: 'email', valeur: c.email || '' });
   const alerteEmail = h('div.minus', { style: { color: 'var(--alerte)' } });
-  const adresse = champ({ etiquette: 'Adresse', valeur: c.adresse || '', exemple: '12 rue des Ateliers' });
+  const adresse = champ({
+    etiquette: 'Adresse', valeur: c.adresse || '', exemple: '12 rue des Ateliers'
+  });
   const cp = champ({ etiquette: 'Code postal', valeur: c.cp || '', exemple: '80000' });
   const ville = champ({ etiquette: 'Ville', valeur: c.ville || '', exemple: 'Amiens' });
 
@@ -467,8 +473,14 @@ export function modaleClient(e, client, apres) {
     etiquette: 'Grille appliquée', type: 'liste',
     valeur: c.grille || (type === 'pro' ? 'pro' : 'part'),
     options: [
-      { valeur: 'part', texte: 'Particulier — ' + fmt.euros(taux, { sansCentimes: true }) + ' HT de l’heure' },
-      { valeur: 'pro', texte: 'Confrère — ' + fmt.euros(tauxPro, { sansCentimes: true }) + ' HT de l’heure' }
+      {
+        valeur: 'part',
+        texte: 'Particulier — ' + fmt.euros(taux, { sansCentimes: true }) + ' HT de l’heure'
+      },
+      {
+        valeur: 'pro',
+        texte: 'Confrère — ' + fmt.euros(tauxPro, { sansCentimes: true }) + ' HT de l’heure'
+      }
     ],
     aide: 'Indépendante du type de fiche : un ancien collègue peut garder la '
       + 'grille confrère sans être une société, et une société peut payer plein tarif.'
@@ -503,6 +515,15 @@ export function modaleClient(e, client, apres) {
   const segments = h('div.segments.segments--plein', { role: 'group' }, [btPart, btPro]);
 
   function choisirType(t) {
+    if (t === type) return;
+    /* Le nom saisi d'un côté suit de l'autre : quelqu'un qui commence en
+       particulier puis se ravise ne doit pas retaper le nom, et l'écrire deux
+       fois donnerait deux orthographes. */
+    if (t === 'pro') contact.ecrire([prenom.lire(), nom.lire()].filter(Boolean).join(' '));
+    else {
+      const duo = decouperNom(contact.lire());
+      if (duo.nom) { nom.ecrire(duo.nom); prenom.ecrire(duo.prenom); }
+    }
     type = t;
     /* Changer de type change la grille par défaut, mais jamais une grille déjà
        choisie à la main : on ne défait pas un geste volontaire. */
@@ -533,22 +554,25 @@ export function modaleClient(e, client, apres) {
    * deux fois), et à l'enregistrement tout le reste a déjà été tapé pour rien.
    */
   function verifierDoublon() {
-    doublon = chercherDoublon(e, c.id, type === 'pro' ? societe.lire() : [prenom.lire(), nom.lire()].filter(Boolean).join(' '), tel.lire());
+    const nomEnCours = type === 'pro'
+      ? societe.lire()
+      : [prenom.lire(), nom.lire()].filter(Boolean).join(' ');
+    doublon = chercherDoublon(e, c.id, nomEnCours, tel.lire());
     if (!doublon) { poser(alerteDoublon, []); return; }
 
-    const raison = doublon.raison === 'tel'
-      ? 'Ce numéro est déjà sur une fiche : '
-      : 'Ce nom existe déjà : ';
+    const trouve = doublon.client;
     poser(alerteDoublon, h('div.bandeau.bandeau--alerte', [
       icone('alerte'),
       h('div.grandit', [
-        h('div', raison + lit.nomClient(doublon.client)
-          + (doublon.client.ville ? ' — ' + doublon.client.ville : '') + '.'),
+        h('div', (doublon.raison === 'tel'
+          ? 'Ce numéro est déjà sur une fiche : '
+          : 'Ce nom existe déjà : ')
+          + lit.nomClient(trouve) + (trouve.ville ? ' — ' + trouve.ville : '') + '.'),
         h('button.bt.bt--nu.bt--s', {
           type: 'button',
           onclick: () => {
             if (fenetre) fenetre.fermer(null);
-            location.hash = '#/client/' + doublon.client.id;
+            location.hash = '#/client/' + trouve.id;
           }
         }, [icone('ouvrir', { taille: 14 }), h('span', 'Ouvrir cette fiche')])
       ])
@@ -577,11 +601,13 @@ export function modaleClient(e, client, apres) {
     if (String(codeEbpChamp.lire()).trim()) return;
     codeEbpChamp.ecrire(codeEbp(e, {
       type,
-      nom: nom.lire(), prenom: prenom.lire(), societe: societe.lire(),
+      nom: nom.lire() || decouperNom(contact.lire()).nom,
+      prenom: prenom.lire(),
+      societe: societe.lire(),
       cree: c.cree || Date.now()
     }));
   }
-  for (const ch of [nom, societe]) {
+  for (const ch of [nom, societe, contact]) {
     ch.entree.addEventListener('blur', proposerCode);
   }
 
@@ -615,27 +641,28 @@ export function modaleClient(e, client, apres) {
       {
         texte: edition ? 'Enregistrer' : 'Créer le client', ton: 'fort',
         faire: () => {
-          const nomSaisi = nom.lire();
+          /* Un interlocuteur de société se range dans nom/prénom, comme pour un
+             particulier : c'est le même carnet d'adresses, et l'export EBP
+             comme le portail confrère y lisent les mêmes champs. */
+          const duo = type === 'pro'
+            ? decouperNom(contact.lire())
+            : { prenom: prenom.lire(), nom: nom.lire() };
           const societeSaisie = societe.lire();
-          if (!nomSaisi && !societeSaisie) {
-            if (type === 'pro') societe.erreur('Une raison sociale, au minimum.');
+
+          if (!duo.nom && !societeSaisie) {
+            if (type === 'pro') societe.erreur('Une raison sociale, ou au moins un interlocuteur.');
             else nom.erreur('Un nom, au minimum.');
             return false;
           }
           nom.erreur('');
           societe.erreur('');
 
-          /* Un interlocuteur de société se range dans nom/prénom, comme pour un
-             particulier : c'est le même carnet d'adresses, et le portail
-             confrère comme l'export EBP y lisent les mêmes champs. */
-          const duo = type === 'pro' ? decouperNom(contact.lire()) : { prenom: prenom.lire(), nom: nomSaisi };
-
           const champs = {
             type,
             civilite: type === 'pro' ? '' : civilite.lire(),
             nom: duo.nom,
             prenom: duo.prenom,
-            societe: type === 'pro' ? societeSaisie : societeSaisie,
+            societe: societeSaisie,
             siret: type === 'pro' ? siret.lire() : (c.siret || ''),
             tvaIntra: type === 'pro' ? tvaIntra.lire() : (c.tvaIntra || ''),
             tel: tel.lire(),

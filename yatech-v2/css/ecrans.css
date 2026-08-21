@@ -1445,3 +1445,56 @@ table.grille tbody tr.factures-retard:hover { background: var(--danger-voile); }
   gap: var(--e-3);
   padding: 0 var(--e-3) var(--e-3);
 }
+
+/* ==========================================================================
+   CLIENTS — l'annuaire
+   --------------------------------------------------------------------------
+   On y arrive presque toujours avec quelqu'un au bout du fil : le champ de
+   recherche est donc plus grand que partout ailleurs, pour se voir et se
+   viser du premier coup, y compris à bout de bras sur un téléphone.
+   ========================================================================== */
+.clients-chercher { margin-bottom: var(--e-3); }
+.clients-chercher .saisie {
+  min-height: 48px;
+  padding-left: 44px;
+  font-size: var(--t-l);
+}
+.clients-chercher svg { left: 15px; width: 20px; height: 20px; }
+.clients-chercher .recherche__vider { right: 10px; }
+
+.clients-outils { display: flex; align-items: flex-start; gap: var(--e-3); flex-wrap: wrap; }
+.clients-outils .filtres { flex: 1; min-width: 0; }
+
+/* Le tri au doigt : sur téléphone les en-têtes du tableau disparaissent avec
+   le repli des lignes, il faut donc un autre moyen de ranger la liste. */
+.clients-tri-mobile { display: none; gap: 5px; flex-direction: column; }
+@media (max-width: 760px) {
+  .clients-tri-mobile { display: flex; }
+}
+
+/* Un en-tête de colonne qui trie : il garde la typographie du tableau. */
+.clients-tri {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.clients-tri:hover { color: var(--encre); }
+.clients-tri svg { width: 13px; height: 13px; opacity: .35; }
+.clients-tri--actif { color: var(--accent); }
+.clients-tri--actif svg { opacity: 1; }
+
+/* Les plaques d'un client passent à la ligne plutôt que d'élargir la colonne :
+   un professionnel avec quatre véhicules ne doit pas pousser « Dû » hors de
+   l'écran. */
+.clients-plaques { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .clients-plaques { justify-content: flex-end; }
+}

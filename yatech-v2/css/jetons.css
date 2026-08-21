@@ -104,6 +104,7 @@
   --ombre-3: 0 30px 80px -24px rgba(0,0,0,.9);
   --luisant: rgba(255,255,255,.06);
   --masque:  rgba(6,9,11,.68);     /* derrière une modale */
+  --bord-ombre: rgba(0,0,0,.55);   /* le voile qui dit « ça défile encore » */
 }
 
 /* ==========================================================================
@@ -142,6 +143,7 @@
   --ombre-3: 0 30px 70px -22px rgba(16,22,28,.36);
   --luisant: rgba(255,255,255,.9);
   --masque:  rgba(24,32,38,.4);
+  --bord-ombre: rgba(16,22,28,.16);
 }
 
 /* Le thème « auto » suit le réglage du téléphone : on ne redéfinit le clair
@@ -168,6 +170,7 @@
     --ombre-3: 0 30px 70px -22px rgba(16,22,28,.36);
     --luisant: rgba(255,255,255,.9);
     --masque: rgba(24,32,38,.4);
+    --bord-ombre: rgba(16,22,28,.16);
   }
 }
 
