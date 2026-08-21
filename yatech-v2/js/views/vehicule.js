@@ -18,7 +18,7 @@ import { icone } from '../core/icones.js';
 import { modale, confirmer, message, menu, vide } from '../core/ui.js';
 import { maj, change, retire } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
-import { id, nombre, JOUR, nu, tronque } from '../core/util.js';
+import { id, nombre, JOUR, nu, tronque, plaqueJolie } from '../core/util.js';
 import { choisirFichier, reduireImage, copier } from '../core/fichiers.js';
 import * as lit from '../domain/selecteurs.js';
 import {
@@ -202,7 +202,7 @@ async function supprimer(e, v, ctx, dossiers, interventions) {
   }
   const oui = await confirmer({
     titre: 'Supprimer ce véhicule ?',
-    texte: lit.nomVehiculeLong(v) + ' — ' + (v.immat || 'sans plaque'),
+    texte: lit.nomVehiculeLong(v) + ' — ' + (plaqueJolie(v.immat) || 'sans plaque'),
     avertissement: 'Cette fiche ne pourra pas être retrouvée.',
     ok: 'Supprimer', danger: true
   });
@@ -438,7 +438,7 @@ function resumeEcu(v) {
   const proto = PROTOCOLES[c.protocole];
   return [
     lit.nomVehiculeLong(v),
-    v.immat,
+    plaqueJolie(v.immat),
     [c.marque, c.type].filter(Boolean).join(' '),
     c.hw ? 'HW ' + c.hw : '',
     c.sw ? 'SW ' + c.sw : '',

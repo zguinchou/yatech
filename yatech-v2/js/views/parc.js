@@ -506,7 +506,9 @@ function modaleLibre(e, place, refaire) {
       const v = lit.vehicule(e, d.vehiculeId);
       const c = lit.client(e, d.clientId);
       return correspond([
-        v ? v.immat : '', v ? lit.nomVehicule(v) : '',
+        /* La plaque est cherchable sous ses deux formes : on tape « EK741 »
+           comme « EK-741 » selon qu'on lit l'écran ou la carte grise. */
+        v ? v.immat : '', v ? plaqueJolie(v.immat) : '', v ? lit.nomVehicule(v) : '',
         c ? lit.nomClient(c) : '', d.numero, d.demande
       ].filter(Boolean).join(' '), requete);
     });

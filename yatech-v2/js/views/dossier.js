@@ -20,7 +20,7 @@ import { icone } from '../core/icones.js';
 import { modale, confirmer, message, messageErreur, menu, vide } from '../core/ui.js';
 import { maj } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
-import { id, nombre, pluriel, jour0, MINUTE } from '../core/util.js';
+import { id, nombre, pluriel, jour0, MINUTE, plaqueJolie } from '../core/util.js';
 import { choisirFichier, reduireImage } from '../core/fichiers.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
@@ -243,7 +243,7 @@ function messagePret(e, d, c, v, t) {
   return String(e.reglages.messagePret || '')
     .replace('{prenom}', (c && c.prenom) || lit.nomClient(c))
     .replace('{vehicule}', v ? lit.nomVehicule(v) : 'votre véhicule')
-    .replace('{immat}', v ? v.immat : '')
+    .replace('{immat}', v ? plaqueJolie(v.immat) : '')
     .replace('{montant}', fmt.euros(t.ttc))
     .replace('{garage}', e.reglages.raisonSociale || e.reglages.nomOutil || '');
 }

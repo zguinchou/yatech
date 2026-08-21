@@ -24,8 +24,7 @@ import { maj, change } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
 import {
   nu, par, pluriel, surligne, plaqueNue, telNu, emailValide,
-  nombre, borne, attend
-} from '../core/util.js';
+  nombre, borne, attend, plaqueJolie } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import { nouveauClient } from '../domain/schema.js';
 import { codeEbp, telechargerClients } from '../domain/ebp.js';
@@ -197,8 +196,8 @@ function plaquesParClient(e) {
   for (const v of e.vehicules || []) {
     if (v.archive || !v.clientId || !v.immat) continue;
     const deja = m.get(v.clientId);
-    if (deja) deja.push(v.immat);
-    else m.set(v.clientId, [v.immat]);
+    if (deja) deja.push(plaqueJolie(v.immat));
+    else m.set(v.clientId, [plaqueJolie(v.immat)]);
   }
   return m;
 }

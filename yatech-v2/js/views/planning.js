@@ -29,8 +29,7 @@ import { maj } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
 import {
   jour0, lundi, plusJours, estAujourdhui, minutesEnHeure, heureEnMinutes,
-  depuisIsoJour, nombre, borne, par, grouper, pluriel
-} from '../core/util.js';
+  depuisIsoJour, nombre, borne, par, grouper, pluriel, plaqueJolie } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import { TYPES_CRENEAU, nouveauCreneau } from '../domain/schema.js';
@@ -255,7 +254,7 @@ function panneauDemandes(cadre) {
             fmt.date(c.debut, 'jourMois') + ' à ' + fmt.heure(c.debut),
             fmt.duree(c.fin - c.debut),
             client ? lit.nomClient(client) : null,
-            v ? v.immat : null
+            v ? plaqueJolie(v.immat) : null
           ].filter(Boolean).join(' · ')),
           c.note ? h('div.minus.tres-faible.coupe-2', c.note) : null
         ]),
@@ -487,7 +486,7 @@ function carteCreneau(cadre, c, geo, avecPersonne) {
      façon dans une colonne de jour. */
   const seconde = [
     fmt.heure(c.debut),
-    avecPersonne ? (u ? (u.prenom || lit.nomUtilisateur(u)) : null) : (v ? v.immat : null)
+    avecPersonne ? (u ? (u.prenom || lit.nomUtilisateur(u)) : null) : (v ? plaqueJolie(v.immat) : null)
   ].filter(Boolean).join(' · ');
 
   return h('button' + classeCreneau(e, c), {
@@ -499,7 +498,7 @@ function carteCreneau(cadre, c, geo, avecPersonne) {
       fmt.heure(c.debut) + ' – ' + fmt.heure(c.fin) + ' (' + fmt.duree(c.fin - c.debut) + ')',
       u ? lit.nomUtilisateur(u) : null,
       t ? t.nom : null,
-      v ? lit.nomVehiculeLong(v) + ' — ' + v.immat : null,
+      v ? lit.nomVehiculeLong(v) + ' — ' + plaqueJolie(v.immat) : null,
       c.note || null
     ].filter(Boolean).join('\n'),
     style: {

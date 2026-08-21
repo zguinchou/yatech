@@ -12,7 +12,7 @@ import { icone } from '../core/icones.js';
 import { modale, confirmer, message } from '../core/ui.js';
 import { maj } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
-import { jour0, telJoli, nombre } from '../core/util.js';
+import { jour0, telJoli, nombre, plaqueJolie } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import {
@@ -256,7 +256,7 @@ function messagePret(e, d, c, v, t) {
   return (e.reglages.messagePret || '')
     .replace('{prenom}', (c && c.prenom) || lit.nomClient(c))
     .replace('{vehicule}', v ? lit.nomVehicule(v) : 'votre véhicule')
-    .replace('{immat}', v ? v.immat : '')
+    .replace('{immat}', v ? plaqueJolie(v.immat) : '')
     .replace('{montant}', fmt.euros(t.ttc))
     .replace('{garage}', e.reglages.raisonSociale || e.reglages.nomOutil || '');
 }
@@ -284,7 +284,7 @@ function enAttente(e) {
         pastilleEtape(d.etape),
         h('div.grandit.coupe', [
           h('div.coupe', lit.titreDossier(e, d)),
-          h('div.petit.faible.coupe', [v ? v.immat : '', d.place ? 'place ' + d.place : '']
+          h('div.petit.faible.coupe', [v ? plaqueJolie(v.immat) : '', d.place ? 'place ' + d.place : '']
             .filter(Boolean).join(' · '))
         ]),
         h('span.minus.tres-faible', jours + ' j')

@@ -1495,6 +1495,110 @@ table.grille tbody tr.factures-retard:hover { background: var(--danger-voile); }
    un professionnel avec quatre véhicules ne doit pas pousser « Dû » hors de
    l'écran. */
 .clients-plaques { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-@media (max-width: 760px) {
+/* Une fois la ligne repliée, la cellule s'aligne à droite : les plaques doivent
+   suivre. On écoute le déclencheur du repli lui-même, sinon elles se recalent
+   trop tôt ou trop tard. */
+@container tableau (max-width: 700px) {
   .clients-plaques { justify-content: flex-end; }
+}
+@supports not (container-type: inline-size) {
+  @media (max-width: 760px) {
+    .clients-plaques { justify-content: flex-end; }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   RÉGLAGES — la colonne des contrôles
+   Trois largeurs suffisent : un nombre court, un champ ordinaire, un texte
+   long. À 380 px on passe le contrôle SOUS son libellé : côte à côte, il ne
+   resterait ni de quoi lire l'explication ni de quoi viser le champ.
+   -------------------------------------------------------------------------- */
+.reglages__ctrl     { width: 200px; max-width: 100%; }
+.reglages__ctrl--s  { width: 116px; }
+.reglages__ctrl--l  { width: 320px; }
+
+/* La bascule mesure 24 px de haut : trop peu pour le doigt. On lui donne une
+   zone tactile de 40 px sans toucher à son dessin. */
+.reglages__bascule {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 0;
+}
+
+@media (max-width: 560px) {
+  .reglage-ligne { flex-direction: column; align-items: stretch; gap: var(--e-2); }
+  .reglages__ctrl,
+  .reglages__ctrl--s,
+  .reglages__ctrl--l { width: 100%; }
+}
+
+/* ==========================================================================
+   FICHE CLIENT
+   ========================================================================== */
+
+/* Les véhicules d'un client se lisent en vignettes : une colonne sur
+   téléphone, autant que la place le permet sur l'écran de l'atelier. */
+.client-vehicules {
+  display: grid;
+  gap: var(--e-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
+}
+
+/* Le code d'accès du portail confrère. Il se recopie à la main sur un papier
+   ou se dicte au téléphone : espacé, en chiffres à chasse fixe, et
+   sélectionnable d'un geste. */
+.client-code {
+  font-family: var(--f-chiffre);
+  font-size: var(--t-2xl);
+  font-weight: 700;
+  letter-spacing: .22em;
+  text-align: center;
+  padding: var(--e-3);
+  border: 1px dashed var(--alerte);
+  border-radius: var(--r-m);
+  background: var(--plan);
+  user-select: all;
+}
+
+/* ==========================================================================
+   PORTAIL PROFESSIONNEL — le choix d'un créneau
+   Un confrère ouvre ce lien debout dans son atelier, un téléphone dans une
+   main. Les cibles sont donc larges, et la bande des jours défile au pouce
+   plutôt que de replier la page sur douze lignes.
+   ========================================================================== */
+.portail__jours {
+  display: flex;
+  gap: var(--e-1);
+  overflow-x: auto;
+  padding: var(--e-2);
+  border-bottom: 1px solid var(--trait-fin);
+  scrollbar-width: none;
+  min-width: 0;
+  max-width: 100%;
+}
+.portail__jours::-webkit-scrollbar { display: none; }
+
+.portail__creneaux {
+  display: grid;
+  gap: var(--e-2);
+  grid-template-columns: repeat(auto-fill, minmax(min(84px, 100%), 1fr));
+}
+.portail__creneau {
+  min-height: 44px;
+  padding: 0 var(--e-2);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-m);
+  background: var(--plan);
+  color: var(--encre);
+  font: 600 var(--t-m)/1 var(--f-chiffre);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background var(--vite), border-color var(--vite);
+}
+.portail__creneau:hover { background: var(--plan-2); border-color: var(--encre-3); }
+.portail__creneau[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-sur);
 }
