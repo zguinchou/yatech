@@ -4717,17 +4717,17 @@ const COMPTEURS = [
   { cle: 'rdvJour', groupe: 'Le travail', nom: () => "au planning aujourd'hui", ton: 'var(--actif)', vue: 'planning',
     calc: () => rdvActifs(minuit(Date.now())).length },
   { cle: 'rdvDemain', groupe: 'Le travail', nom: () => 'au planning demain', ton: 'var(--actif)', vue: 'planning',
-    calc: () => rdvActifs(minuit(Date.now()) + JOUR).length },
+    calc: () => rdvActifs(jourPlus(Date.now(), 1)).length },
   { cle: 'heuresJour', groupe: 'Le travail', nom: () => "d'atelier posées aujourd'hui", ton: 'var(--attente)', vue: 'planning',
     calc: () => { const h = chargeDuJour(Date.now()).pris; return { n: h, aff: heuresFr(h) }; } },
   { cle: 'heuresLibres', groupe: 'Le travail', nom: () => 'encore libres aujourd\'hui', ton: 'var(--libre)', vue: 'planning',
     calc: () => { const h = chargeDuJour(Date.now()).libre; return { n: h, aff: heuresFr(h) }; } },
   { cle: 'rdvSemaine', groupe: 'Le travail', nom: () => 'rendez-vous cette semaine', ton: 'var(--actif)', vue: 'planning',
     calc: () => { const l = debutSemaine();
-      return DB.etat.planning.filter(p => !p.annule && minuit(p.jour) >= l && minuit(p.jour) < l + 7 * JOUR).length; } },
+      return DB.etat.planning.filter(p => !p.annule && minuit(p.jour) >= l && minuit(p.jour) < jourPlus(l, 7)).length; } },
   { cle: 'heuresSemaine', groupe: 'Le travail', nom: () => 'posées cette semaine', ton: 'var(--attente)', vue: 'planning',
     calc: () => { const l = debutSemaine();
-      const h = DB.etat.planning.filter(p => !p.annule && minuit(p.jour) >= l && minuit(p.jour) < l + 7 * JOUR)
+      const h = DB.etat.planning.filter(p => !p.annule && minuit(p.jour) >= l && minuit(p.jour) < jourPlus(l, 7))
         .reduce((s, p) => s + (Number(p.duree) || 0), 0);
       return { n: h, aff: heuresFr(h) }; } },
   { cle: 'auPont', groupe: 'Le travail', nom: () => 'au pont aujourd\'hui', ton: 'var(--gros)', vue: 'planning',
@@ -7544,6 +7544,11 @@ function vueFicheDevis() {
    ========================================================================== */
 const minuit = (ts) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
+/* Avancer de n jours par le CALENDRIER, jamais en ajoutant 24 h. Deux nuits
+   par an ne durent pas 24 h : fin octobre, « demain » calculé en millisecondes
+   retombe sur aujourd'hui, et fin mars il saute un jour. */
+const jourPlus = (ts, n) => { const d = new Date(ts); d.setDate(d.getDate() + n); d.setHours(0, 0, 0, 0); return d.getTime(); };
+
 /* Le planning se regarde au mois, une semaine à la fois. On liste les lundis
    qui touchent le mois affiché — quatre le plus souvent, cinq ou six parfois,
    selon le jour où il tombe. Chacun devient un onglet, et on glisse de l'un à
@@ -7901,7 +7906,7 @@ function vuePlanning() {
     </button>`;
   };
 
-  const fin = lundi + (jours.length - 1) * JOUR;
+  const fin = jours[jours.length - 1].ts;
 
   /* Poser un rendez-vous à la main ne doit pas dépendre du survol d'une case :
      on prend un appel debout, avec un téléphone dans une main. Le bouton se
@@ -10884,11 +10889,11 @@ function chargeDuJour(jour) {
 function joursReservables(nb) {
   const jours = [];
   const ouvres = DB.etat.reglages.joursOuvres === 5 ? 5 : 6;
-  let j = minuit(Date.now()) + JOUR;
+  let n = 1;
   while (jours.length < nb) {
+    const j = jourPlus(Date.now(), n++);
     const jour = new Date(j).getDay();          // 0 = dimanche
     if (jour !== 0 && (ouvres === 6 || jour !== 6)) jours.push(j);
-    j += JOUR;
   }
   return jours;
 }
@@ -11586,7 +11591,7 @@ function blocJournalAppels() {
   const quandDit = (ts) => {
     const j = minuit(ts), aujourd = minuit(Date.now());
     const h = new Date(ts).toTimeString().slice(0, 5);
-    return j === aujourd ? h : j === aujourd - JOUR ? 'hier ' + h : dateCourte(ts) + ' ' + h;
+    return j === aujourd ? h : j === jourPlus(Date.now(), -1) ? 'hier ' + h : dateCourte(ts) + ' ' + h;
   };
 
   return `<section class="carte">
@@ -11647,7 +11652,7 @@ function raisonsAppel(info) {
   const jour = minuit(Date.now());
 
   DB.etat.planning
-    .filter(p => !p.annule && minuit(p.jour) >= jour && minuit(p.jour) <= jour + 2 * JOUR)
+    .filter(p => !p.annule && minuit(p.jour) >= jour && minuit(p.jour) <= jourPlus(jour, 2))
     .filter(p => memeNumero(p.tel, c.tel)
               || (p.devisId && (DB.devis(p.devisId) || {}).clientId === c.id))
     .sort((a, b) => a.jour - b.jour)
@@ -17342,7 +17347,7 @@ function vueTableauAtelier() {
     memos:    () => colonneMemos(),
     planning: () => `<div class="bande-jour">
       ${colonneJour("Aujourd'hui", ceJour)}
-      ${colonneJour('Demain', ceJour + JOUR)}
+      ${colonneJour('Demain', jourPlus(ceJour, 1))}
     </div>`
   };
 
@@ -17445,7 +17450,7 @@ function titreEcran(vue) {
     const s = m.semaines[semaineAffichee(m)] || m.semaines[0];
     const ouvres = (DB.etat.reglages.joursOuvres || 6) - 1;
     const qui = S.planningQui ? DB.utilisateur(S.planningQui) : null;
-    return ['Planning', libelleSemaine(s.lundi, s.lundi + ouvres * JOUR)
+    return ['Planning', libelleSemaine(s.lundi, jourPlus(s.lundi, ouvres))
             + (qui ? ` · ${qui.nom} seulement` : '')];
   }
   if (vue === 'reglages') {
