@@ -3527,6 +3527,10 @@ function jeuDeDemo() {
   const L = (type, libelle, qte, prixHT, extra = {}) =>
     Object.assign({ id: 'l' + Math.random().toString(36).slice(2, 8), type, libelle, qte, prixHT, remise: 0 }, extra);
 
+  /* Les dossiers du jeu d'exemple sont déjà partis chez leurs clients : ils
+     portent donc leur taux, comme n'importe quel dossier envoyé. */
+  const figee = { taux: REGLAGES.tauxTva, franchise: !!REGLAGES.tvaFranchise };
+
   const devis = [
     {
       id: 'd1', numero: 'DV-2601', clientId: 'c1', vehiculeId: 'v1', statut: 'accepte',
@@ -3697,6 +3701,15 @@ function jeuDeDemo() {
     { id: 'r8', userId: 'u3', jour: J(4),   heure: '08:00', duree: 4,   emplacement: 'sol',  devisId: null, client: '',                    prestation: 'Congé — matinée', fait: false }
   ];
 
+  /* Les dossiers déjà partis chez leur client portent leur taux de TVA, comme
+     dans une vraie base : changer le taux dans les réglages ne doit pas
+     réécrire une facture émise. */
+  devis.forEach(d => {
+    const parti = d.envoye || d.facture
+      || ['accepte', 'commande', 'encours', 'termine', 'facture'].includes(d.statut);
+    if (parti) d.tva = Object.assign({}, figee);
+  });
+
   return {
     // copie en profondeur : une copie de surface partagerait nomsRangees et
     // typesPlaces avec les valeurs par défaut, et les modifier les abîmerait
@@ -3735,6 +3748,16 @@ const DB = {
       if (avantPause && e.reglages.heureDebut === '08:00') e.reglages.heureDebut = d.heureDebut;
     }
     if (!Array.isArray(e.appels)) e.appels = [];
+    /* Les dossiers déjà partis chez un client n'avaient pas de taux figé :
+       on leur pose celui d'aujourd'hui, une fois. Leurs montants restent donc
+       exactement ceux qu'on lit à l'écran en ce moment, et ils ne bougeront
+       plus si le taux change demain. */
+    if (Array.isArray(e.devis)) e.devis.forEach(d => {
+      const parti = d.envoye || d.facture || ['accepte', 'commande', 'encours', 'termine', 'facture'].includes(d.statut);
+      if (parti && !(d.tva && typeof d.tva.taux === 'number')) {
+        d.tva = { taux: Number(e.reglages.tauxTva) || 0, franchise: !!e.reglages.tvaFranchise };
+      }
+    });
     /* Les droits n'existaient pas : on les pose une fois. L'accueil n'est pas
        administrateur par défaut — le reste de l'équipe l'est, et cela se
        change ensuite dans L'équipe. Un atelier sans aucun administrateur ne
@@ -4453,13 +4476,35 @@ function sessionValide() {
 /* ==========================================================================
    CALCULS
    ========================================================================== */
+/** La TVA qui s'applique à un dossier : celle figée à son départ si elle l'a
+ *  été, sinon celle de l'atelier aujourd'hui — un devis en préparation suit
+ *  les réglages, un devis parti ne bouge plus. */
+function tvaDu(d) {
+  if (d && d.tva && typeof d.tva.taux === 'number') return d.tva;
+  return { taux: Number(DB.etat.reglages.tauxTva) || 0,
+           franchise: !!DB.etat.reglages.tvaFranchise };
+}
+
+/** Figer le taux sur un dossier. Une fois posé, il ne se repose pas. */
+function figerTva(d) {
+  if (!d || (d.tva && typeof d.tva.taux === 'number')) return;
+  d.tva = { taux: Number(DB.etat.reglages.tauxTva) || 0,
+            franchise: !!DB.etat.reglages.tvaFranchise };
+}
+
 function totaux(d) {
   const brut = (d.lignes || []).reduce((s, l) => s + (Number(l.qte) || 0) * (Number(l.prixHT) || 0) * (1 - (Number(l.remise) || 0) / 100), 0);
   const rem = brut * (Number(d.remise) || 0) / 100;
   const ht = brut - rem;
-  /* En franchise en base, il n'y a pas de TVA à facturer : le taux ne
+  /* Le taux qui s'applique est celui du jour où le devis est parti, pas celui
+     d'aujourd'hui. Sans ça, changer la TVA dans les réglages réécrivait le
+     montant de toutes les factures déjà émises — un document que le client a
+     entre les mains et que le comptable a enregistré.
+
+     En franchise en base, il n'y a pas de TVA à facturer : le taux ne
      s'applique pas, quel qu'il soit resté dans les réglages. */
-  const tva = DB.etat.reglages.tvaFranchise ? 0 : ht * (DB.etat.reglages.tauxTva / 100);
+  const t = tvaDu(d);
+  const tva = t.franchise ? 0 : ht * (t.taux / 100);
   return { brut, rem, ht, tva, ttc: ht + tva };
 }
 
@@ -5157,6 +5202,8 @@ function changerStatut(id, statut, motCle) {
   d.maj = Date.now();
   if (statut === 'envoye') d.envoye = Date.now();
   if (statut === 'accepte' || statut === 'refuse') d.reponse = Date.now();
+  /* À partir du moment où un chiffre part chez le client, il ne bouge plus. */
+  if (['envoye', 'accepte', 'commande', 'encours', 'termine', 'facture'].includes(statut)) figerTva(d);
 
   // le parc suit automatiquement l'avancement du devis
   const occ = DB.etat.occupations.find(o => o.devisId === id);
@@ -5878,6 +5925,7 @@ function importerFacturesEbp(texte) {
 
     const ttc = nombreFr(lire(l, 'ttc'));
     const ht = nombreFr(lire(l, 'ht'));
+    figerTva(d);
     d.facture = {
       numero,
       date: depuisInputDate(dateEbp(lire(l, 'date'))) || Date.now(),
@@ -7379,7 +7427,7 @@ function vueFicheDevis() {
               <div class="l"><span>Forfaits</span><span>${eur(d.lignes.filter(l => l.type === 'forfait').reduce((s, l) => s + l.qte * l.prixHT, 0))}</span></div>
               <div class="sep" style="margin:6px 0"></div>
               <div class="l"><span>Total HT</span><span>${eur(t.ht)}</span></div>
-              <div class="l"><span>TVA ${DB.etat.reglages.tauxTva} %</span><span>${eur(t.tva)}</span></div>
+              <div class="l"><span>TVA ${tvaDu(d).franchise ? '—' : tvaDu(d).taux + ' %'}</span><span>${eur(t.tva)}</span></div>
               <div class="l ttc"><span>TTC</span><span>${eur(t.ttc)}</span></div>
             </div>
             <div class="champ" style="margin-top:14px">
@@ -8160,7 +8208,7 @@ function blocImpression(d) {
         <tr><td>Total main d'œuvre HT</td><td class="d">${eur(oeuvre.reduce((s, l) => s + l.qte * l.prixHT, 0))}</td></tr>
         ${d.remise ? `<tr><td>Remise ${d.remise} %</td><td class="d">− ${eur(t.rem)}</td></tr>` : ''}
         <tr class="st"><td>Total HT</td><td class="d">${eur(t.ht)}</td></tr>
-        <tr><td>TVA ${r.tauxTva} %</td><td class="d">${eur(t.tva)}</td></tr>
+        <tr><td>TVA ${tvaDu(d).franchise ? 'non applicable' : tvaDu(d).taux + ' %'}</td><td class="d">${eur(t.tva)}</td></tr>
         <tr class="ttc"><td>TOTAL TTC</td><td class="d">${eur(t.ttc)}</td></tr>
       </table>
     </section>
@@ -12803,8 +12851,13 @@ function apresRendu() {
             : S.modale.type === 'confirmer' ? modaleConfirmer() : '';
     const d = document.createElement('div');
     d.innerHTML = h;
-    // un type de fenêtre inconnu ne doit pas faire tomber tout l'affichage
+    /* Un type de fenêtre inconnu — ou une fenêtre qui pointe vers une fiche
+       effacée entre-temps — ne doit pas faire tomber tout l'affichage. Et
+       comme rien ne s'affiche, on oublie la fenêtre : sinon l'application se
+       croit encore ouverte sur une fenêtre invisible. La palette de recherche
+       fait exception : c'est la v2 qui la pose, juste après ce passage. */
     if (d.firstElementChild) document.body.appendChild(d.firstElementChild);
+    else if (S.modale.type !== 'recherche') S.modale = null;
   }
 
   /* Une ligne qu'on vient d'ajouter : le curseur s'y place, il n'y a plus qu'à
@@ -15394,6 +15447,7 @@ document.addEventListener('click', (e) => {
         if (blob) telechargerFichier(d.pdf && d.pdf.nom || (d.numero + '.pdf'), blob, 'application/pdf');
       });
       d.envoye = d.envoye || Date.now();
+      figerTva(d);
       if (d.statut === 'brouillon') { d.statut = 'envoye'; d.maj = Date.now(); }
       S.modale = null; S.texteP = null;
       enregistrer(`Devis ${d.numero} envoyé au client`);
@@ -15505,7 +15559,7 @@ document.addEventListener('click', (e) => {
         const fichier = new File([blob], d.pdf.nom || (d.numero + '.pdf'), { type: 'application/pdf' });
         if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
           navigator.share({ files: [fichier], title: d.numero, text: texte })
-            .then(() => { d.envoye = d.envoye || Date.now(); DB.sauver(); toast('Devis envoyé'); })
+            .then(() => { d.envoye = d.envoye || Date.now(); figerTva(d); DB.sauver(); toast('Devis envoyé'); })
             .catch(() => { /* partage annulé : rien à signaler */ });
           return;
         }
