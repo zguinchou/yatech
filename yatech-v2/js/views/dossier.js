@@ -280,7 +280,7 @@ function menuDossier(ancre, e, d, ctx, refaireTout) {
         ctx.aller('/atelier');
       }
     }
-  ], { titre: 'Dossier' });
+  ]);
 }
 
 /* ==========================================================================

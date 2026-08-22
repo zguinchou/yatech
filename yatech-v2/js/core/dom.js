@@ -71,7 +71,15 @@ export function appliquer(noeud, props) {
     } else if (cle === 'ref' && typeof val === 'function') {
       val(noeud);
     } else if (cle in noeud && !ATTRIBUTS_TOUJOURS.has(cle)) {
-      try { noeud[cle] = val; } catch (e) { noeud.setAttribute(cle, val); }
+      let v = val;
+      /* Un attribut booléen reçu sous forme de texte : écrire
+         `spellcheck: 'false'` mettrait la propriété à VRAI, puisque toute
+         chaîne non vide l'est. C'est le genre de piège qui fait qu'un champ
+         reste souligné en rouge sans qu'on comprenne pourquoi. */
+      if (typeof noeud[cle] === 'boolean' && typeof v === 'string') {
+        v = v !== 'false' && v !== '';
+      }
+      try { noeud[cle] = v; } catch (e) { noeud.setAttribute(cle, v); }
     } else {
       noeud.setAttribute(cle, val === true ? '' : val);
     }

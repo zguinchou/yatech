@@ -107,7 +107,7 @@ function porteCode(e, c, cle, entre) {
     inputmode: 'text',
     autocapitalize: 'characters',
     autocomplete: 'one-time-code',
-    spellcheck: false,
+    spellcheck: 'false',
     maxlength: 16,
     'aria-label': 'Code d’accès',
     placeholder: 'Votre code',
@@ -255,7 +255,7 @@ function noterAcces(c) {
 
 function espace(e, c) {
   const ctx = contexte(e.reglages, c);
-  const zone = h('div');
+  const zone = h('div', { role: 'tabpanel' });
   let onglet = 'tarifs';
 
   const pages = [
@@ -275,7 +275,6 @@ function espace(e, c) {
         Array.from(barre.children).forEach((b, i) =>
           b.setAttribute('aria-selected', pages[i].cle === onglet ? 'true' : 'false'));
         poser(zone, p.faire());
-        zone.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }
     }, [icone(p.icone, { taille: 15 }), h('span', p.texte)])
   ));
