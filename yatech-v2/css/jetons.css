@@ -17,12 +17,19 @@
   --s-accent: 100%;
 
   /* --- typographies ----------------------------------------------------- */
-  --f-titre: Bahnschrift, "DIN Alternate", "DIN Condensed", "Roboto Condensed",
-             "Archivo Narrow", "Segoe UI Semibold", system-ui, sans-serif;
+  /* La condensée des plaques machine et des panneaux d'atelier. Elle est
+     chargée depuis Google Fonts pour que l'outil ait le même visage sur le
+     téléphone de l'atelier et sur le poste du bureau — sans elle, un Mac
+     montre DIN Condensed, un PC Bahnschrift, et un Linux rien du tout.
+     La pile de repli est complète : hors ligne, la page ne bronche pas. */
+  --f-titre: "Barlow Condensed", Bahnschrift, "DIN Alternate", "DIN Condensed",
+             "Roboto Condensed", "Archivo Narrow", "Segoe UI Semibold",
+             system-ui, sans-serif;
   --f-texte: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
              Arial, sans-serif;
-  --f-chiffre: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono",
-               Consolas, monospace;
+  /* Les chiffres alignés : montants en colonne, plaques, heures, références. */
+  --f-chiffre: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono",
+               "Roboto Mono", Consolas, monospace;
 
   /* Échelle typographique : peu de tailles, bien écartées. */
   --t-xs: 11px;
@@ -30,8 +37,8 @@
   --t-m:  14px;
   --t-l:  16px;
   --t-xl: 20px;
-  --t-2xl: 26px;
-  --t-3xl: 34px;
+  --t-2xl: 27px;
+  --t-3xl: 36px;
 
   /* --- espaces : multiples de 4, nommés par usage ------------------------ */
   --e-1: 4px;

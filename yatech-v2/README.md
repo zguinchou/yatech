@@ -69,6 +69,13 @@ JavaScript natifs que le navigateur charge directement. C'est un choix : dans
 cinq ans, ce code s'ouvrira encore et se modifiera encore, sans avoir à
 ressusciter une chaîne d'outils.
 
+Une seule chose vient de l'extérieur : deux polices, chargées depuis Google
+Fonts. Sans elles, l'outil n'a pas le même visage d'une machine à l'autre — un
+Mac affiche DIN Condensed, un PC Bahnschrift, un Linux rien du tout. La pile de
+repli est complète et le chargement ne bloque jamais : hors ligne, la page
+s'affiche immédiatement avec les polices du système. Pour couper ce dernier
+lien, il suffit de retirer les trois `<link>` en tête de `index.html`.
+
 ```
 yatech-v2/
   index.html            la coquille, une vingtaine de lignes
@@ -116,8 +123,25 @@ yatech-v2/
 
     views/              un fichier par écran
   tests/
-    verifs.mjs          les vérifications de calcul : node tests/verifs.mjs
+    verifs.mjs          les calculs, les formats, les données
+    metier.mjs          les règles du métier (stock, parc, devis, crédits)
+  outils/
+    empaqueter.mjs      tout l'outil en un seul fichier HTML
 ```
+
+### Tout l'outil en un seul fichier
+
+```
+node outils/empaqueter.mjs
+```
+
+Produit un `yatech-un-seul-fichier.html` qui s'ouvre en double-cliquant dessus :
+styles, code et icône rassemblés, aucun serveur nécessaire. Pratique pour le
+montrer à quelqu'un, l'envoyer en pièce jointe ou le poser sur une clé.
+
+Ce fichier charge le jeu de démonstration au premier lancement : c'est une
+vitrine, pas un poste de travail. Pour travailler pour de vrai, c'est le site
+qu'il faut — avec ses sauvegardes.
 
 ---
 
