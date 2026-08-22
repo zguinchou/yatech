@@ -448,7 +448,7 @@ function ligne(e, p, requete, avecCredits, rappels) {
       type: 'checkbox',
       checked: !!p.actif,
       'aria-label': 'Prestation active',
-      style: { width: '20px', height: '20px', accentColor: 'var(--accent)' },
+      style: { accentColor: 'var(--accent)' },
       onchange: (ev) => {
         const v = ev.currentTarget.checked;
         change('prestations', p.id, { actif: v }, v ? 'Prestation réactivée' : 'Prestation désactivée');

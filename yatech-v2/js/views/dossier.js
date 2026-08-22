@@ -513,7 +513,7 @@ function ongletTravaux(e, d, moi, changer, refaireOnglets) {
           type: 'checkbox',
           checked: !!t.fait,
           'aria-label': t.texte,
-          style: { width: '20px', height: '20px', accentColor: 'var(--accent)', flex: 'none' },
+          style: { accentColor: 'var(--accent)', flex: 'none' },
           onchange: (ev) => {
             const coche = ev.target.checked;
             changer(null, (x) => {

@@ -422,7 +422,7 @@ function penseBetes(e, moi, refaire) {
           return h('div.liste__ligne.liste__ligne--muette', [
             h('input', {
               type: 'checkbox',
-              style: { width: '20px', height: '20px', accentColor: 'var(--accent)', flex: 'none' },
+              style: { accentColor: 'var(--accent)', flex: 'none' },
               'aria-label': 'Fait',
               onchange: () => { act.cocherTache(t.id, true); refaire(); }
             }),

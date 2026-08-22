@@ -238,6 +238,16 @@ select.saisie {
 }
 .coche input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex: none; }
 
+/* Les cases posées hors d'un libellé (une liste à cocher, une colonne de
+   sélection) : même taille de base, agrandie au doigt par utilitaires.css. */
+input[type="checkbox"], input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex: none;
+}
+
 .bascule {
   position: relative;
   width: 42px; height: 24px;

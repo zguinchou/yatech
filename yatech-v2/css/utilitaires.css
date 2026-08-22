@@ -97,3 +97,79 @@
 @supports (overflow-x: clip) {
   .contenu { overflow-x: clip; }
 }
+
+/* ==========================================================================
+   AU DOIGT
+   --------------------------------------------------------------------------
+   Une souris vise au pixel. Un doigt ganté, dans un atelier, une main occupée
+   par une pièce, ne vise pas à 30 px. Tout ce qui se touche passe donc à
+   38 px au moins — mais SEULEMENT sur les appareils tactiles : sur un écran de
+   bureau, la même règle gonflerait l'interface pour rien et on verrait deux
+   fois moins de lignes.
+
+   `pointer: coarse` est le bon discriminant : il décrit le moyen de pointage,
+   pas la taille de l'écran. Une tablette tactile de 1200 px en a besoin, un
+   petit portable au trackpad non.
+   ========================================================================== */
+
+@media (pointer: coarse) {
+  .filtre { height: 40px; padding: 0 var(--e-4); }
+
+  .segments button { min-height: 38px; padding: 0 var(--e-4); }
+
+  .bt--s { min-height: 38px; padding: 0 var(--e-3); }
+  .bt--icone.bt--s { width: 38px; }
+
+  .recherche__vider { width: 38px; height: 38px; right: 3px; }
+
+  .lien { min-height: 44px; }
+
+  .onglets button { min-height: 44px; }
+
+  .jour-onglet { min-height: 44px; }
+
+  /* Une case à cocher de 18 px se rate une fois sur trois. On l'agrandit, et
+     le libellé qui l'accompagne reste cliquable — c'est lui la vraie cible. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 24px;
+    height: 24px;
+  }
+  .coche { min-height: 40px; }
+
+  /* Le pas d'une ligne de tableau : au doigt, on veut pouvoir en toucher une
+     sans attraper sa voisine. */
+  table.grille td { padding-top: var(--e-3); padding-bottom: var(--e-3); }
+  .liste__ligne { min-height: 56px; }
+}
+
+/* --------------------------------------------------------------------------
+   iOS zoome sur tout champ dont le texte fait moins de 16 px, et ne revient
+   jamais : la page reste agrandie et décalée jusqu'au rechargement. La règle
+   vaut pour TOUS les champs, pas seulement ceux qui portent la classe maison —
+   un écran qui pose un `<input>` nu tomberait sinon dans le piège.
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Les liens de texte posés dans une ligne de tableau ou de liste : ils font la
+   hauteur d'une ligne de texte, soit une vingtaine de pixels. On leur donne
+   une zone de touche décente sans rien déplacer — la marge négative reprend
+   exactement ce que la marge intérieure a ajouté. */
+@media (pointer: coarse) {
+  table.grille td a,
+  table.grille td button.bt--nu,
+  table.grille td button:not(.bt):not(.filtre):not(.etiq),
+  .liste__ligne a,
+  .rang-s a,
+  a.rang-s {
+    padding-block: 10px;
+    margin-block: -10px;
+  }
+  .etiq[role="button"], button.etiq { min-height: 38px; padding: 0 var(--e-3); }
+}
