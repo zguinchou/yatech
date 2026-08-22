@@ -575,6 +575,26 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 /* Ce qui est derrière nous se relit, mais ne se planifie plus. */
 .pl-jour.passe, .pl-piste.passe { opacity: .62; }
 
+/* --- les heures où l'atelier n'ouvre pas ----------------------------------
+   Hachurées, jamais effacées : un trou sans explication ressemble à un créneau
+   libre, et c'est comme ça qu'on promet une heure qu'on ne tiendra pas. */
+.pl-ferme {
+  position: absolute; left: 0; right: 0; top: var(--y); height: var(--h);
+  background: repeating-linear-gradient(135deg,
+    var(--trait-fin) 0 6px, transparent 6px 12px);
+  opacity: .85; pointer-events: none; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.pl-ferme i {
+  font-style: normal; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--encre-3); background: var(--plan); border: 1px solid var(--trait);
+  border-radius: 999px; padding: 2px 8px; max-width: 92%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.pl-piste.ferme { background: var(--fond); }
+.pl-jour.clos b, .pl-jour.clos span { color: var(--encre-3); }
+.pl-charge.clos { background: var(--relief); color: var(--encre-3); }
+
 /* les heures pleines, en fond : des repères, pas un quadrillage */
 .pl-trait {
   position: absolute; top: var(--y); left: 0; right: 0; height: 1px;
@@ -1007,6 +1027,43 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 
 /* réglage fin du parc, dans les paramètres */
 .grille-rangees { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+/* --- les horaires jour par jour -------------------------------------------
+   Une ligne par jour travaillé, lisible d'un coup : c'est là qu'on voit que le
+   samedi s'arrête à midi sans avoir à ouvrir six panneaux. */
+.horaires-jours { display: grid; gap: 8px; }
+.hj {
+  display: grid; gap: 7px; padding: 9px 11px;
+  border: 1px solid var(--trait); border-radius: var(--r-s); background: var(--plan-2);
+}
+.hj.clos { opacity: .72; }
+.hj-nom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hj-nom b { font-size: 13px; min-width: 74px; }
+.hj-nom .bascule { margin-left: auto; font-size: 12px; }
+.hj-heures { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); }
+.hj-heures label {
+  display: grid; gap: 3px; font-size: 10.5px; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--encre-3);
+}
+.hj-heures .saisie { padding: 6px 8px; font-size: 12.5px; }
+@media (max-width: 560px) {
+  .hj-heures { grid-template-columns: 1fr 1fr; }
+}
+
+/* --- congés et fermetures ------------------------------------------------- */
+.ferm-l {
+  display: flex; align-items: center; gap: 10px; padding: 8px 11px;
+  border: 1px solid var(--trait); border-radius: var(--r-s); background: var(--plan-2);
+}
+.ferm-l.passee { opacity: .55; }
+.ferm-txt { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.ferm-txt b { font-size: 13px; }
+.ferm-form {
+  display: grid; gap: 9px; align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  padding: 11px; border: 1px dashed var(--trait); border-radius: var(--r-s);
+}
+.ferm-form .btn { height: 36px; }
 .grille-places { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .place-reglage { display: flex; align-items: center; gap: 8px; }
 .place-reglage .num {
@@ -3083,6 +3140,17 @@ const REGLAGES = {
   pauseDebut: '12:00',    // la coupure du midi : on ne propose rien entre les deux
   pauseFin: '14:00',
   pasPlanning: 30,
+
+  /* Des horaires différents selon les jours — le samedi matin seulement, le
+     mercredi fermé. Tant que ce n'est pas coché, tous les jours suivent les
+     horaires ci-dessus. { 5: { debut:'09:00', fin:'12:00' }, 2: { ferme:true } } */
+  horairesParJour: false,
+  horairesJour: {},
+
+  /* Congés, ponts, fermeture exceptionnelle. Le planning cesse d'y proposer
+     quoi que ce soit ; ce qui y est déjà pris est signalé, jamais effacé.
+     [{ id, debut:'2026-08-10', fin:'2026-08-24', motif:'Congés d'été' }] */
+  fermetures: [],
   voixAuto: false,        // le micro s'ouvre-t-il tout seul en arrivant ?
   voixParle: true,        // l'outil répond-il à voix haute ?
   voixDemande: true,      // pose-t-il les questions de ce qui manque ?
@@ -3248,32 +3316,139 @@ const enMinutes = (h, defaut) => {
 };
 const enHeure = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 
-/** Les deux tranches d'ouverture : le matin, puis l'après-midi. Un garage
- *  ferme le midi — proposer 12 h 30 à un client ne mène qu'à un malentendu. */
-function tranchesOuverture(r) {
-  const debut = enMinutes(r && r.heureDebut, 540);
-  const fin = Math.max(enMinutes(r && r.heureFin, 1080), debut + 60);
-  let p1 = enMinutes(r && r.pauseDebut, 0), p2 = enMinutes(r && r.pauseFin, 0);
-  // une coupure hors des heures d'ouverture, ou à l'envers, n'en est pas une
-  if (!(p1 > debut && p2 > p1 && p2 < fin)) return [[debut, fin]];
-  return [[debut, p1], [p2, fin]];
+/** Le n° du jour dans la semaine de travail : 0 = lundi … 5 = samedi.
+ *  Le dimanche vaut 6 — aucun horaire ne lui est attaché, il est fermé. */
+const rangJour = (ts) => (new Date(ts).getDay() + 6) % 7;
+
+/* Les horaires d'UN jour. Beaucoup d'ateliers ne font que le samedi matin, ou
+   ferment le mercredi : un horaire unique pour toute la semaine oblige soit à
+   refuser des rendez-vous qu'on pourrait prendre, soit à en proposer qu'on ne
+   tiendra pas. Tant que « des horaires différents selon les jours » n'est pas
+   coché, chaque jour répond l'horaire général — rien ne change. */
+function horairesDuJour(r, n) {
+  const general = {
+    debut: enMinutes(r && r.heureDebut, 540),
+    fin: enMinutes(r && r.heureFin, 1080),
+    p1: enMinutes(r && r.pauseDebut, 0),
+    p2: enMinutes(r && r.pauseFin, 0),
+    ferme: false
+  };
+  if (n === undefined || n === null) return general;
+  if (n > (Number(r && r.joursOuvres) === 5 ? 4 : 5)) return { ...general, ferme: true };
+  if (!(r && r.horairesParJour)) return general;
+  const j = (r.horairesJour || {})[n];
+  if (!j) return general;
+  if (j.ferme) return { ...general, ferme: true };
+  return {
+    debut: enMinutes(j.debut, general.debut),
+    fin: enMinutes(j.fin, general.fin),
+    p1: enMinutes(j.pauseDebut, general.p1),
+    p2: enMinutes(j.pauseFin, general.p2),
+    ferme: false
+  };
 }
 
+/** Les deux tranches d'ouverture : le matin, puis l'après-midi. Un garage
+ *  ferme le midi — proposer 12 h 30 à un client ne mène qu'à un malentendu.
+ *
+ *  Sans jour précisé, on répond l'AMPLITUDE de la semaine : la plus large
+ *  ouverture et la plus tardive fermeture de tous les jours travaillés. C'est
+ *  elle qui donne sa hauteur à la grille du planning — chaque journée y peint
+ *  ensuite ses propres heures fermées. */
+function tranchesOuverture(r, n) {
+  const cadre = (h) => {
+    const debut = h.debut;
+    const fin = Math.max(h.fin, debut + 60);
+    // une coupure hors des heures d'ouverture, ou à l'envers, n'en est pas une
+    if (!(h.p1 > debut && h.p2 > h.p1 && h.p2 < fin)) return [[debut, fin]];
+    return [[debut, h.p1], [h.p2, fin]];
+  };
+  if (n !== undefined && n !== null) {
+    const h = horairesDuJour(r, n);
+    return h.ferme ? [] : cadre(h);
+  }
+  if (!(r && r.horairesParJour)) return cadre(horairesDuJour(r));
+  const ouverts = joursTravailles(r).map(i => horairesDuJour(r, i)).filter(h => !h.ferme);
+  if (!ouverts.length) return cadre(horairesDuJour(r));
+  /* La coupure commune : celle que TOUS les jours observent. Si un seul jour
+     travaille entre midi et deux, la grille doit lui laisser la place. */
+  const p1 = Math.max(...ouverts.map(h => (h.p1 > h.debut && h.p2 > h.p1 && h.p2 < h.fin) ? h.p1 : 0));
+  const p2 = Math.min(...ouverts.map(h => (h.p1 > h.debut && h.p2 > h.p1 && h.p2 < h.fin) ? h.p2 : 1440));
+  return cadre({
+    debut: Math.min(...ouverts.map(h => h.debut)),
+    fin: Math.max(...ouverts.map(h => h.fin)),
+    p1: p1 && p2 > p1 ? p1 : 0,
+    p2: p1 && p2 > p1 ? p2 : 0
+  });
+}
+
+/** Les rangs des jours travaillés : 0-4 ou 0-5 selon le samedi. */
+const joursTravailles = (r) => [0, 1, 2, 3, 4, 5].slice(0, Number(r && r.joursOuvres) === 5 ? 5 : 6);
+
 /** Le total d'heures réellement ouvertes dans une journée. */
-function heuresOuvertes(r) {
-  return tranchesOuverture(r).reduce((s, [a, b]) => s + (b - a) / 60, 0);
+function heuresOuvertes(r, n) {
+  return tranchesOuverture(r, n).reduce((s, [a, b]) => s + (b - a) / 60, 0);
+}
+
+/** La moyenne d'heures ouvertes sur la semaine : ce qui sert à juger si une
+ *  journée est chargée quand on regarde la semaine entière. */
+function heuresMoyennes(r) {
+  const l = joursTravailles(r).map(i => heuresOuvertes(r, i)).filter(h => h > 0);
+  return l.length ? l.reduce((s, h) => s + h, 0) / l.length : heuresOuvertes(r);
+}
+
+/* --- les jours où l'atelier ne travaille pas -------------------------------
+   Congés, ponts, jour de fermeture exceptionnelle : ils se posent une fois et
+   le planning cesse d'y proposer quoi que ce soit. Un rendez-vous déjà pris ce
+   jour-là n'est jamais effacé — il est signalé, et c'est à vous de rappeler le
+   client. */
+function fermetures(r) {
+  return ((r || DB.etat.reglages).fermetures || [])
+    .filter(f => f && f.debut)
+    .map(f => ({
+      id: f.id, motif: f.motif || '',
+      debut: depuisInputDate(f.debut),
+      fin: depuisInputDate(f.fin || f.debut)
+    }))
+    .filter(f => f.debut && f.fin && f.fin >= f.debut)
+    .sort((a, b) => a.debut - b.debut);
+}
+
+/** La fermeture qui couvre ce jour-là, s'il y en a une. */
+function fermetureDu(ts, r) {
+  const j = minuit(ts);
+  return fermetures(r).find(f => j >= f.debut && j <= f.fin) || null;
+}
+
+/** Ce jour-là, l'atelier tourne-t-il ? */
+function jourOuvre(ts, r) {
+  const reg = r || DB.etat.reglages;
+  return !horairesDuJour(reg, rangJour(ts)).ferme && !fermetureDu(ts, reg);
 }
 
 /* Les créneaux proposés : de l'ouverture à la fermeture, la coupure du midi en
    moins. Le tableau est reconstruit sur place : tout ce qui le référence suit. */
 const HEURES = [];
+function pasPlanning(r) {
+  return [15, 30, 60].includes(Math.round(r && r.pasPlanning)) ? Math.round(r.pasPlanning) : 30;
+}
 function construireHeures(r) {
-  const pas = [15, 30, 60].includes(Math.round(r && r.pasPlanning)) ? Math.round(r.pasPlanning) : 30;
+  const pas = pasPlanning(r);
   HEURES.length = 0;
   tranchesOuverture(r).forEach(([debut, fin]) => {
     for (let m = debut; m <= fin; m += pas) HEURES.push(enHeure(m));
   });
   return HEURES;
+}
+
+/** Les créneaux d'un jour précis : ceux du samedi ne sont pas ceux du mardi. */
+function heuresDuJour(r, ts) {
+  const pas = pasPlanning(r);
+  const l = [];
+  tranchesOuverture(r, rangJour(ts)).forEach(([debut, fin]) => {
+    for (let m = debut; m <= fin; m += pas) l.push(enHeure(m));
+  });
+  return l;
 }
 construireHeures(REGLAGES);
 
@@ -3748,6 +3923,9 @@ const DB = {
       if (avantPause && e.reglages.heureDebut === '08:00') e.reglages.heureDebut = d.heureDebut;
     }
     if (!Array.isArray(e.appels)) e.appels = [];
+    // une sauvegarde abîmée ne doit pas faire tomber le planning
+    if (!Array.isArray(e.reglages.fermetures)) e.reglages.fermetures = [];
+    if (!e.reglages.horairesJour || typeof e.reglages.horairesJour !== 'object') e.reglages.horairesJour = {};
     /* Les dossiers déjà partis chez un client n'avaient pas de taux figé :
        on leur pose celui d'aujourd'hui, une fois. Leurs montants restent donc
        exactement ceux qu'on lit à l'écran en ce moment, et ils ne bougeront
@@ -6731,12 +6909,34 @@ function modalePlanif(ctx) {
             <select class="saisie" name="heure">
               ${/* Le « + » d'une demi-journée dit laquelle : autant partir de son
                     heure d'ouverture plutôt que de celle du matin. */ ''}
-              ${HEURES.map(h => `<option value="${h}" ${
-                (p ? p.heure : (HEURES.includes(ctx.heure) ? ctx.heure : HEURES[0])) === h ? 'selected' : ''
-              }>${h}</option>`).join('')}
+              ${(() => {
+                /* Les créneaux de CE jour-là : le samedi matin n'a pas les
+                   heures du mardi. Un rendez-vous déjà posé garde la sienne,
+                   même si l'horaire a changé depuis — sinon on ne pourrait
+                   plus le corriger sans le déplacer. */
+                const dispo = heuresDuJour(DB.etat.reglages, jour);
+                const choisie = p ? p.heure : (dispo.includes(ctx.heure) ? ctx.heure : dispo[0]);
+                const liste = dispo.length ? dispo : HEURES;
+                return (liste.includes(choisie) ? liste : [choisie].concat(liste))
+                  .map(h => `<option value="${h}" ${h === choisie ? 'selected' : ''}>${h}${
+                    dispo.includes(h) ? '' : ' — hors horaires'}</option>`).join('');
+              })()}
             </select>
           </div>
         </div>
+
+        ${/* Poser un rendez-vous un jour de congés n'est pas interdit — on ouvre
+              parfois pour un dépannage. Mais il faut le savoir avant de le
+              confirmer au client, pas en revenant de vacances. */ ''}
+        <div id="planif-ferme">${(() => {
+          const ferm = fermetureDu(jour);
+          const clos = horairesDuJour(DB.etat.reglages, rangJour(jour)).ferme;
+          if (!ferm && !clos) return '';
+          return `<div class="encart alerte"><b>L'atelier est fermé ce jour-là${
+            ferm && ferm.motif ? ' — ' + esc(ferm.motif) : ''}.</b>
+            Le créneau se pose quand même si vous ouvrez exprès, mais il ne comptera
+            dans aucune charge de journée.</div>`;
+        })()}</div>
 
         <div class="champ-duo">
           <div class="champ"><label>Durée de l'intervention (heures)</label>
@@ -7852,8 +8052,8 @@ function vuePlanning() {
   const rdvVus = (ts) => rdvDu(ts, suivi || undefined).filter(p => gardeAnnules || !p.annule);
 
   // au-delà de quoi une journée est pleine : une personne, ou tout l'atelier
-  const capaciteJour = heuresOuvertes(DB.etat.reglages)
-    * (suivi ? 1 : Math.max(1, DB.etat.utilisateurs.length));
+  const equipe = suivi ? 1 : Math.max(1, DB.etat.utilisateurs.length);
+  const capaciteDu = (ts) => heuresOuvertes(DB.etat.reglages, rangJour(ts)) * equipe;
 
   const tranches = tranchesOuverture(DB.etat.reglages);
   const minuteCourante = new Date().getHours() * 60 + new Date().getMinutes();
@@ -7863,20 +8063,45 @@ function vuePlanning() {
 
   /* La demi-journée d'un jour : les repères d'heures, ce qui y est posé, et le
      trait du moment présent quand il y tombe — c'est lui qui dit où on en est. */
+  /* Ce qui, dans cette demi-journée, est fermé pour CE jour-là : l'atelier
+     n'ouvre pas encore, il a déjà fermé, ou il est en congés. On le peint en
+     hachures plutôt que de l'effacer — un trou sans explication ressemble à un
+     créneau libre, et c'est comme ça qu'on promet une heure qu'on ne tiendra
+     pas. */
+  const bandesFermees = (jour, t) => {
+    const ferm = fermetureDu(jour.ts);
+    const h = horairesDuJour(DB.etat.reglages, rangJour(jour.ts));
+    if (ferm || h.ferme) return [{ a: 0, b: 100, motif: ferm ? (ferm.motif || 'Fermé') : 'Fermé' }];
+    const siennes = tranchesOuverture(DB.etat.reglages, rangJour(jour.ts));
+    const bandes = [];
+    let curseur = t[0];
+    siennes.filter(([a, b]) => b > t[0] && a < t[1]).forEach(([a, b]) => {
+      if (a > curseur) bandes.push({ a: posDemi(curseur, t), b: posDemi(a, t), motif: '' });
+      curseur = Math.max(curseur, b);
+    });
+    if (curseur < t[1]) bandes.push({ a: posDemi(curseur, t), b: posDemi(t[1], t), motif: '' });
+    return bandes.filter(x => x.b - x.a > 0.5);
+  };
+
   const piste = (jour, i, demi) => {
     const t = tranches[i];
     const passe = jour.ts < aujourdhui;
     const maintenant = jour.ts === aujourdhui && minuteCourante >= t[0] && minuteCourante <= t[1]
       ? posDemi(minuteCourante, t) : null;
+    const fermees = bandesFermees(jour, t);
+    const toutFerme = fermees.some(f => f.a <= 0.5 && f.b >= 99.5);
 
     return `<div class="pl-piste ${jour.ts === aujourdhui ? 'jour-j' : ''} ${passe ? 'passe' : ''} ${
-                 i ? 'coupe' : ''}"
+                 i ? 'coupe' : ''} ${toutFerme ? 'ferme' : ''}"
                  style="--heures:${(t[1] - t[0]) / 60};--n:${demi.cols}">
+      ${fermees.map(f => `<span class="pl-ferme" style="--y:${f.a}%;--h:${f.b - f.a}%"${
+        f.motif ? ` title="${esc(f.motif)}"` : ''}>${
+        f.motif && f.b - f.a > 30 ? `<i>${esc(f.motif)}</i>` : ''}</span>`).join('')}
       ${marquesDemi(t).map(m => `<span class="pl-trait" style="--y:${m.pos}%"></span>`).join('')}
       ${maintenant !== null ? `<span class="pl-maintenant" style="--y:${maintenant}%"></span>` : ''}
-      ${demi.poses.length ? '' : '<span class="pl-libre">libre</span>'}
+      ${demi.poses.length || toutFerme ? '' : '<span class="pl-libre">libre</span>'}
       ${demi.poses.map(o => boiteRdv(o, t)).join('')}
-      ${passe ? '' : `<button class="pl-plus" data-act="planif-nouveau"
+      ${passe || toutFerme ? '' : `<button class="pl-plus" data-act="planif-nouveau"
         data-jour="${jour.ts}" data-heure="${enHeure(t[0])}" data-user="${S.planningQui || S.userId}"
         title="Ajouter un rendez-vous — ${nomDemi(i)}, ${heureCourte(t[0])} à ${heureCourte(t[1])}">${ic('plus')}</button>`}
     </div>`;
@@ -8015,14 +8240,20 @@ function vuePlanning() {
         ${jours.map(j => {
           // un créneau rendu ne charge plus la journée : il ne se compte plus
           const charge = rdvVus(j.ts).filter(x => !x.annule).reduce((s, p) => s + p.duree, 0);
-          const plein = charge > capaciteJour;
+          const capa = capaciteDu(j.ts);
+          const plein = capa > 0 && charge > capa;
+          const ferm = fermetureDu(j.ts);
+          const clos = ferm || horairesDuJour(DB.etat.reglages, rangJour(j.ts)).ferme;
           return `<div class="pl-jour ${j.ts === aujourdhui ? 'jour-j' : ''} ${
-                       j.ts < aujourdhui ? 'passe' : ''}">
+                       j.ts < aujourdhui ? 'passe' : ''} ${clos ? 'clos' : ''}">
             <b>${esc(j.nom)}</b>
             <span class="num">${dateCourte(j.ts)}</span>
             ${/* Chaque demi-journée dit déjà si elle est libre : le répéter ici
                   ferait écrire « libre » trois fois sur une journée vide. */ ''}
-            ${charge ? `<span class="pl-charge ${plein ? 'plein' : ''}">${heuresFr(charge)}</span>` : ''}
+            ${clos ? `<span class="pl-charge clos" title="${esc(ferm ? (ferm.motif || 'Fermé') : 'Jour non travaillé')}">${
+                       esc(ferm ? (ferm.motif || 'Fermé') : 'Fermé')}${
+                       charge ? ' · ' + heuresFr(charge) + ' pris' : ''}</span>`
+                   : charge ? `<span class="pl-charge ${plein ? 'plein' : ''}">${heuresFr(charge)}</span>` : ''}
           </div>`;
         }).join('')}
 
@@ -10439,6 +10670,82 @@ function vueReglages() {
                    data-champ-reglage="dureeDefaut" value="${esc(r.dureeDefaut)}">
           </div>
         </div>
+        <label class="voix-reglage">
+          <input type="checkbox" data-champ-parc-oui="horairesParJour" ${r.horairesParJour ? 'checked' : ''}>
+          <div><b>Des horaires différents selon les jours</b>
+            <span class="aide">Le samedi matin seulement, le mercredi fermé, une reprise plus tôt le
+            lundi. Décoché, tous les jours suivent les horaires ci-dessus.</span></div>
+        </label>
+        ${r.horairesParJour ? `<div class="horaires-jours">
+          ${joursTravailles(r).map(n => {
+            const j = (r.horairesJour || {})[n] || {};
+            const h = horairesDuJour(r, n);
+            return `<div class="hj ${h.ferme ? 'clos' : ''}">
+              <div class="hj-nom">
+                <b>${esc(JOURS_SEMAINE[n])}</b>
+                <label class="bascule">
+                  <input type="checkbox" data-champ-jour-ferme="${n}" ${h.ferme ? 'checked' : ''}>
+                  <span>Fermé</span>
+                </label>
+              </div>
+              ${h.ferme ? '<span class="aide">Aucun créneau ne sera proposé ce jour-là.</span>' : `
+              <div class="hj-heures">
+                <label>Ouverture<input class="saisie num" type="time" step="1800"
+                       data-champ-jour="${n}:debut" value="${esc(j.debut || enHeure(h.debut))}"></label>
+                <label>Fermeture<input class="saisie num" type="time" step="1800"
+                       data-champ-jour="${n}:fin" value="${esc(j.fin || enHeure(h.fin))}"></label>
+                <label>Coupure<input class="saisie num" type="time" step="1800"
+                       data-champ-jour="${n}:pauseDebut" value="${esc(j.pauseDebut || (h.p1 ? enHeure(h.p1) : ''))}"></label>
+                <label>Reprise<input class="saisie num" type="time" step="1800"
+                       data-champ-jour="${n}:pauseFin" value="${esc(j.pauseFin || (h.p2 ? enHeure(h.p2) : ''))}"></label>
+              </div>
+              <span class="aide">${heuresOuvertes(r, n)
+                ? tranchesOuverture(r, n).map(([a, b]) => `${esc(enHeure(a))}–${esc(enHeure(b))}`).join(' et ')
+                  + ' · ' + heuresFr(heuresOuvertes(r, n))
+                : 'aucune heure ouverte'}</span>`}
+            </div>`;
+          }).join('')}
+        </div>
+        <p class="aide">Laissez la coupure vide pour une journée continue. La grille du planning
+        s'ouvre sur l'amplitude la plus large de la semaine ; chaque jour y hachure ses heures
+        fermées.</p>` : ''}
+
+        <div class="sep"></div>
+        <div class="etiq">Congés et fermetures</div>
+        <p class="aide" style="margin:0">Vacances, ponts, une journée de fermeture exceptionnelle.
+        Le planning cesse d'y proposer des créneaux et les confrères ne peuvent plus y réserver.
+        <b>Rien n'est effacé</b> : un rendez-vous déjà pris ce jour-là reste, signalé — à vous de
+        rappeler le client.</p>
+        <div class="pile" style="gap:8px">
+          ${fermetures(r).map(f => {
+            const encore = f.fin >= minuit(Date.now());
+            const pris = DB.etat.planning.filter(x => !x.annule
+              && minuit(x.jour) >= f.debut && minuit(x.jour) <= f.fin).length;
+            return `<div class="ferm-l ${encore ? '' : 'passee'}">
+              <div class="ferm-txt">
+                <b>${esc(f.motif || 'Fermeture')}</b>
+                <span class="mini">${f.debut === f.fin ? dateLongue(f.debut)
+                  : 'du ' + dateCourte(f.debut) + ' au ' + dateCourte(f.fin)
+                    + ' · ' + (Math.round((f.fin - f.debut) / JOUR) + 1) + ' jours'}</span>
+                ${pris ? `<span class="mini" style="color:var(--occupe)">
+                  ${pris} rendez-vous ${pris > 1 ? 'sont' : 'est'} posé${pris > 1 ? 's' : ''} sur ces dates</span>` : ''}
+              </div>
+              <button class="btn nu danger" data-act="suppr-fermeture" data-id="${esc(f.id)}"
+                      title="Retirer">${ic('poubelle')}</button>
+            </div>`;
+          }).join('') || '<p class="aide" style="margin:0">Aucune fermeture prévue.</p>'}
+        </div>
+        <form id="form-fermeture" class="ferm-form">
+          <div class="champ"><label>Du</label>
+            <input class="saisie" type="date" name="debut" required></div>
+          <div class="champ"><label>Au (vide = un seul jour)</label>
+            <input class="saisie" type="date" name="fin"></div>
+          <div class="champ"><label>Motif</label>
+            <input class="saisie" name="motif" placeholder="Congés d'été" maxlength="40"></div>
+          <button class="btn plein" type="submit">${ic('plus')} Ajouter</button>
+        </form>
+
+        <div class="sep"></div>
         <div class="champ-duo">
           <div class="champ"><label>Nom de la ressource « pont »</label>
             <input class="saisie" data-champ-parc="nomPont" value="${esc(r.nomPont)}" placeholder="Pont élévateur"></div>
@@ -10467,9 +10774,19 @@ function vueReglages() {
         </label>
 
         <p class="aide">Les créneaux proposés suivent ces horaires, coupure du midi comprise.
-        Actuellement ${HEURES.length} créneaux —
-        ${tranchesOuverture(r).map(([a, b]) => `de <b>${esc(enHeure(a))}</b> à <b>${esc(enHeure(b))}</b>`).join(' et ')},
-        soit ${heuresFr(heuresOuvertes(r))} d'atelier par jour.</p>
+        ${r.horairesParJour
+          ? `La grille du planning s'ouvre sur l'amplitude de la semaine —
+             ${tranchesOuverture(r).map(([a, b]) => `de <b>${esc(enHeure(a))}</b> à <b>${esc(enHeure(b))}</b>`).join(' et ')} —
+             et chaque jour y hachure ses heures fermées. Sur la semaine,
+             <b>${heuresFr(joursTravailles(r).reduce((t, n) => t + heuresOuvertes(r, n), 0))}</b> d'atelier,
+             soit ${heuresFr(heuresMoyennes(r))} par jour ouvré en moyenne.`
+          : `Actuellement ${HEURES.length} créneaux —
+             ${tranchesOuverture(r).map(([a, b]) => `de <b>${esc(enHeure(a))}</b> à <b>${esc(enHeure(b))}</b>`).join(' et ')},
+             soit ${heuresFr(heuresOuvertes(r))} d'atelier par jour.`}
+        ${(() => { const f = fermetures(r).filter(x => x.fin >= minuit(Date.now()));
+          return f.length ? `<br>${f.length} fermeture${f.length > 1 ? 's' : ''} à venir — la prochaine
+            ${f[0].debut === f[0].fin ? 'le ' + dateCourte(f[0].debut)
+              : 'du ' + dateCourte(f[0].debut) + ' au ' + dateCourte(f[0].fin)}.` : ''; })()}</p>
       </div>
     </section>` : ''}
 
@@ -10888,12 +11205,13 @@ function chargeDuJour(jour) {
 
 function joursReservables(nb) {
   const jours = [];
-  const ouvres = DB.etat.reglages.joursOuvres === 5 ? 5 : 6;
   let n = 1;
-  while (jours.length < nb) {
+  /* On ne propose jamais un jour où l'atelier n'ouvre pas : ni le dimanche, ni
+     un jour de fermeture hebdomadaire, ni pendant les congés. Le garde-fou à
+     400 évite une boucle sans fin si tout est fermé. */
+  while (jours.length < nb && n <= 400) {
     const j = jourPlus(Date.now(), n++);
-    const jour = new Date(j).getDay();          // 0 = dimanche
-    if (jour !== 0 && (ouvres === 6 || jour !== 6)) jours.push(j);
+    if (jourOuvre(j)) jours.push(j);
   }
   return jours;
 }
@@ -12899,7 +13217,11 @@ function apresRendu() {
      setSelectionRange n'existe que sur les champs texte — l'appeler sur un
      champ nombre lève une erreur qui interromprait tout le reste. */
   if (S.champParcActif) {
-    const c = $(`[data-champ-parc="${S.champParcActif}"]`);
+    /* Les horaires d'un jour portent leur propre attribut : « jour:5:debut »
+       désigne l'heure d'ouverture du samedi. */
+    const c = String(S.champParcActif).startsWith('jour:')
+      ? $(`[data-champ-jour="${S.champParcActif.slice(5)}"]`)
+      : $(`[data-champ-parc="${S.champParcActif}"]`);
     S.champParcActif = null;
     if (c) {
       c.focus();
@@ -13298,6 +13620,64 @@ function apresRendu() {
       champ.setSelectionRange(champ.value.length, champ.value.length);
     }
   }
+
+  /* Changer le jour change les créneaux : le samedi matin n'a pas les heures
+     du mardi. On refait la liste sur place — un redessin complet viderait tout
+     ce que la fenêtre a déjà de saisi. */
+  const fpJour = $('#form-planif [name=jourDate]');
+  if (fpJour) fpJour.addEventListener('change', () => {
+    const ts = depuisInputDate(fpJour.value);
+    if (!ts) return;
+    const sel = $('#form-planif [name=heure]');
+    if (sel) {
+      const avant = sel.value;
+      const dispo = heuresDuJour(DB.etat.reglages, ts);
+      const liste = dispo.length ? dispo : HEURES;
+      const garde = liste.includes(avant) ? avant : liste[0];
+      sel.innerHTML = liste.map(h => `<option value="${h}" ${h === garde ? 'selected' : ''}>${h}</option>`).join('');
+      sel.value = garde;
+    }
+    const avis = $('#planif-ferme');
+    if (avis) {
+      const ferm = fermetureDu(ts);
+      const clos = horairesDuJour(DB.etat.reglages, rangJour(ts)).ferme;
+      avis.innerHTML = (ferm || clos)
+        ? `<div class="encart alerte"><b>L'atelier est fermé ce jour-là${
+            ferm && ferm.motif ? ' — ' + esc(ferm.motif) : ''}.</b>
+            Le créneau se pose quand même si vous ouvrez exprès, mais il ne comptera
+            dans aucune charge de journée.</div>`
+        : '';
+    }
+  });
+
+  /* Une fermeture s'ajoute : congés, pont, journée exceptionnelle. Une seule
+     date suffit — le champ « au » vide veut dire « ce jour-là seulement ». */
+  const ff = $('#form-fermeture');
+  if (ff) ff.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!exigeAdmin('Modifier les fermetures')) return;
+    const f = Object.fromEntries(new FormData(ff).entries());
+    const debut = depuisInputDate(f.debut);
+    if (!debut) { toast('Choisissez au moins une date de début'); return; }
+    const fin = depuisInputDate(f.fin) || debut;
+    if (fin < debut) { toast('La fin est avant le début : reprenez les dates'); return; }
+    const r = DB.etat.reglages;
+    r.fermetures = r.fermetures || [];
+    r.fermetures.push({
+      id: DB.nouvelId('fe'), debut: isoLocal(debut), fin: isoLocal(fin),
+      motif: String(f.motif || '').trim()
+    });
+    DB.sauver();
+    const jours = Math.round((fin - debut) / JOUR) + 1;
+    const pris = DB.etat.planning.filter(x => !x.annule
+      && minuit(x.jour) >= debut && minuit(x.jour) <= fin && !x.annule).length;
+    enregistrer(`Fermeture posée du ${dateCourte(debut)} au ${dateCourte(fin)}`
+      + (f.motif ? ' : ' + String(f.motif).trim() : ''));
+    toast(jours > 1 ? `${jours} jours fermés` : 'Journée fermée');
+    if (pris) toast(`${pris} rendez-vous ${pris > 1 ? 'sont' : 'est'} déjà posé${
+      pris > 1 ? 's' : ''} sur ces dates — pensez à prévenir`);
+    rendre();
+  });
 
   // pose ou modification d'un créneau
   const fp = $('#form-planif');
@@ -15693,6 +16073,19 @@ document.addEventListener('click', (e) => {
     'monter-presta'()    { deplacerPresta(id, -1); },
     'descendre-presta'() { deplacerPresta(id, +1); },
 
+    /* Retirer une fermeture : l'atelier rouvre ces jours-là, et le planning
+       recommence à y proposer des créneaux. Rien d'autre ne bouge. */
+    'suppr-fermeture'() {
+      if (!exigeAdmin('Modifier les fermetures')) return;
+      const r = DB.etat.reglages;
+      const f = (r.fermetures || []).find(x => x.id === id);
+      r.fermetures = (r.fermetures || []).filter(x => x.id !== id);
+      DB.sauver();
+      enregistrer('Fermeture retirée' + (f && f.motif ? ' : ' + f.motif : ''));
+      toast('Fermeture retirée — l\'atelier rouvre ces jours-là');
+      rendre();
+    },
+
     'suppr-famille'() {
       if (!exigeAdmin('Supprimer une section du catalogue')) return;
       const lignes = DB.etat.catalogue.filter(p => p.famille === id);
@@ -16630,6 +17023,36 @@ document.addEventListener('input', (e) => {
   if (t.dataset.champVoix || t.dataset.champOui) {
     DB.etat.reglages[t.dataset.champVoix || t.dataset.champOui] = t.checked;
     DB.sauver(); rendre();
+    return;
+  }
+  /* Les horaires d'un jour : « 5:debut », « 2:pauseFin ». Vide = ce jour suit
+     l'horaire général, ce qui permet de revenir en arrière sans tout retaper. */
+  if (t.dataset.champJour) {
+    const [n, quoi] = t.dataset.champJour.split(':');
+    const r = DB.etat.reglages;
+    r.horairesJour = r.horairesJour || {};
+    const j = r.horairesJour[n] = r.horairesJour[n] || {};
+    if (t.value) j[quoi] = t.value; else delete j[quoi];
+    DB.sauver(); DB.appliquerReglages();
+    S.champParcActif = 'jour:' + t.dataset.champJour;
+    rendre();
+    return;
+  }
+  if (t.dataset.champJourFerme) {
+    const n = t.dataset.champJourFerme;
+    const r = DB.etat.reglages;
+    r.horairesJour = r.horairesJour || {};
+    r.horairesJour[n] = r.horairesJour[n] || {};
+    r.horairesJour[n].ferme = t.checked;
+    DB.sauver(); DB.appliquerReglages();
+    rendre();
+    return;
+  }
+  /* Un interrupteur qui refait les créneaux : il faut réappliquer, pas
+     seulement enregistrer. */
+  if (t.dataset.champParcOui) {
+    DB.etat.reglages[t.dataset.champParcOui] = t.checked;
+    DB.sauver(); DB.appliquerReglages(); rendre();
     return;
   }
   if (t.dataset.champParc) {
