@@ -23,8 +23,7 @@ import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import {
   ROLES, ETAPES, TYPES_PLACE, OUTILS_ELECTRO,
-  apercuNumero, nouvelUtilisateur, normaliser, neuf
-} from '../domain/schema.js';
+  apercuNumero, nouvelUtilisateur, normaliser, neuf, estUneSauvegarde } from '../domain/schema.js';
 import { enTete, champ, tete } from '../ui/widgets.js';
 import { appliquerApparence, MENU } from '../coque.js';
 
@@ -1212,8 +1211,11 @@ async function restaurer() {
   try { doc = JSON.parse(await lireTexte(fichiers[0])); }
   catch (err) { messageErreur('Fichier illisible : ce n’est pas du JSON.'); return; }
 
-  if (!doc || typeof doc !== 'object' || !Array.isArray(doc.dossiers)) {
-    messageErreur('Ce fichier n’est pas une sauvegarde Yatech.');
+  /* On vérifie AVANT de remplacer quoi que ce soit : normaliser() est
+     indulgent par nécessité — il relit les vieilles sauvegardes — et
+     transformerait un fichier quelconque en garage vide. */
+  if (!estUneSauvegarde(doc)) {
+    messageErreur('Ce fichier n’est pas une sauvegarde Yatech. Rien n’a été touché.');
     return;
   }
 

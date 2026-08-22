@@ -688,6 +688,25 @@ const COLLECTIONS = ['utilisateurs', 'clients', 'vehicules', 'dossiers', 'devis'
   'pieces', 'mouvements', 'fournisseurs', 'creneaux', 'interventions', 'prestations',
   'taches', 'appels', 'journal'];
 
+/**
+ * Est-ce vraiment une sauvegarde de l'outil ?
+ *
+ * `normaliser()` est volontairement indulgent : il complète ce qui manque et
+ * ne rejette rien, parce qu'il sert à relire les vieilles sauvegardes. Cette
+ * indulgence devient dangereuse au moment d'une RESTAURATION : un fichier
+ * quelconque passerait, deviendrait un garage vide, et remplacerait les vraies
+ * données. On demande donc des marques précises avant d'aller plus loin.
+ */
+export function estUneSauvegarde(doc) {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return false;
+  if (!doc.reglages || typeof doc.reglages !== 'object' || Array.isArray(doc.reglages)) return false;
+  /* Au moins trois des grandes collections doivent être présentes ET être des
+     tableaux : un objet qui a « reglages » par hasard n'ira pas plus loin. */
+  const presentes = ['clients', 'vehicules', 'dossiers', 'devis', 'factures', 'pieces', 'prestations']
+    .filter(k => Array.isArray(doc[k]));
+  return presentes.length >= 3;
+}
+
 export function normaliser(e) {
   if (!e || typeof e !== 'object') return neuf();
 

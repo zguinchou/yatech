@@ -14,7 +14,7 @@ import * as util from '../js/core/util.js';
 import { quand as fmtQuand } from '../js/core/fmt.js';
 import { sha256, verrou, verifier } from '../js/core/crypto.js';
 import { versCsv, depuisCsv, csvEnObjets } from '../js/core/fichiers.js';
-import { normaliser, neuf, nouvelleLigne, prochainNumero } from '../js/domain/schema.js';
+import { normaliser, neuf, nouvelleLigne, prochainNumero, estUneSauvegarde } from '../js/domain/schema.js';
 import { S, maj, annuler, refaire, peutAnnuler } from '../js/core/store.js';
 
 let passes = 0, echecs = 0;
@@ -321,6 +321,23 @@ groupe('Normalisation d’un état', () => {
     devis: [{ id: 'v1', statut: 'envoye', valableJusquau: Date.now() - 86400000 }]
   });
   verifie('un devis dépassé devient périmé', perime.devis[0].statut, 'expire');
+});
+
+groupe('Reconnaître une sauvegarde', () => {
+  /* Ce contrôle protège d'une perte de données : normaliser() est indulgent
+     par nécessité et transformerait n'importe quoi en garage vide. */
+  vrai('une vraie sauvegarde', estUneSauvegarde(neuf()));
+  verifie('un tableau', estUneSauvegarde([1, 2, 3]), false);
+  verifie('du texte', estUneSauvegarde('bonjour'), false);
+  verifie('null', estUneSauvegarde(null), false);
+  verifie('un objet quelconque', estUneSauvegarde({ a: 1 }), false);
+  verifie('des réglages seuls', estUneSauvegarde({ reglages: {} }), false);
+  verifie('deux collections ne suffisent pas',
+    estUneSauvegarde({ reglages: {}, clients: [], devis: [] }), false);
+  vrai('trois collections suffisent',
+    estUneSauvegarde({ reglages: {}, clients: [], devis: [], dossiers: [] }));
+  verifie('des collections qui n’en sont pas',
+    estUneSauvegarde({ reglages: {}, clients: 'oui', devis: 3, dossiers: null }), false);
 });
 
 groupe('Numérotation', () => {
