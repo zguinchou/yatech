@@ -26,6 +26,7 @@ import {
   apercuNumero, nouvelUtilisateur, normaliser, neuf, estUneSauvegarde } from '../domain/schema.js';
 import { enTete, champ, tete } from '../ui/widgets.js';
 import { appliquerApparence, MENU } from '../coque.js';
+import { verrou } from '../core/crypto.js';
 
 /* Les teintes proposées pour l'accent : huit repères bien séparés sur la roue,
    plutôt qu'un sélecteur libre où l'on tombe sur un orange illisible. */
@@ -559,8 +560,10 @@ function sectionEquipe(ctx, refaire) {
     panneau('Accès à l’outil', [
       reglageBascule(ctx, {
         cle: 'demanderCode', titre: 'Demander un code à l’ouverture',
-        aide: 'Désactivez si l’outil vit sur un seul poste, dans un atelier fermé : '
-          + 'il s’ouvrira directement sur la première personne active.'
+        aide: 'Par défaut, non : l’outil s’ouvre directement sur la première '
+          + 'personne active. Activez si plusieurs personnes se partagent le poste '
+          + 'et que chacune doit retrouver ses écrans — posez alors un code par '
+          + 'personne avec la clé, dans la liste ci-dessus.'
       }),
       reglage(ctx, {
         cle: 'verrouAuto', titre: 'Verrouillage automatique', type: 'nombre', unite: 'min',
@@ -582,7 +585,7 @@ function ligneUtilisateur(ctx, u, refaire) {
       h('div.gras.coupe', lit.nomUtilisateur(u)),
       h('div.petit.faible.coupe', [
         role.nom,
-        u.verrou ? 'code posé' : 'code à choisir à la prochaine connexion'
+        u.verrou ? 'code posé' : 'sans code'
       ].join(' · '))
     ]),
     u.actif ? null : h('span.pastille', 'désactivée'),
@@ -596,8 +599,10 @@ function ligneUtilisateur(ctx, u, refaire) {
         onclick: () => modaleCouleur(u, refaire)
       }, icone('etiquette')),
       h('button.bt.bt--nu.bt--icone.bt--s', {
-        type: 'button', 'aria-label': 'Réinitialiser le code de ' + lit.nomUtilisateur(u),
-        onclick: () => reinitialiserCode(u, refaire)
+        type: 'button',
+        'aria-label': (u.verrou ? 'Changer le code de ' : 'Poser un code pour ')
+          + lit.nomUtilisateur(u),
+        onclick: () => modaleCode(u, refaire)
       }, icone('cle')),
       h('button.bt.bt--nu.bt--icone.bt--s', {
         type: 'button', 'aria-label': (u.actif ? 'Désactiver ' : 'Réactiver ') + lit.nomUtilisateur(u),
@@ -694,20 +699,78 @@ function modaleCouleur(u, refaire) {
   });
 }
 
-async function reinitialiserCode(u, refaire) {
-  const ok = await confirmer({
-    titre: 'Réinitialiser le code ?',
-    texte: lit.nomUtilisateur(u) + ' n’aura plus de code.',
-    detail: 'À sa prochaine connexion, elle en choisira un nouveau elle-même.',
-    ok: 'Réinitialiser', danger: true
+/* Poser, changer ou retirer le code de quelqu'un.
+   On le tape deux fois : un code à quatre chiffres qu'on ne relit jamais et
+   qu'on a mal tapé une fois, c'est quelqu'un dehors le lendemain matin. */
+function modaleCode(u, refaire) {
+  const chiffres = (etiquette, auto) => {
+    const entree = h('input.saisie.saisie--num', {
+      type: 'password', inputmode: 'numeric', autocomplete: 'off',
+      maxlength: 4, placeholder: '••••', autofocus: auto || undefined,
+      oninput: (ev) => { ev.target.value = ev.target.value.replace(/\D/g, '').slice(0, 4); }
+    });
+    return { noeud: h('div.champ', [h('label', etiquette), entree]), entree };
+  };
+
+  const a = chiffres('Nouveau code (4 chiffres)', true);
+  const b = chiffres('Le même, pour être sûr');
+  const erreur = h('div.champ__erreur');
+
+  modale({
+    titre: (u.verrou ? 'Changer le code de ' : 'Poser un code pour ') + lit.nomUtilisateur(u),
+    corps: h('div.pile', [
+      h('p.petit.faible', 'Le code sépare les rôles au comptoir : il évite qu’un '
+        + 'client lise les chiffres par-dessus votre épaule. Il ne chiffre rien — '
+        + 'les données restent lisibles par qui a cet appareil en main.'),
+      a.noeud, b.noeud, erreur,
+      u.verrou ? h('div.petit.faible', 'Un code oublié se retire depuis l’écran '
+        + 'de connexion : personne ne reste enfermé dehors.') : null,
+      S.etat.reglages.demanderCode === false ? h('div.bandeau', [
+        icone('info'),
+        h('span', 'Le code ne sera pas demandé tant que « Demander un code à '
+          + 'l’ouverture » reste éteint, plus bas sur cet écran.')
+      ]) : null
+    ]),
+    actions: [
+      { texte: 'Annuler', ton: 'contour' },
+      u.verrou ? {
+        texte: 'Retirer le code', ton: 'danger',
+        faire: async () => {
+          const ok = await confirmer({
+            titre: 'Retirer le code ?',
+            texte: lit.nomUtilisateur(u) + ' entrera sans rien taper.',
+            ok: 'Retirer', danger: true
+          });
+          if (!ok) return false;
+          maj('Code de ' + lit.nomUtilisateur(u) + ' retiré', (etat) => {
+            const x = etat.utilisateurs.find(y => y.id === u.id);
+            if (x) x.verrou = null;
+          });
+          messageOk('Code retiré');
+          refaire();
+        }
+      } : null,
+      {
+        texte: 'Enregistrer', ton: 'fort',
+        faire: () => {
+          const c1 = a.entree.value, c2 = b.entree.value;
+          if (c1.length !== 4) { erreur.textContent = 'Il faut quatre chiffres.'; return false; }
+          if (c1 !== c2) {
+            erreur.textContent = 'Les deux saisies ne correspondent pas.';
+            b.entree.value = ''; b.entree.focus();
+            return false;
+          }
+          const v = verrou(c1);
+          maj('Code de ' + lit.nomUtilisateur(u) + ' enregistré', (etat) => {
+            const x = etat.utilisateurs.find(y => y.id === u.id);
+            if (x) x.verrou = v;
+          });
+          messageOk('Code enregistré. Retenez-le : il n’est plus affiché.');
+          refaire();
+        }
+      }
+    ]
   });
-  if (!ok) return;
-  maj('Code de ' + lit.nomUtilisateur(u) + ' réinitialisé', (etat) => {
-    const x = etat.utilisateurs.find(y => y.id === u.id);
-    if (x) x.verrou = null;
-  });
-  messageOk('Code effacé : un nouveau sera demandé à la prochaine connexion');
-  refaire();
 }
 
 async function basculerActif(e, u, refaire) {

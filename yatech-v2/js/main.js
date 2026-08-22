@@ -141,21 +141,26 @@ function etatDeDepart() {
 const CLE_SESSION = 'yatech.session';
 
 function reprendreSession() {
-  if (S.etat.reglages.demanderCode === false) {
-    S.moi = S.etat.utilisateurs.find(u => u.actif) || S.etat.utilisateurs[0] || null;
-    return;
-  }
+  const sansCode = S.etat.reglages.demanderCode === false;
   try {
     const brut = localStorage.getItem(CLE_SESSION);
-    if (!brut) return;
-    const s = JSON.parse(brut);
-    if (!s || !s.userId) return;
+    const s = brut ? JSON.parse(brut) : null;
     /* Une session ouverte il y a trois semaines n'a plus de sens : on demande
-       le code. Douze heures couvre une journée de travail et une nuit. */
-    if (s.quand && Date.now() - s.quand > 12 * 3600000) { localStorage.removeItem(CLE_SESSION); return; }
-    const u = S.etat.utilisateurs.find(x => x.id === s.userId && x.actif);
-    if (u) S.moi = u;
+       le code. Douze heures couvre une journée de travail et une nuit. Sans
+       code demandé, la date ne veut plus rien dire : on se souvient seulement
+       de qui travaillait, pour rouvrir sur ses écrans. */
+    const perimee = !sansCode && s && s.quand && Date.now() - s.quand > 12 * 3600000;
+    if (perimee) localStorage.removeItem(CLE_SESSION);
+    else if (s && s.userId) {
+      const u = S.etat.utilisateurs.find(x => x.id === s.userId && x.actif);
+      if (u) { S.moi = u; return; }
+    }
   } catch (e) { /* session illisible : on redemandera le code */ }
+
+  /* Personne à reprendre. Si le garage ne demande pas de code, l'outil s'ouvre
+     quand même : on entre sur la première personne active, et on change de
+     personne depuis le menu si ce n'est pas la bonne. */
+  if (sansCode) S.moi = S.etat.utilisateurs.find(u => u.actif) || S.etat.utilisateurs[0] || null;
 }
 
 export function ouvrirSession(utilisateur) {

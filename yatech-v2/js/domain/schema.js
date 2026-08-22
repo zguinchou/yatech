@@ -24,7 +24,7 @@
 
 import { id, copie, plaqueNue } from '../core/util.js';
 
-export const VERSION_MODELE = 2;
+export const VERSION_MODELE = 3;
 
 /* ==========================================================================
    VOCABULAIRES
@@ -275,7 +275,12 @@ export const REGLAGES_DEFAUT = {
 
   /* --- l'accès ------------------------------------------------------------ */
   verrouAuto: 0,            // minutes d'inactivité avant verrouillage ; 0 = jamais
-  demanderCode: true,       // faux : l'outil s'ouvre directement (poste unique, atelier fermé)
+  /* L'outil s'ouvre directement, sur la première personne active. Un garage de
+     trois personnes dans un atelier fermé n'a pas à taper un code pour lire son
+     planning — et le code n'a jamais protégé grand-chose : les données vivent
+     en clair dans le navigateur, le vrai verrou c'est celui du téléphone.
+     Le garage qui veut séparer les rôles l'allume dans Réglages → Équipe. */
+  demanderCode: false,
 
   /* --- les modèles de messages -------------------------------------------- */
   messageDevis: 'Bonjour {prenom},\n\nVoici le devis {numero} pour votre {vehicule} ({immat}), '
@@ -717,6 +722,7 @@ export function normaliser(e) {
   if (typeof e.credits.solde !== 'number') e.credits.solde = 0;
 
   /* --- les réglages : on ajoute ce qui manque, on ne touche pas au reste -- */
+  const versionLue = typeof e.version === 'number' ? e.version : 0;
   if (!e.reglages || typeof e.reglages !== 'object') e.reglages = {};
   const parDefaut = copie(REGLAGES_DEFAUT);
   for (const k in parDefaut) if (e.reglages[k] === undefined) e.reglages[k] = parDefaut[k];
@@ -725,6 +731,13 @@ export function normaliser(e) {
   if (!Array.isArray(e.reglages.joursOuvres) || !e.reglages.joursOuvres.length) {
     e.reglages.joursOuvres = [1, 2, 3, 4, 5, 6];
   }
+
+  /* Modèle 3 : le code à l'ouverture était demandé par défaut, et quelqu'un
+     qui l'oubliait n'avait aucune porte de sortie. Le réglage passe à « non »
+     pour les installations d'avant : on ne laisse personne dehors de son
+     propre atelier. Celui qui le rallume ensuite le garde — la migration ne
+     repasse pas, la version est enregistrée avec les données. */
+  if (versionLue > 0 && versionLue < 3) e.reglages.demanderCode = false;
 
   /* --- les gens ---------------------------------------------------------- */
   e.utilisateurs.forEach(u => {

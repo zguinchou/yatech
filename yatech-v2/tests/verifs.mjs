@@ -14,7 +14,9 @@ import * as util from '../js/core/util.js';
 import { quand as fmtQuand } from '../js/core/fmt.js';
 import { sha256, verrou, verifier } from '../js/core/crypto.js';
 import { versCsv, depuisCsv, csvEnObjets } from '../js/core/fichiers.js';
-import { normaliser, neuf, nouvelleLigne, prochainNumero, estUneSauvegarde } from '../js/domain/schema.js';
+import { normaliser, neuf, nouvelleLigne, prochainNumero, estUneSauvegarde,
+  VERSION_MODELE } from '../js/domain/schema.js';
+import { equipeDepart } from '../js/domain/demo.js';
 import { S, maj, annuler, refaire, peutAnnuler } from '../js/core/store.js';
 
 let passes = 0, echecs = 0;
@@ -321,6 +323,30 @@ groupe('Normalisation d’un état', () => {
     devis: [{ id: 'v1', statut: 'envoye', valableJusquau: Date.now() - 86400000 }]
   });
   verifie('un devis dépassé devient périmé', perime.devis[0].statut, 'expire');
+});
+
+groupe('L’accès à l’outil', () => {
+  /* Un garage de trois personnes dans un atelier fermé ne tape pas un code
+     pour lire son planning. Le code s'allume, il ne se subit pas. */
+  verifie('aucun code demandé par défaut', neuf().reglages.demanderCode, false);
+  verifie('l’équipe de départ part sans code',
+    equipeDepart().filter(u => u.verrou).length, 0);
+
+  /* Les installations d'avant demandaient un code, et celui qui l'oubliait
+     restait dehors. La migration ouvre la porte une fois. */
+  const ancienne = normaliser({
+    version: 2, reglages: { demanderCode: true },
+    clients: [], devis: [], dossiers: []
+  });
+  verifie('une installation d’avant est rouverte', ancienne.reglages.demanderCode, false);
+  verifie('la version est enregistrée', ancienne.version, VERSION_MODELE);
+
+  /* Mais celui qui rallume le code le garde : la migration ne repasse pas. */
+  const rallume = normaliser({
+    version: VERSION_MODELE, reglages: { demanderCode: true },
+    clients: [], devis: [], dossiers: []
+  });
+  vrai('un code rallumé après coup reste allumé', rallume.reglages.demanderCode);
 });
 
 groupe('Reconnaître une sauvegarde', () => {

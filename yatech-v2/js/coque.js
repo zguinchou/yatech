@@ -17,6 +17,7 @@ import { compteEnAttente } from './domain/ebp.js';
 import { surligne, attend, plaqueJolie } from './core/util.js';
 import { tete } from './ui/widgets.js';
 import { ROLES } from './domain/schema.js';
+import { fermerSession } from './main.js';
 
 /* ==========================================================================
    LE MENU
@@ -100,7 +101,11 @@ export function contenu() { return zoneContenu; }
 
 export function peindreCoque() {
   racine = document.getElementById('app');
-  if (!peintUneFois) {
+  /* Les écrans nus — connexion, portail confrère — repeignent la racine pour
+     eux seuls : la coque construite avant n'y est plus. Sans ce contrôle, on
+     revient de l'écran de connexion et on peint dans une zone qui n'est plus
+     dans la page : l'outil semble figé sur le pavé numérique. */
+  if (!peintUneFois || !zoneContenu || !zoneContenu.isConnected) {
     construire();
     peintUneFois = true;
   }
@@ -312,8 +317,11 @@ function menuMoi(ancre) {
     { texte: 'Sauvegarder les données', icone: 'telecharger', faire: sauvegarder },
     null,
     {
-      texte: 'Verrouiller', icone: 'cadenas', danger: false,
-      faire: () => { S.moi = null; routeur.aller('/connexion'); }
+      /* Sans code demandé, « Verrouiller » serait un mensonge : rien ne se
+         ferme, on change simplement de personne. */
+      texte: S.etat.reglages.demanderCode === false ? 'Changer de personne' : 'Verrouiller',
+      icone: 'cadenas', danger: false,
+      faire: () => fermerSession()
     }
   ]);
 }

@@ -276,10 +276,15 @@ Dit franchement, pour éviter les mauvaises surprises :
   dans l'application du téléphone : l'envoi part de la personne, en un geste.
 - **Il n'est pas un logiciel de comptabilité.** C'est EBP qui l'est.
 - **Il ne partage pas les données entre appareils** (voir plus haut).
-- **Le code d'accès n'est pas un coffre-fort.** Il sépare les rôles et évite
-  qu'un client au comptoir lise les chiffres par-dessus l'épaule. Ce qui vit
-  dans un navigateur reste lisible par qui a la main sur l'appareil : le vrai
-  verrou, c'est celui du téléphone.
+- **Le code d'accès n'est pas un coffre-fort.** Il est éteint par défaut :
+  l'outil s'ouvre directement, sur la première personne active. On l'allume
+  dans *Réglages → Équipe* si plusieurs personnes se partagent le poste. Il
+  sépare alors les rôles et évite qu'un client au comptoir lise les chiffres
+  par-dessus l'épaule — rien de plus. Ce qui vit dans un navigateur reste
+  lisible par qui a la main sur l'appareil : le vrai verrou, c'est celui du
+  téléphone. C'est pour ça qu'un code oublié se retire depuis l'écran de
+  connexion : il ne garde pas un secret, il n'a pas à enfermer quelqu'un
+  dehors de son propre atelier.
 
 ---
 

@@ -139,7 +139,8 @@ const CSS = ['jetons', 'base', 'composants', 'coque', 'ecrans', 'utilitaires', '
   .join('\n');
 
 /* --- l'enveloppe -------------------------------------------------------------- */
-const html = `<title>Yatech Atelier</title>
+const html = `<meta charset="utf-8">
+<title>Yatech Atelier</title>
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="${iconeUri}">
 <link rel="preconnect" href="https://fonts.googleapis.com">

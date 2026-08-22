@@ -16,7 +16,6 @@ import {
   nouvelleFacture, nouvellePiece, nouveauFournisseur, nouvelUtilisateur,
   nouvellePrestation, nouvelleIntervention, nouvelAppel, neuf
 } from './schema.js';
-import { verrou } from '../core/crypto.js';
 import { plusJours, jour0, lundi, id, JOUR, HEURE } from '../core/util.js';
 
 /* Le planning de démonstration s'accroche à la SEMAINE en cours, pas à
@@ -85,20 +84,14 @@ export function catalogueDepart() {
    L'ÉQUIPE PAR DÉFAUT — trois personnes, comme dans l'atelier
    ========================================================================== */
 
+/* Personne ne part avec un code : inventer un code d'usine, c'est livrer un
+   atelier fermé à clé avec la clé écrite dans le mode d'emploi. Chacun pose le
+   sien quand il le décide, dans Réglages → Équipe. */
 export function equipeDepart() {
   return [
-    nouvelUtilisateur({
-      id: 'usr_patron', prenom: 'Yanis', nom: 'B.', role: 'patron', couleur: 38,
-      verrou: verrou('1234')
-    }),
-    nouvelUtilisateur({
-      id: 'usr_tech', prenom: 'Karim', nom: 'M.', role: 'technicien', couleur: 200,
-      verrou: verrou('1234')
-    }),
-    nouvelUtilisateur({
-      id: 'usr_sec', prenom: 'Sophie', nom: 'L.', role: 'secretariat', couleur: 320,
-      verrou: verrou('1234')
-    })
+    nouvelUtilisateur({ id: 'usr_patron', prenom: 'Yanis', nom: 'B.', role: 'patron', couleur: 38 }),
+    nouvelUtilisateur({ id: 'usr_tech', prenom: 'Karim', nom: 'M.', role: 'technicien', couleur: 200 }),
+    nouvelUtilisateur({ id: 'usr_sec', prenom: 'Sophie', nom: 'L.', role: 'secretariat', couleur: 320 })
   ];
 }
 

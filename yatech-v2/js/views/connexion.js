@@ -1,21 +1,22 @@
 /* ==========================================================================
    YATECH — écran de connexion
    --------------------------------------------------------------------------
-   Un code par personne. Il ne rend pas l'outil inviolable — tout ce qui vit
-   dans un navigateur est lisible par qui a la main sur l'appareil — mais il
-   sépare les rôles et il évite qu'un client au comptoir consulte les chiffres
-   en se penchant sur l'écran.
+   Par défaut, il n'y a pas de code : on choisit qui travaille, on entre. Un
+   code ne rendrait pas l'outil inviolable — tout ce qui vit dans un navigateur
+   est lisible par qui a la main sur l'appareil — et il enfermait dehors ceux
+   qui l'oubliaient.
 
-   Le pavé est fait pour le pouce : on tape son code d'une main, avec des
-   gants, sans regarder.
+   Le garage qui veut séparer les rôles allume « Demander un code » dans
+   Réglages → Équipe. Alors seulement le pavé apparaît. Il est fait pour le
+   pouce : on tape son code d'une main, avec des gants, sans regarder. Et il
+   garde toujours une porte de sortie : un code oublié se retire.
    ========================================================================== */
 
 import { h, poser } from '../core/dom.js';
 import { icone } from '../core/icones.js';
-import { message } from '../core/ui.js';
+import { message, confirmer } from '../core/ui.js';
 import { S, maj } from '../core/store.js';
-import { verifier, verrou } from '../core/crypto.js';
-import { initiales } from '../core/util.js';
+import { verifier } from '../core/crypto.js';
 import { ROLES, nouvelUtilisateur } from '../domain/schema.js';
 import { nomUtilisateur } from '../domain/selecteurs.js';
 import { ouvrirSession } from '../main.js';
@@ -27,7 +28,11 @@ export function peindre(ctx) {
   const e = ctx.etat;
   const equipe = (e.utilisateurs || []).filter(u => u.actif);
 
-  let choisi = equipe.length === 1 ? equipe[0] : null;
+  /* Le réglage du garage décide. Sans code demandé, l'écran n'est plus qu'un
+     sélecteur de personne — utile quand on se passe le téléphone à l'atelier. */
+  const codeDemande = e.reglages.demanderCode !== false;
+
+  let choisi = (equipe.length === 1 && codeDemande) ? equipe[0] : null;
   let code = '';
   let etape = choisi ? 'code' : 'qui';
 
@@ -43,6 +48,12 @@ export function peindre(ctx) {
       ]),
       etape === 'qui' ? choixPersonne() : saisieCode()
     ]);
+  }
+
+  function entrer(u) {
+    ouvrirSession(u);
+    const p = u.preferences || {};
+    location.hash = '#' + (p.ecranAccueil || e.reglages.ecranAccueil || '/');
   }
 
   /* --- première étape : qui êtes-vous ? ---------------------------------- */
@@ -63,7 +74,15 @@ export function peindre(ctx) {
       h('div.connexion__equipe', equipe.map(u =>
         h('button.connexion__qui', {
           type: 'button',
-          onclick: () => { choisi = u; code = ''; etape = 'code'; peindreTout(); }
+          onclick: () => {
+            choisi = u;
+            code = '';
+            /* Sans code demandé — ou pour quelqu'un qui n'en a pas posé — un
+               clic suffit. On ne fait pas taper quatre chiffres pour rien. */
+            if (!codeDemande || !u.verrou) { entrer(u); return; }
+            etape = 'code';
+            peindreTout();
+          }
         }, [
           tete(u, 'l'),
           h('div.grandit', [
@@ -72,7 +91,9 @@ export function peindre(ctx) {
           ]),
           icone('droite', { taille: 16 })
         ])
-      ))
+      )),
+      codeDemande ? null : h('div.petit.tres-faible',
+        'Aucun code n’est demandé. Pour en exiger un : Réglages → Équipe.')
     ]);
   }
 
@@ -116,36 +137,44 @@ export function peindre(ctx) {
       majPoints();
     }
 
-    function valider() {
-      if (!choisi) return;
-      /* Personne n'a encore de code : la première connexion l'installe. On ne
-         laisse pas un compte sans porte, mais on ne bloque pas non plus le
-         premier démarrage sur un code qu'il faudrait deviner. */
-      if (!choisi.verrou) {
-        const v = verrou(code);
-        maj('Code d’accès défini', (etat) => {
-          const u = etat.utilisateurs.find(x => x.id === choisi.id);
-          if (u) u.verrou = v;
-        });
-        entrer();
-        message('Code enregistré. Retenez-le : il n’est plus affiché.', { ton: 'ok', duree: 6000 });
-        return;
-      }
-
-      if (verifier(code, choisi.verrou)) { entrer(); return; }
-
+    function refuser(texte) {
       code = '';
       majPoints();
       points.classList.add('points--faux');
       setTimeout(() => points.classList.remove('points--faux'), 340);
       if (navigator.vibrate) { try { navigator.vibrate([40, 60, 40]); } catch (err) {} }
-      message('Code incorrect', { ton: 'danger', duree: 1800 });
+      message(texte, { ton: 'danger', duree: 1800 });
     }
 
-    function entrer() {
-      ouvrirSession(choisi);
-      const p = choisi.preferences || {};
-      location.hash = '#' + (p.ecranAccueil || e.reglages.ecranAccueil || '/');
+    function valider() {
+      if (!choisi || !choisi.verrou) return;
+      if (verifier(code, choisi.verrou)) { entrer(choisi); return; }
+      refuser('Code incorrect');
+    }
+
+    /* Un code oublié n'enferme personne dehors. Ce n'est pas une faille qu'on
+       ouvre : les données sont déjà en clair dans cet appareil, celui qui l'a
+       en main peut les lire de dix façons. Le code sépare les rôles, il ne
+       garde pas un coffre. */
+    async function oublie() {
+      const ok = await confirmer({
+        titre: 'Code oublié ?',
+        texte: 'Le code de ' + nomUtilisateur(choisi) + ' va être retiré.',
+        detail: 'L’outil s’ouvrira sans rien demander. Vous pourrez en poser un '
+          + 'nouveau quand vous voudrez, dans Réglages → Équipe.',
+        avertissement: 'Faites-le depuis l’appareil du garage : n’importe qui '
+          + 'ayant ce téléphone en main pourra ensuite entrer.',
+        ok: 'Retirer le code'
+      });
+      if (!ok) return;
+      maj('Code de ' + nomUtilisateur(choisi) + ' retiré', (etat) => {
+        const u = etat.utilisateurs.find(x => x.id === choisi.id);
+        if (u) u.verrou = null;
+      });
+      choisi = (S.etat.utilisateurs || []).find(x => x.id === choisi.id) || choisi;
+      entrer(choisi);
+      message('Code retiré. Posez-en un nouveau dans Réglages → Équipe si besoin.',
+        { ton: 'ok', duree: 6000 });
     }
 
     const touche = (t, action, classe) => h('button' + (classe || ''), {
@@ -163,7 +192,7 @@ export function peindre(ctx) {
         tete(choisi),
         h('div.grandit', [
           h('div.gras', nomUtilisateur(choisi)),
-          h('div.petit.faible', choisi.verrou ? 'Entrez votre code' : 'Choisissez votre code')
+          h('div.petit.faible', 'Entrez votre code')
         ])
       ]),
       cache,
@@ -178,10 +207,9 @@ export function peindre(ctx) {
           type: 'button', 'aria-label': 'Effacer', onclick: effacer
         }, icone('gauche', { taille: 20 }))
       ]),
-      !choisi.verrou ? h('div.bandeau', [
-        icone('info'),
-        h('span', 'Première connexion : le code que vous tapez maintenant devient le vôtre.')
-      ]) : null
+      h('button.bt.bt--nu.bt--s.centre', {
+        type: 'button', style: { alignSelf: 'center' }, onclick: oublie
+      }, 'Code oublié ?')
     ]);
   }
 
@@ -208,12 +236,8 @@ export function peindre(ctx) {
             etat.utilisateurs.push(u);
             return u;
           });
-          if (cree) {
-            equipe.push(cree);
-            choisi = cree;
-            etape = 'code';
-            peindreTout();
-          }
+          /* Le compte vient de naître : il n'a pas de code, on entre. */
+          if (cree) entrer(cree);
         }
       }, 'Continuer')
     ]);
