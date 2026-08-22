@@ -554,10 +554,7 @@ export function enregistrerIntervention(champs) {
   return maj('Intervention électronique enregistrée', (e) => {
     const i = nouvelleIntervention(Object.assign({ par: qui() }, champs));
     e.interventions.push(i);
-
-    /* Une intervention réussie consomme ses crédits tout de suite : le solde
-       affiché doit être celui de l'appareil, pas une intention. */
-    if (i.etat === 'ok' && nombre(i.credits) > 0) consommerCredits(e, i.credits, i);
+    reconcilierCredits(e, i);
     return i;
   });
 }
@@ -566,24 +563,62 @@ export function terminerIntervention(interventionId, etat, resultat) {
   return maj('Intervention terminée', (e) => {
     const i = lit.intervention(e, interventionId);
     if (!i) return null;
-    const avant = i.etat;
     i.etat = etat || 'ok';
     if (resultat !== undefined) i.resultat = resultat;
-    /* On ne débite qu'une fois : rouvrir puis refermer une intervention ne
-       doit pas manger deux fois les crédits. */
-    if (i.etat === 'ok' && avant !== 'ok' && nombre(i.credits) > 0) consommerCredits(e, i.credits, i);
+    reconcilierCredits(e, i);
     return i;
   }, { cible: { type: 'interventions', id: interventionId } });
 }
 
-function consommerCredits(e, n, intervention) {
+/** Modifie une intervention et remet le solde de crédits d'accord avec elle. */
+export function modifierIntervention(interventionId, champs) {
+  return maj('Intervention modifiée', (e) => {
+    const i = lit.intervention(e, interventionId);
+    if (!i) return null;
+    Object.assign(i, champs);
+    reconcilierCredits(e, i);
+    return i;
+  }, { cible: { type: 'interventions', id: interventionId } });
+}
+
+/**
+ * Remet le solde d'accord avec CETTE intervention.
+ *
+ * Le solde de l'outil vaut ce qu'il vaut : la somme des interventions réussies
+ * depuis la dernière mise à niveau sur l'appareil. Chaque intervention se
+ * souvient donc de ce qu'elle a déjà fait retirer (`creditsDebites`), et on ne
+ * bouge que l'écart.
+ *
+ * Trois cas, et c'est tout :
+ *   • elle devient réussie      → on retire ce qui manque ;
+ *   • on corrige son nombre de crédits → on ajuste de la différence ;
+ *   • elle cesse d'être réussie → on rend ce qu'on avait retiré, parce que
+ *     c'est l'enregistrement qui était faux, pas l'appareil. Si les crédits ont
+ *     réellement été consommés, « Corriger le solde » a le dernier mot — c'est
+ *     l'appareil qui fait foi, jamais nous.
+ *
+ * Sans cette réconciliation, rouvrir puis refermer une intervention mangeait
+ * les crédits une deuxième fois, et changer son nombre de crédits après coup ne
+ * changeait rien du tout.
+ */
+function reconcilierCredits(e, i) {
   if (!e.credits) e.credits = { solde: 0, historique: [] };
-  e.credits.solde = cts(nombre(e.credits.solde) - nombre(n));
+  const du = i.etat === 'ok' ? nombre(i.credits, 0) : 0;
+  const deja = nombre(i.creditsDebites, 0);
+  const ecart = cts(du - deja);
+  if (ecart === 0) return;
+
+  e.credits.solde = cts(nombre(e.credits.solde) - ecart);
+  i.creditsDebites = du;
   e.credits.historique.push({
-    id: id('cre'), quand: Date.now(), sens: 'sortie', n: nombre(n),
-    solde: e.credits.solde, qui: qui(),
-    motif: intervention ? (intervention.ecu && intervention.ecu.type ? intervention.ecu.type : 'Intervention') : '',
-    interventionId: intervention ? intervention.id : null
+    id: id('cre'),
+    quand: Date.now(),
+    sens: ecart > 0 ? 'sortie' : 'retour',
+    n: Math.abs(ecart),
+    solde: e.credits.solde,
+    qui: qui(),
+    motif: (i.ecu && i.ecu.type) ? i.ecu.type : 'Intervention',
+    interventionId: i.id
   });
 }
 

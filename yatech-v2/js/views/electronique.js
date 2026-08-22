@@ -810,19 +810,16 @@ function modaleIntervention(e, refaire, existante) {
 /**
  * Modification d'une intervention existante.
  *
- * L'état est traité à part : passer en « réussie » débite les crédits, et
- * seul `terminerIntervention` sait ne le faire qu'une fois. On écrit donc tout
- * le reste d'abord, puis on lui laisse la main sur l'état.
+ * Le solde de crédits est réconcilié par le domaine, pas ici : lui seul sait
+ * ce que cette intervention a déjà fait retirer, et donc ce qu'il reste à
+ * bouger. L'écran se contente de dire à quoi elle doit ressembler.
  */
 function enregistrerModification(i, champs, etatVoulu) {
-  maj('Intervention modifiée', (etat) => {
-    const x = lit.intervention(etat, i.id);
-    if (!x) return null;
-    Object.assign(x, champs);
-    return x;
-  }, { cible: { type: 'interventions', id: i.id } });
-
-  if (etatVoulu !== i.etat) act.terminerIntervention(i.id, etatVoulu, champs.resultat);
+  /* Un seul geste : `modifierIntervention` écrit les champs ET remet le solde
+     de crédits d'accord avec le résultat. Écrire les champs à part laissait le
+     solde inchangé quand on corrigeait le nombre de crédits sans toucher à
+     l'état. */
+  act.modifierIntervention(i.id, Object.assign({}, champs, { etat: etatVoulu }));
 }
 
 /** Ce qu'on a lu sur le boîtier vaut mieux que ce que la fiche véhicule dit. */

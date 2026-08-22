@@ -564,7 +564,10 @@ export function nouvelleIntervention(champs) {
     operation: 'lecture',
     protocole: 'obd',
     ecu: { marque: '', type: '', hw: '', sw: '' },
-    credits: 0,              // crédits Autotuner consommés
+    credits: 0,              // crédits Autotuner que l'intervention coûte
+    /* Ce qui a DÉJÀ été retiré du solde pour elle. L'écart entre les deux
+       est ce qu'il reste à faire bouger — voir reconcilierCredits(). */
+    creditsDebites: 0,
     slave: '',               // identifiant de l'appareil utilisé
     etat: 'prevu',
     fichiers: [],            // [{ id, nom, role:'origine'|'modifie'|'sauvegarde', quand, cle }]
@@ -813,6 +816,10 @@ export function normaliser(e) {
     if (!i.ecu || typeof i.ecu !== 'object') i.ecu = { marque: '', type: '', hw: '', sw: '' };
     if (!Array.isArray(i.fichiers)) i.fichiers = [];
     if (typeof i.credits !== 'number') i.credits = 0;
+    /* Les interventions d'avant la réconciliation : celles qui étaient
+       réussies avaient bien été débitées, on le note pour ne pas les
+       débiter une seconde fois au prochain enregistrement. */
+    if (typeof i.creditsDebites !== 'number') i.creditsDebites = (i.etat === 'ok' ? i.credits : 0);
   });
 
   /* --- catalogue ------------------------------------------------------------ */
