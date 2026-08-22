@@ -417,6 +417,39 @@ groupe('L’accès à l’outil', () => {
   vrai('un code rallumé après coup reste allumé', rallume.reglages.demanderCode);
 });
 
+groupe('Des données abîmées n’empêchent pas d’ouvrir', () => {
+  /* Un `null` égaré dans un tableau faisait planter la normalisation, donc le
+     chargement, donc l'outil entier : le garage tombait sur l'écran de secours
+     pour une virgule de trop dans un fichier de sauvegarde. */
+  const sale = normaliser({
+    version: 3,
+    clients: [null, { id: 'c1', nom: 'Vrai' }, 'nawak', 42],
+    vehicules: [null],
+    utilisateurs: [null, { id: 'u1', prenom: 'Réel' }],
+    creneaux: [null],
+    devis: [{ id: 'd1', lignes: [null, 'x', { id: 'l1', qte: 2, prixHT: 10 }] }],
+    factures: [{ id: 'f1', lignes: [null], reglements: [null] }],
+    interventions: [{ id: 'i1', fichiers: [null, 'oups', { id: 'fi1', nom: 'a.bin' }] }],
+    dossiers: [{ id: 'do1', lignes: [null], checklist: [null], notes: [null] }],
+    credits: { solde: 0, historique: [null] }
+  });
+  verifie('le client valable survit seul', sale.clients.map(c => c.nom), ['Vrai']);
+  verifie('les véhicules nuls disparaissent', sale.vehicules.length, 0);
+  verifie('l’utilisateur valable reste', sale.utilisateurs.length, 1);
+  verifie('les créneaux nuls aussi', sale.creneaux.length, 0);
+  verifie('la ligne valable du devis reste', sale.devis[0].lignes.length, 1);
+  verifie('les lignes de facture sont nettoyées', sale.factures[0].lignes.length, 0);
+  verifie('les règlements aussi', sale.factures[0].reglements.length, 0);
+  verifie('le fichier valable reste', sale.interventions[0].fichiers.map(f => f.nom), ['a.bin']);
+  verifie('la checklist est nettoyée', sale.dossiers[0].checklist.length, 0);
+  verifie('les notes aussi', sale.dossiers[0].notes.length, 0);
+  verifie('l’historique de crédits aussi', sale.credits.historique.length, 0);
+
+  /* Les étiquettes sont des mots, pas des fiches : on garde les mots. */
+  const etiq = normaliser({ version: 3, clients: [{ id: 'c1', etiquettes: ['bon payeur', null, 7] }] });
+  verifie('les étiquettes gardent leurs mots', etiq.clients[0].etiquettes, ['bon payeur']);
+});
+
 groupe('Reconnaître une sauvegarde', () => {
   /* Ce contrôle protège d'une perte de données : normaliser() est indulgent
      par nécessité et transformerait n'importe quoi en garage vide. */

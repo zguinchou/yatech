@@ -366,6 +366,16 @@ groupe('Par où passe ce calculateur', ({ client, vehicule }) => {
   verifie('ni d’un boîtier jamais ouvert', ficheCalculateur(S.etat, 'MED17'), null);
   verifie('ni d’un type vide', ficheCalculateur(S.etat, '  '), null);
 
+  /* Une intervention ouverte en modification ne doit pas se compter elle-même :
+     sinon elle cite son propre accès comme s'il avait fait ses preuves. */
+  const laBench = S.etat.interventions.find(x => x.protocole === 'bench' && x.etat === 'ok');
+  const sansElle = ficheCalculateur(S.etat, 'EDC17C64', laBench.id);
+  verifie('exclue, elle ne compte plus', sansElle.nb, f.nb - 1);
+  verifie('et son accès n’est plus une preuve',
+    (conseilAcces(sansElle, 'ecriture').sure || {}).protocole, undefined);
+  verifie('les autres opérations ne bougent pas',
+    conseilAcces(sansElle, 'lecture').sure.ok, 2);
+
   const connus = calculateursConnus(S.etat);
   verifie('un seul boîtier connu', connus.length, 1);
   verifie('les deux orthographes ne font qu’un', cleCalculateur('EDC17 C64'), 'EDC17C64');

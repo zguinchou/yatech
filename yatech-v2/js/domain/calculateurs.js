@@ -55,9 +55,14 @@ function voieNeuve(operation, protocole) {
  * Tout ce que le garage sait d'un type de calculateur.
  * @param {object} etat   l'état complet
  * @param {string} type   le type cherché ; la casse et les tirets sont ignorés
+ * @param {string} [sauf] identifiant d'une intervention à ne PAS compter.
+ *        Une fiche ouverte en modification s'apprendrait sinon à elle-même :
+ *        elle citerait son propre accès comme s'il avait fait ses preuves, et
+ *        annoncerait un boîtier « déjà ouvert 3 fois » alors qu'on est en
+ *        train d'écrire la troisième.
  * @returns {object|null} null si on ne l'a jamais ouvert
  */
-export function ficheCalculateur(etat, type) {
+export function ficheCalculateur(etat, type, sauf) {
   const cle = cleCalculateur(type);
   if (!cle) return null;
 
@@ -70,6 +75,7 @@ export function ficheCalculateur(etat, type) {
   const modifs = new Map();
 
   for (const i of etat.interventions || []) {
+    if (sauf && i.id === sauf) continue;
     if (cleCalculateur(typeCalculateur(i)) !== cle) continue;
     /* Une intervention prévue ou annulée n'apprend rien : elle n'a pas eu
        lieu. On ne retient que ce qui a été tenté pour de bon. */

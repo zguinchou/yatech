@@ -410,6 +410,22 @@ Dit franchement, pour éviter les mauvaises surprises :
 
 ---
 
+## Ce qui résiste
+
+Trois choses ont été durcies parce qu'elles cassaient pour de bon :
+
+- **Des données abîmées n'empêchent plus d'ouvrir.** Un `null` égaré dans une
+  collection — sauvegarde tronquée, fusion ratée, import à moitié écrit —
+  faisait planter la normalisation, donc le chargement, donc l'outil entier.
+  Les intrus sont jetés, le reste est gardé.
+- **Le calculateur d'une intervention fait foi.** Rouvrir une intervention ne
+  reprend plus les références du véhicule par-dessus ce qui a été lu sur le
+  boîtier : les HW et SW notés ce jour-là ne s'effacent pas à l'enregistrement.
+- **La date de sauvegarde est enregistrée pour de vrai.** Elle passait
+  auparavant à côté du store et se perdait à la fermeture de l'onglet.
+
+---
+
 ## Vérifier que tout va bien
 
 ```

@@ -328,12 +328,16 @@ function menuMoi(ancre) {
 
 async function sauvegarder() {
   const { telecharger, nomDate } = await import('./core/fichiers.js');
-  const { instantane } = await import('./core/store.js');
+  const { instantane, maj } = await import('./core/store.js');
   const doc = instantane();
   const ok = await telecharger(nomDate('yatech-sauvegarde', 'json'), JSON.stringify(doc, null, 2),
     'application/json');
   if (ok) {
-    S.etat.reglages.derniereSauvegarde = Date.now();
+    /* Par `maj`, pas à la main : écrire dans l'état sans passer par le store
+       ne déclenche aucun enregistrement. La date se perdait à la fermeture de
+       l'onglet, et Réglages continuait d'annoncer « jamais sauvegardé » alors
+       que le fichier était sur le disque. */
+    maj('Sauvegarde téléchargée', (etat) => { etat.reglages.derniereSauvegarde = Date.now(); });
     message('Sauvegarde enregistrée', { ton: 'ok' });
   } else {
     message('La sauvegarde n’est pas partie', { ton: 'danger' });

@@ -212,7 +212,8 @@ export function jeuDemo() {
     ecu: { marque: 'Continental', type: 'SID807EVO', protocole: 'obd' } });
   const v3 = veh({ clientId: c5.id, immat: 'AB123CD', marque: 'Volkswagen', modele: 'Golf VII',
     motorisation: '2.0 TDI 150', energie: 'diesel', annee: 2016, km: 143900,
-    ecu: { marque: 'Bosch', type: 'EDC17C64', protocole: 'bench' } });
+    ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210',
+      protocole: 'bench' } });
   const v4 = veh({ clientId: c6.id, immat: 'DR951KL', marque: 'Citroën', modele: 'C3',
     motorisation: '1.2 PureTech 82', energie: 'essence', annee: 2018, km: 74200 });
   const v5 = veh({ clientId: c8.id, immat: 'GH246MN', marque: 'BMW', modele: 'Série 3 (F30)',
@@ -563,7 +564,7 @@ export function jeuDemo() {
        avant de comprendre qu'il faut le déposer. La troisième fois, l'outil
        le dit avant qu'on branche. */
     nouvelleIntervention({
-      vehiculeId: v2.id, clientId: c2.id,
+      vehiculeId: v3.id, clientId: c5.id,
       outil: 'autotuner', operation: 'lecture', protocole: 'obd',
       ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
       credits: 1, etat: 'ok', dureeMin: 25,
@@ -571,7 +572,7 @@ export function jeuDemo() {
       quand: ilYa(74), par: 'usr_patron'
     }),
     nouvelleIntervention({
-      vehiculeId: v2.id, clientId: c2.id,
+      vehiculeId: v3.id, clientId: c5.id,
       outil: 'autotuner', operation: 'ecriture', protocole: 'obd',
       ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
       credits: 0, etat: 'echec', dureeMin: 55,
@@ -581,7 +582,7 @@ export function jeuDemo() {
       quand: ilYa(73), par: 'usr_patron'
     }),
     nouvelleIntervention({
-      vehiculeId: v2.id, clientId: c2.id,
+      vehiculeId: v3.id, clientId: c5.id,
       outil: 'autotuner', operation: 'ecriture', protocole: 'bench',
       ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
       credits: 2, slave: 'AT-SLV-0042', etat: 'ok', dureeMin: 50,
@@ -592,9 +593,9 @@ export function jeuDemo() {
       quand: ilYa(73), par: 'usr_patron'
     }),
     nouvelleIntervention({
-      vehiculeId: v6.id, clientId: c10.id,
+      vehiculeId: v3.id, clientId: c5.id,
       outil: 'autotuner', operation: 'ecriture', protocole: 'obd',
-      ecu: { marque: 'Bosch', type: 'EDC17C64' },
+      ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
       credits: 0, etat: 'echec', dureeMin: 40,
       modifications: ['stage1'],
       controles: { origine: true, charge: true },
@@ -602,9 +603,9 @@ export function jeuDemo() {
       quand: ilYa(40), par: 'usr_tech'
     }),
     nouvelleIntervention({
-      vehiculeId: v6.id, clientId: c10.id,
+      vehiculeId: v3.id, clientId: c5.id,
       outil: 'autotuner', operation: 'lecture', protocole: 'obd',
-      ecu: { marque: 'Bosch', type: 'EDC17C64' },
+      ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
       credits: 1, etat: 'ok', dureeMin: 20,
       resultat: 'Lecture sans histoire.',
       quand: ilYa(40), par: 'usr_tech'

@@ -785,13 +785,34 @@ export function estUneSauvegarde(doc) {
   return presentes.length >= 3;
 }
 
+/** Une vraie fiche : un objet, ni null, ni tableau, ni texte, ni nombre.
+ *  C'est le seul filtre qui sépare des données abîmées d'un outil qui refuse
+ *  de s'ouvrir. */
+function estUneFiche(x) {
+  return !!x && typeof x === 'object' && !Array.isArray(x);
+}
+
+/** Un tableau de fiches, débarrassé de ce qui n'en est pas. */
+function tableauDeFiches(l) {
+  return Array.isArray(l) ? l.filter(estUneFiche) : [];
+}
+
 export function normaliser(e) {
   if (!e || typeof e !== 'object') return neuf();
 
-  /* --- l'ossature -------------------------------------------------------- */
-  for (const c of COLLECTIONS) if (!Array.isArray(e[c])) e[c] = [];
+  /* --- l'ossature --------------------------------------------------------
+     Chaque collection ne contient que de vraies fiches. Une entrée nulle ou
+     un bout de texte égaré — un fichier de sauvegarde tronqué, une fusion
+     ratée, un import à moitié écrit — faisait planter la normalisation, donc
+     le chargement, donc l'outil entier : le garage se retrouvait devant
+     l'écran de secours pour un `null` dans un tableau. On jette l'intrus et
+     on garde le reste. */
+  for (const c of COLLECTIONS) {
+    e[c] = Array.isArray(e[c]) ? e[c].filter(estUneFiche) : [];
+  }
   if (!e.credits || typeof e.credits !== 'object') e.credits = { solde: 0, historique: [] };
-  if (!Array.isArray(e.credits.historique)) e.credits.historique = [];
+  e.credits.historique = Array.isArray(e.credits.historique)
+    ? e.credits.historique.filter(estUneFiche) : [];
   if (typeof e.credits.solde !== 'number') e.credits.solde = 0;
 
   /* --- les réglages : on ajoute ce qui manque, on ne touche pas au reste -- */
@@ -830,7 +851,7 @@ export function normaliser(e) {
        collègue) sans devenir une société. */
     if (!c.grille) c.grille = c.type === 'pro' ? 'pro' : 'part';
     if (typeof c.remise !== 'number') c.remise = 0;
-    if (!Array.isArray(c.etiquettes)) c.etiquettes = [];
+    c.etiquettes = Array.isArray(c.etiquettes) ? c.etiquettes.filter(x => typeof x === 'string') : [];
     if (typeof c.archive !== 'boolean') c.archive = false;
   });
 
@@ -850,9 +871,9 @@ export function normaliser(e) {
     if (!NATURES[d.nature]) d.nature = 'meca';
     if (!PRIORITES[d.priorite]) d.priorite = 'normale';
     if (!Array.isArray(d.assignes)) d.assignes = [];
-    if (!Array.isArray(d.lignes)) d.lignes = [];
-    if (!Array.isArray(d.checklist)) d.checklist = [];
-    if (!Array.isArray(d.notes)) d.notes = [];
+    d.lignes = tableauDeFiches(d.lignes);
+    d.checklist = tableauDeFiches(d.checklist);
+    d.notes = tableauDeFiches(d.notes);
     if (!Array.isArray(d.photos)) d.photos = [];
     if (!Array.isArray(d.devisIds)) d.devisIds = [];
     if (typeof d.remiseGlobale !== 'number') d.remiseGlobale = 0;
@@ -867,7 +888,7 @@ export function normaliser(e) {
   e.devis.forEach(d => {
     if (!d.id) d.id = id('dev');
     if (!STATUTS_DEVIS[d.statut]) d.statut = 'brouillon';
-    if (!Array.isArray(d.lignes)) d.lignes = [];
+    d.lignes = tableauDeFiches(d.lignes);
     d.lignes.forEach(l => normaliserLigne(l));
     if (typeof d.version !== 'number') d.version = 1;
     /* Un devis parti sans réponse et dont la validité est passée n'est plus
@@ -880,8 +901,8 @@ export function normaliser(e) {
   e.factures.forEach(f => {
     if (!f.id) f.id = id('fac');
     if (!STATUTS_FACTURE[f.statut]) f.statut = 'attente';
-    if (!Array.isArray(f.lignes)) f.lignes = [];
-    if (!Array.isArray(f.reglements)) f.reglements = [];
+    f.lignes = tableauDeFiches(f.lignes);
+    f.reglements = tableauDeFiches(f.reglements);
     f.lignes.forEach(l => normaliserLigne(l));
   });
 
@@ -934,7 +955,7 @@ export function normaliser(e) {
     }
     i.controles = coches;
 
-    if (!Array.isArray(i.fichiers)) i.fichiers = [];
+    i.fichiers = tableauDeFiches(i.fichiers);
     i.fichiers.forEach(f => {
       if (!f.id) f.id = id('fic');
       if (typeof f.nom !== 'string') f.nom = '';

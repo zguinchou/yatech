@@ -882,12 +882,16 @@ function modaleIntervention(e, refaire, existante, modele) {
   const chHw     = champ({ etiquette: 'HW', valeur: ecuDepart.hw || '', exemple: '03…' });
   const chSw     = champ({ etiquette: 'SW', valeur: ecuDepart.sw || '', exemple: '1037…' });
 
-  /* Tant que personne n'a touché aux champs du calculateur, ils suivent la
-     fiche du véhicule choisi. Dès la première frappe, on arrête de les
-     écraser : rien n'est plus agaçant qu'une saisie qui s'efface. */
-  /* Quand on recopie une intervention passée, le boîtier vient d'elle : la
-     fiche du nouveau véhicule ne doit pas l'effacer. */
-  let ecuTouche = !!(modele && !i);
+  /* Sur une fiche VIERGE, les champs du calculateur suivent le véhicule choisi
+     tant que personne n'y a touché : c'est une aide à la saisie.
+
+     Sur une fiche qui porte déjà un boîtier — une intervention qu'on rouvre,
+     ou une passée qu'on recopie — c'est l'inverse : ce qui a été lu sur le
+     boîtier fait foi. Sans cette distinction, rouvrir une intervention
+     remplaçait « Bosch EDC17C64, HW 0281019112, SW 1037543210 » par ce que
+     disait la fiche du véhicule, et un simple Enregistrer effaçait pour de
+     bon des références qu'on ne relit qu'en rouvrant la voiture. */
+  let ecuTouche = !!dep;
   for (const c of [chMarque, chType, chHw, chSw]) {
     c.entree.addEventListener('input', () => { ecuTouche = true; });
   }
@@ -989,10 +993,11 @@ function modaleIntervention(e, refaire, existante, modele) {
      On ne montre que l'opération en cours : devant la voiture, la question
      est « pour l'écrire, je passe par où ? », pas « raconte-moi tout ». */
   function rafraichirMemoire() {
-    const fiche = ficheCalculateur(e, chType.lire());
-    /* Une fiche en cours de modification s'apprend à elle-même : sans ça,
-       elle se conseillerait son propre accès comme s'il avait fait ses
-       preuves. On la retire du compte. */
+    /* L'intervention qu'on est en train de modifier ne compte pas dans sa
+       propre mémoire : sinon elle se conseille son propre accès comme s'il
+       avait fait ses preuves, et annonce « déjà ouvert 3 fois » alors qu'on
+       écrit la troisième. */
+    const fiche = ficheCalculateur(e, chType.lire(), i ? i.id : null);
     const c = fiche ? conseilAcces(fiche, chOperation.lire()) : null;
 
     if (!fiche) { poser(memoEcu, null); return; }
@@ -1049,6 +1054,31 @@ function modaleIntervention(e, refaire, existante, modele) {
   chOperation.entree.addEventListener('change', rafraichirMemoire);
   rafraichir();
 
+  /** Ce que l'écran dit diffère-t-il de ce qui est enregistré ? On ne compare
+   *  que ce qui figure sur le papier : le reste peut bouger sans conséquence
+   *  pour la personne qui signe. */
+  function fichePasEnregistree() {
+    if (!i) return false;
+    const memeListe = (a, b) => (a || []).join('|') === (b || []).join('|');
+    const memeObjet = (a, b) => Object.keys(a || {}).sort().join('|')
+      === Object.keys(b || {}).sort().join('|');
+    const ecu = i.ecu || {};
+    return chOperation.lire() !== i.operation
+      || chProtocole.lire() !== i.protocole
+      || chEtat.lire() !== i.etat
+      || chMarque.lire() !== (ecu.marque || '')
+      || chType.lire() !== (ecu.type || '')
+      || chHw.lire() !== (ecu.hw || '')
+      || chSw.lire() !== (ecu.sw || '')
+      || chResultat.lire() !== (i.resultat || '')
+      || chNotes.lire() !== (i.notes || '')
+      || chSlave.lire() !== (i.slave || '')
+      || nombre(chDuree.lire(), 0) !== nombre(i.dureeMin, 0)
+      || !memeListe(programmes.lire(), i.modifications)
+      || !memeObjet(controles.lire(), i.controles)
+      || fichiers.lire().length !== (i.fichiers || []).length;
+  }
+
   /* --- le corps ------------------------------------------------------------ */
   const corps = h('div.pile', [
     chDossier.noeud,
@@ -1098,6 +1128,19 @@ function modaleIntervention(e, refaire, existante, modele) {
       i ? {
         texte: 'Imprimer', ton: 'contour', ferme: false,
         faire: async () => {
+          /* Une fiche modifiée à l'écran mais pas enregistrée s'imprimerait
+             telle qu'elle est en mémoire, pas telle qu'on la voit : on ferait
+             signer un papier qui ne dit pas la même chose que l'écran. */
+          if (fichePasEnregistree()) {
+            const quandMeme = await confirmer({
+              titre: 'Imprimer la fiche enregistrée ?',
+              texte: 'Vos modifications ne sont pas encore enregistrées.',
+              detail: 'Le papier reprendra la version enregistrée. Enregistrez '
+                + 'd’abord si vous voulez imprimer ce que vous voyez.',
+              ok: 'Imprimer quand même', annuler: 'Revenir enregistrer'
+            });
+            if (!quandMeme) return;
+          }
           const { imprimerFicheElectro } = await import('./impression.js');
           imprimerFicheElectro(e, i);
         }
