@@ -3469,6 +3469,35 @@ function fermetures(r) {
     .sort((a, b) => a.debut - b.debut);
 }
 
+/* Les jours fériés français d'une année. Pâques se calcule — c'est le premier
+   dimanche après la première pleine lune du printemps, et l'algorithme de Gauss
+   le donne sans table. Les cinq fêtes mobiles en découlent. */
+function joursFeries(an) {
+  const a = an % 19, b = Math.floor(an / 100), c = an % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mois = Math.floor((h + l - 7 * m + 114) / 31);
+  const jour = ((h + l - 7 * m + 114) % 31) + 1;
+  const paques = new Date(an, mois - 1, jour);
+  const apres = (n) => { const x = new Date(paques); x.setDate(x.getDate() + n); return x; };
+  return [
+    [new Date(an, 0, 1),   'Jour de l\'an'],
+    [apres(1),             'Lundi de Pâques'],
+    [new Date(an, 4, 1),   'Fête du travail'],
+    [new Date(an, 4, 8),   'Victoire 1945'],
+    [apres(39),            'Ascension'],
+    [apres(50),            'Lundi de Pentecôte'],
+    [new Date(an, 6, 14),  'Fête nationale'],
+    [new Date(an, 7, 15),  'Assomption'],
+    [new Date(an, 10, 1),  'Toussaint'],
+    [new Date(an, 10, 11), 'Armistice 1918'],
+    [new Date(an, 11, 25), 'Noël']
+  ].map(([d2, nom]) => ({ jour: minuit(d2.getTime()), nom }));
+}
+
 /** La fermeture qui couvre ce jour-là, s'il y en a une. */
 function fermetureDu(ts, r) {
   const j = minuit(ts);
@@ -3648,7 +3677,7 @@ const ETATS = {
    les paramètres : on garde une copie de référence, et on réapplique par-dessus
    les objets eux-mêmes, pour que tous les écrans suivent sans rien changer. */
 const LIBELLES_DEFAUT = {};
-[['etat', ETATS], ['memo', TYPES_MEMO]].forEach(([prefixe, objet]) => {
+[['etat', ETATS], ['memo', TYPES_MEMO], ['statut', STATUTS]].forEach(([prefixe, objet]) => {
   Object.keys(objet).forEach(k => {
     LIBELLES_DEFAUT[prefixe + '.' + k] = { nom: objet[k].nom, court: objet[k].court };
   });
@@ -3671,11 +3700,16 @@ function appliquerLibelles(r) {
   const perso = (r && r.libelles) || {};
   Object.keys(LIBELLES_DEFAUT).forEach(cle => {
     const [prefixe, k] = cle.split('.');
-    const cible = prefixe === 'etat' ? ETATS[k] : TYPES_MEMO[k];
+    const cible = prefixe === 'etat' ? ETATS[k] : prefixe === 'statut' ? STATUTS[k] : TYPES_MEMO[k];
     const defaut = LIBELLES_DEFAUT[cle];
     const choisi = String(perso[cle] || '').trim();
     cible.nom = choisi || defaut.nom;
-    cible.court = choisi ? abreger(choisi) : defaut.court;
+    /* La forme courte tient dans une pastille du plan : un seul mot. Les
+       statuts, eux, s'affichent dans des étiquettes qui ont de la place —
+       « Sur le pont » y tient entier, et perdrait son sens réduit à « pont ». */
+    cible.court = !choisi ? defaut.court
+      : prefixe === 'statut' && choisi.length <= 14 ? choisi
+      : abreger(choisi);
   });
   EMPLACEMENTS.pont.nom = String((r && r.nomPont) || '').trim() || 'Pont élévateur';
   EMPLACEMENTS.sol.nom = String((r && r.nomSol) || '').trim() || 'Au sol';
@@ -10742,6 +10776,21 @@ function vueReglages() {
           </div>
         </div>
         <div>
+          <div class="etiq" style="margin-bottom:7px">Où en est un dossier</div>
+          <div class="grille-mots">
+            ${Object.keys(STATUTS).sort((a, b) => STATUTS[a].ordre - STATUTS[b].ordre)
+              .map(k => `<div class="champ">
+              <label><i class="puce-ton" data-ton="${STATUTS[k].ton}"></i> ${esc(LIBELLES_DEFAUT['statut.' + k].court)}</label>
+              <input class="saisie" data-champ-libelle="statut.${k}"
+                     value="${esc(r.libelles && r.libelles['statut.' + k] || '')}"
+                     placeholder="${esc(LIBELLES_DEFAUT['statut.' + k].nom)}">
+            </div>`).join('')}
+          </div>
+          <p class="aide" style="margin-top:8px">Les dix états par lesquels passe un dossier, du premier
+          appel à la facture. Ce sont vos mots qui s'afficheront partout — sur les fiches, dans les
+          listes et dans l'export vers EBP.</p>
+        </div>
+        <div>
           <div class="etiq" style="margin-bottom:7px">Type de pense-bête</div>
           <div class="grille-mots">
             ${Object.keys(TYPES_MEMO).map(k => `<div class="champ">
@@ -11047,6 +11096,19 @@ function vueReglages() {
             </div>`;
           }).join('') || '<p class="aide" style="margin:0">Aucune fermeture prévue.</p>'}
         </div>
+        <div class="rangee" style="gap:7px;flex-wrap:wrap">
+          ${[0, 1].map(n => { const an = new Date().getFullYear() + n;
+            const reste = joursFeries(an).filter(f => !fermetureDu(f.jour, r)
+              && !horairesDuJour(r, rangJour(f.jour)).ferme).length;
+            return `<button class="btn nu" data-act="feries-ajouter" data-id="${an}"
+              ${reste ? '' : 'disabled'}>${ic('agenda')} Jours fériés ${an}${
+              reste ? ` (${reste})` : ' — déjà posés'}</button>`;
+          }).join('')}
+        </div>
+        <span class="aide">Les onze jours fériés français, calculés — Pâques comprise. Ceux qui tombent
+        un jour déjà fermé sont ignorés, et chacun se retire ensuite un par un si vous ouvrez ce
+        jour-là.</span>
+
         <form id="form-fermeture" class="ferm-form">
           <div class="champ"><label>Du</label>
             <input class="saisie" type="date" name="debut" required></div>
@@ -16441,6 +16503,31 @@ document.addEventListener('click', (e) => {
       if (!exigeAdmin('Changer l\'enseigne')) return;
       DB.etat.reglages.logo = '';
       DB.sauver(); enregistrer('Enseigne retirée'); toast('Enseigne retirée'); rendre();
+    },
+
+    /* Les onze jours fériés d'une année, posés d'un coup. On saute ceux qui
+       tombent un jour déjà fermé — un 1er mai un dimanche ne ferme rien de
+       plus — et ceux qui sont déjà là. */
+    'feries-ajouter'() {
+      if (!exigeAdmin('Modifier les fermetures')) return;
+      const an = Number(id) || new Date().getFullYear();
+      const r = DB.etat.reglages;
+      r.fermetures = r.fermetures || [];
+      let poses = 0, deja = 0, dimanches = 0;
+      joursFeries(an).forEach(({ jour, nom }) => {
+        if (horairesDuJour(r, rangJour(jour)).ferme) { dimanches++; return; }
+        if (fermetureDu(jour, r)) { deja++; return; }
+        r.fermetures.push({ id: DB.nouvelId('fe'), debut: isoLocal(jour), fin: isoLocal(jour), motif: nom });
+        poses++;
+      });
+      DB.sauver();
+      enregistrer(`Jours fériés ${an} ajoutés (${poses})`);
+      toast(poses
+        ? `${poses} jour${poses > 1 ? 's' : ''} férié${poses > 1 ? 's' : ''} ajouté${poses > 1 ? 's' : ''}`
+          + (deja ? `, ${deja} déjà posé${deja > 1 ? 's' : ''}` : '')
+          + (dimanches ? `, ${dimanches} tombant${dimanches > 1 ? 's' : ''} un jour déjà fermé` : '')
+        : 'Tous les jours fériés de ' + an + ' étaient déjà pris en compte');
+      rendre();
     },
 
     'suppr-fermeture'() {
