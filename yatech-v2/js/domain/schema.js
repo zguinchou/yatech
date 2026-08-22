@@ -259,6 +259,11 @@ export const REGLAGES_DEFAUT = {
 
   /* --- l'électronique ----------------------------------------------------- */
   outilDefaut: 'autotuner',
+  /* Autotuner vend l'accès aux protocoles au crédit : c'est la seule chose,
+     dans une reprogrammation, qui s'épuise et bloque un travail en plein
+     après-midi. D'où le compteur. Un atelier sous abonnement, ou qui travaille
+     à l'outil déjà débloqué, éteint tout ça d'un interrupteur. */
+  suiviCredits: true,
   creditsAlerte: 5,         // prévenir en dessous de ce solde
   prixCredit: 0,            // ce qu'un crédit vous coûte, pour la marge
 

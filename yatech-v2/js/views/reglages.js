@@ -1075,6 +1075,13 @@ function sectionElectronique(ctx) {
     ]),
 
     panneau('Crédits', [
+      reglageBascule(ctx, {
+        cle: 'suiviCredits', titre: 'Suivre les crédits',
+        aide: 'Autotuner vend l’accès aux protocoles au crédit : le compteur '
+          + 'prévient avant d’être à sec en plein travail. Éteignez si votre '
+          + 'outil est sous abonnement ou déjà débloqué — les crédits '
+          + 'disparaissent alors partout, les interventions restent.'
+      }),
       reglage(ctx, {
         cle: 'creditsAlerte', titre: 'Seuil d’alerte des crédits', type: 'nombre', unite: 'crédits',
         aide: 'En dessous, l’outil prévient avant que le bench soit à sec. '

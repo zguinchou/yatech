@@ -602,6 +602,9 @@ export function modifierIntervention(interventionId, champs) {
  * changeait rien du tout.
  */
 function reconcilierCredits(e, i) {
+  /* Compteur éteint : on n'entretient pas un solde que personne ne regarde.
+     Les crédits notés sur les interventions restent, ils ne bougent plus. */
+  if (e.reglages.suiviCredits === false) return;
   if (!e.credits) e.credits = { solde: 0, historique: [] };
   const du = i.etat === 'ok' ? nombre(i.credits, 0) : 0;
   const deja = nombre(i.creditsDebites, 0);

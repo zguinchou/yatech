@@ -552,6 +552,62 @@ export function jeuDemo() {
       credits: 0, etat: 'ok', dureeMin: 40,
       resultat: 'Relevé complet : P0234, P2263. Turbo confirmé.',
       quand: ilYa(8), par: 'usr_tech'
+    }),
+
+    /* --- l'histoire d'un boîtier, sur trois mois ----------------------------
+       C'est ce vécu-là qui alimente la mémoire des calculateurs : l'EDC17C64
+       se lit par la prise, mais refuse l'écriture — deux après-midi perdus
+       avant de comprendre qu'il faut le déposer. La troisième fois, l'outil
+       le dit avant qu'on branche. */
+    nouvelleIntervention({
+      vehiculeId: v2.id, clientId: c2.id,
+      outil: 'autotuner', operation: 'lecture', protocole: 'obd',
+      ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
+      credits: 1, etat: 'ok', dureeMin: 25,
+      resultat: 'Lecture par la prise, sans dépose.',
+      quand: ilYa(74), par: 'usr_patron'
+    }),
+    nouvelleIntervention({
+      vehiculeId: v2.id, clientId: c2.id,
+      outil: 'autotuner', operation: 'ecriture', protocole: 'obd',
+      ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
+      credits: 0, etat: 'echec', dureeMin: 55,
+      resultat: 'Refuse l’écriture par OBD : coupe la communication à 12 %.',
+      quand: ilYa(73), par: 'usr_patron'
+    }),
+    nouvelleIntervention({
+      vehiculeId: v2.id, clientId: c2.id,
+      outil: 'autotuner', operation: 'ecriture', protocole: 'bench',
+      ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
+      credits: 2, slave: 'AT-SLV-0042', etat: 'ok', dureeMin: 50,
+      resultat: 'Écrit au bench du premier coup, boîtier déposé.',
+      notes: 'Alimentation 12 V bien stable, sinon il décroche en fin d’écriture.',
+      quand: ilYa(73), par: 'usr_patron'
+    }),
+    nouvelleIntervention({
+      vehiculeId: v6.id, clientId: c10.id,
+      outil: 'autotuner', operation: 'ecriture', protocole: 'obd',
+      ecu: { marque: 'Bosch', type: 'EDC17C64' },
+      credits: 0, etat: 'echec', dureeMin: 40,
+      resultat: 'Même refus que la dernière fois par la prise.',
+      quand: ilYa(40), par: 'usr_tech'
+    }),
+    nouvelleIntervention({
+      vehiculeId: v6.id, clientId: c10.id,
+      outil: 'autotuner', operation: 'lecture', protocole: 'obd',
+      ecu: { marque: 'Bosch', type: 'EDC17C64' },
+      credits: 1, etat: 'ok', dureeMin: 20,
+      resultat: 'Lecture sans histoire.',
+      quand: ilYa(40), par: 'usr_tech'
+    }),
+    nouvelleIntervention({
+      dossierId: d6.id, vehiculeId: v8.id, clientId: c3.id,
+      outil: 'autotuner', operation: 'ecriture', protocole: 'bench',
+      ecu: { marque: 'Delphi', type: 'CRD2', hw: 'A6519002100', sw: '28345678' },
+      credits: 2, slave: 'AT-SLV-0042', etat: 'ok', dureeMin: 60,
+      resultat: 'Écriture au bench, essai routier concluant.',
+      notes: 'Le CRD2 ne se laisse pas faire par la prise : bench d’emblée.',
+      quand: ilYa(1), par: 'usr_patron'
     })
   );
 

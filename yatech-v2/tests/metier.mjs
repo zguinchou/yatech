@@ -15,6 +15,8 @@ import { S } from '../js/core/store.js';
 import * as act from '../js/domain/actions.js';
 import * as lit from '../js/domain/selecteurs.js';
 import { totaux } from '../js/domain/calculs.js';
+import { ficheCalculateur, calculateursConnus, conseilAcces,
+  cleCalculateur } from '../js/domain/calculateurs.js';
 import { neuf, normaliser, nouveauClient, nouveauVehicule, nouvellePiece } from '../js/domain/schema.js';
 
 let passes = 0, echecs = 0;
@@ -298,6 +300,75 @@ groupe('Les crédits ne se débitent qu’une fois', ({ client, vehicule }) => {
   act.ajusterCredits(19, 'Relevé sur l’appareil');
   verifie('la correction fait foi', lit.soldeCredits(S.etat), 19);
   verifie('et laisse une trace', S.etat.credits.historique.slice(-1)[0].sens, 'ajustement');
+});
+
+groupe('Un atelier qui ne compte pas ses crédits', ({ client, vehicule }) => {
+  act.rechargerCredits(10, 300, 'Recharge');
+  S.etat.reglages.suiviCredits = false;
+
+  const i = act.enregistrerIntervention({
+    vehiculeId: vehicule.id, clientId: client.id,
+    operation: 'ecriture', protocole: 'bench', credits: 2, etat: 'ok'
+  });
+  verifie('le solde ne bouge plus', lit.soldeCredits(S.etat), 10);
+  verifie('mais le nombre reste noté sur l’intervention', i.credits, 2);
+  verifie('et l’alerte de solde bas se tait',
+    lit.alertes(S.etat).filter(a => a.cle === 'credits').length, 0);
+
+  /* Rallumé, le compteur reprend la main sans avoir rien perdu. */
+  S.etat.reglages.suiviCredits = true;
+  act.modifierIntervention(i.id, { credits: 2 });
+  verifie('rallumé, il rattrape le retard', lit.soldeCredits(S.etat), 8);
+});
+
+/* ==========================================================================
+   LA MÉMOIRE DES CALCULATEURS
+   ========================================================================== */
+
+groupe('Par où passe ce calculateur', ({ client, vehicule }) => {
+  const poser = (o) => act.enregistrerIntervention(Object.assign({
+    vehiculeId: vehicule.id, clientId: client.id,
+    ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '', sw: '' }
+  }, o));
+
+  /* Le vécu de l'atelier : la lecture passe par la prise, l'écriture non. */
+  poser({ operation: 'lecture',  protocole: 'obd',   etat: 'ok',    dureeMin: 20 });
+  poser({ operation: 'lecture',  protocole: 'obd',   etat: 'ok',    dureeMin: 30 });
+  poser({ operation: 'ecriture', protocole: 'obd',   etat: 'echec' });
+  poser({ operation: 'ecriture', protocole: 'obd',   etat: 'echec' });
+  poser({ operation: 'ecriture', protocole: 'bench', etat: 'ok',    dureeMin: 45, credits: 2,
+    notes: 'Alim 12 V stable, sinon il décroche' });
+  /* Une intervention seulement prévue n'apprend rien : elle n'a pas eu lieu. */
+  poser({ operation: 'ecriture', protocole: 'boot',  etat: 'prevu' });
+
+  const f = ficheCalculateur(S.etat, 'edc17-c64');
+  vrai('l’orthographe n’empêche pas de retrouver le boîtier', !!f);
+  verifie('les tentatives comptent, pas les intentions', f.nb, 5);
+  verifie('la marque est retenue', f.marque, 'Bosch');
+
+  const lecture = conseilAcces(f, 'lecture');
+  verifie('la lecture passe par l’OBD', lecture.sure.protocole, 'obd');
+  verifie('deux fois sur deux', lecture.sure.ok, 2);
+  verifie('en 25 min environ', lecture.sure.minutesTypiques, 25);
+  verifie('rien à éviter en lecture', lecture.echouees.length, 0);
+
+  const ecriture = conseilAcces(f, 'ecriture');
+  verifie('l’écriture passe par le bench', ecriture.sure.protocole, 'bench');
+  verifie('pour deux crédits', ecriture.sure.creditsTypiques, 2);
+  verifie('avec l’astuce de la dernière fois', ecriture.sure.astuce,
+    'Alim 12 V stable, sinon il décroche');
+  verifie('et l’OBD est à éviter', ecriture.echouees.map(v => v.protocole), ['obd']);
+  verifie('il a coûté deux essais', ecriture.echouees[0].ko, 2);
+  /* Le boot n'a jamais été tenté : on ne le déconseille pas, on se tait. */
+  verifie('le boot jamais tenté n’apparaît pas', ecriture.voies.length, 2);
+
+  verifie('rien à dire d’une opération jamais faite', conseilAcces(f, 'cle'), null);
+  verifie('ni d’un boîtier jamais ouvert', ficheCalculateur(S.etat, 'MED17'), null);
+  verifie('ni d’un type vide', ficheCalculateur(S.etat, '  '), null);
+
+  const connus = calculateursConnus(S.etat);
+  verifie('un seul boîtier connu', connus.length, 1);
+  verifie('les deux orthographes ne font qu’un', cleCalculateur('EDC17 C64'), 'EDC17C64');
 });
 
 /* ==========================================================================

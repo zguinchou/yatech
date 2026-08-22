@@ -140,7 +140,8 @@ function indicateurs(e) {
       detail: du.retard > 0 ? fmt.euros(du.retard, { sansCentimes: true }) + ' en retard' : 'rien en retard',
       vers: '/factures'
     }),
-    indic({
+    /* Le compteur de crédits ne s'affiche que si le garage le suit. */
+    e.reglages.suiviCredits === false ? null : indic({
       nom: 'Crédits Autotuner', valeur: solde,
       ton: solde <= nombre(e.reglages.creditsAlerte, 5) ? 'alerte' : null,
       detail: 'consommés ce mois : ' + lit.creditsConsommes(e, debutMois),

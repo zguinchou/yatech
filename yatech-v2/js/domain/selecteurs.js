@@ -473,7 +473,7 @@ export function alertes(e) {
   /* --- crédits Autotuner ---------------------------------------------------- */
   const solde = soldeCredits(e);
   const seuilCredits = nombre(r.creditsAlerte, 5);
-  if (solde <= seuilCredits) {
+  if (r.suiviCredits !== false && solde <= seuilCredits) {
     sortie.push({
       cle: 'credits', ton: solde <= 0 ? 'danger' : 'alerte', icone: 'puce',
       titre: solde <= 0 ? 'Plus de crédits Autotuner' : 'Il reste ' + solde + ' crédits',

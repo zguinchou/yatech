@@ -215,10 +215,57 @@ ils sont affichés dans l'écran EBP, à vérifier au premier import.
 
 ---
 
+## La mémoire des calculateurs
+
+Le temps perdu en électronique, ce n'est pas la lecture : c'est la demi-heure
+passée à chercher par où entrer. Un EDC17 qui se lit par la prise mais ne
+s'écrit qu'au bench, on ne le découvre qu'en essayant — une fois.
+
+L'outil ne contient **aucune base de données** de calculateurs, et n'en
+inventera jamais une : tout ce qu'il affiche sort des interventions que le
+garage a lui-même enregistrées. Ce qu'il sait, il le sait parce que vous
+l'avez fait.
+
+Ce qu'il retient, c'est le couple **opération + accès** — pas le boîtier tout
+seul. Savoir qu'un EDC17C64 « se fait par OBD » ne sert à rien si c'est vrai en
+lecture et faux en écriture. Pour chaque type de calculateur, l'écran
+Électronique affiche donc, par opération :
+
+- l'accès qui a marché, et combien de fois (`OBD ✓3`, `Bench ✓2`) ;
+- celui qui a échoué, et combien de fois (`OBD ✗2`) — c'est le quart d'heure
+  qu'on ne repasse pas dessus ;
+- le temps typique et les crédits typiques, en médiane ;
+- la note laissée la dernière fois que ça a marché — souvent le vrai piège de
+  branchement.
+
+Pendant la saisie d'une intervention, dès que le type du calculateur est
+renseigné, tout ça s'affiche dans la fiche, et **l'accès se pose tout seul sur
+celui qui a fait ses preuves** pour l'opération choisie. Le choisir à la main
+reprend la main : l'outil ne réécrit jamais par-dessus une décision.
+
+Pour que ça marche, une seule discipline : renseigner le type du calculateur,
+l'opération et l'accès — y compris sur les échecs. Un échec enregistré vaut
+plus qu'une réussite : c'est lui qui fait gagner du temps la fois d'après.
+Une intervention seulement *prévue* ou *annulée* n'apprend rien et n'entre pas
+dans le compte. Les orthographes se rejoignent : `EDC17 C64`, `edc17-c64` et
+`EDC17C64` sont le même boîtier.
+
+---
+
 ## Les crédits Autotuner
 
-Une lecture ou une écriture de calculateur consomme des crédits achetés à
-l'avance. L'outil tient le compte :
+Autotuner vend l'accès aux protocoles au crédit : c'est la seule chose, dans
+une reprogrammation, qui s'épuise et bloque un travail en plein après-midi.
+D'où le compteur.
+
+Si votre outil est sous abonnement, ou déjà débloqué sur ce que vous faites,
+le compteur ne sert à rien : **éteignez « Suivre les crédits »** dans
+*Réglages → Électronique*. Le solde, l'historique des recharges, la colonne du
+tableau, le champ de saisie et l'alerte de solde bas disparaissent partout ;
+les interventions et leur historique ne bougent pas. Rallumé, le compteur
+reprend là où il en était.
+
+Compteur allumé, l'outil tient le compte :
 
 - le solde est affiché en permanence sur l'écran Électronique et sur l'accueil ;
 - une intervention marquée « réussie » débite ses crédits automatiquement,
