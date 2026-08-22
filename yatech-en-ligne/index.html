@@ -1051,6 +1051,30 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 }
 
 /* --- congés et fermetures ------------------------------------------------- */
+/* --- la densité -----------------------------------------------------------
+   Le même outil, plus serré ou plus gros. On agrandit l'ensemble plutôt que le
+   seul texte : sur un poste d'atelier, ce sont aussi les boutons qu'on vise de
+   loin avec des mains sales. */
+body { zoom: var(--echelle, 1); }
+@media print { body { zoom: 1; } }
+
+/* --- chercher un réglage --------------------------------------------------
+   Une vingtaine de volets, c'est déjà trop pour retrouver un réglage à l'œil. */
+.rech-reglages {
+  display: flex; align-items: center; gap: 9px; padding: 5px 13px;
+  border: 1px solid var(--trait); border-radius: 999px; background: var(--plan);
+  box-shadow: var(--ombre);
+}
+.rech-reglages svg { color: var(--encre-3); flex: none; }
+.rech-reglages .saisie {
+  flex: 1; min-width: 0; border: 0; background: transparent; padding: 8px 0; font-size: 14px;
+}
+.rech-reglages .saisie:focus { outline: none; box-shadow: none; }
+.volets.en-recherche > .carte.ouvert { box-shadow: 0 0 0 1.5px var(--accent-voile), var(--ombre); }
+.apercu-logo {
+  max-height: 46px; max-width: 150px; border: 1px solid var(--trait);
+  border-radius: var(--r-s); padding: 5px 8px; background: #fff;
+}
 .ferm-l {
   display: flex; align-items: center; gap: 10px; padding: 8px 11px;
   border: 1px solid var(--trait); border-radius: var(--r-s); background: var(--plan-2);
@@ -1958,6 +1982,7 @@ tr.vient-de-bouger td { animation: surligne 1.4s ease-out; }
   .imp-lignes tr { break-inside: avoid; }
 
   .imp-bas { display: flex; gap: 24px; align-items: flex-start; margin-bottom: 18px; break-inside: avoid; }
+  .imp-logo { max-height: 20mm; max-width: 60mm; display: block; margin-bottom: 5px; }
   .imp-mentions { flex: 1.3; font-size: 8pt; color: #444; }
   .imp-mentions p { margin: 0 0 5px; }
   .imp-totaux { flex: 1; max-width: 74mm; border-collapse: collapse; font-size: 10pt; }
@@ -3062,6 +3087,25 @@ const REGLAGES = {
   email: '',
   siret: '',
   tva: '',
+
+  /* Ce que la loi demande de porter sur un devis et une facture, et que
+     personne ne devrait avoir à me demander d'ajouter. Laissé vide, rien ne
+     s'imprime — on n'invente pas des mentions à la place du garage. */
+  formeJuridique: '',     // SARL, SAS, EI, EURL…
+  capital: '',            // « 10 000 € » — les sociétés doivent le porter
+  rcs: '',                // « RCS Marseille 512 345 678 »
+  ape: '',                // code APE / NAF, 4521Z pour l'entretien de véhicules
+  assurance: '',          // assureur et n° de contrat, garantie décennale ou RC pro
+  logo: '',               // l'enseigne, en haut du devis imprimé
+
+  /* Le paiement. Un devis qui ne dit pas comment on règle, ni sous combien de
+     jours, se paie quand le client y pense. */
+  delaiPaiement: 0,       // jours après facture ; 0 = comptant à l'enlèvement
+  moyensPaiement: 'Carte bancaire, espèces, chèque, virement',
+  iban: '',               // imprimé sous les totaux quand le virement est proposé
+  bic: '',
+  penalites: true,        // la mention des pénalités de retard et des 40 € d'indemnité
+  acompte: 0,             // pourcentage demandé à la commande ; 0 = aucun
   tauxHoraire: 62,        // grille particulier
   tauxHorairePro: 52,     // grille professionnel
   tauxTva: 20,
@@ -3164,6 +3208,17 @@ const REGLAGES = {
 
   // rappel des fiches qui attendent d'être passées dans EBP, en minutes (0 = jamais)
   rappelEbp: 120,
+
+  /* Rappel de sauvegarde. Les données vivent dans ce navigateur : un fichier
+     récent est la seule chose qui les rendra s'il les perd. 0 = jamais. */
+  rappelSauvegarde: 7,    // jours sans sauvegarde avant que la cloche le dise
+
+  /* Le parc bientôt plein. Passé ce taux d'occupation, l'alerte prévient qu'il
+     va falloir mettre des voitures dehors. 0 = jamais. */
+  parcAlerte: 85,         // %
+
+  // combien de temps un message reste à l'écran, en secondes
+  dureeMessages: 2.4,
 
   // verrouillage automatique après inactivité, en minutes (0 = jamais)
   verrouAuto: 0,
@@ -4578,6 +4633,10 @@ const ICO = {
   coche:    '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/><path d="M8 12.3l2.7 2.7L16 9.6"/>',
   cadenas:  '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/>',
   micro:    '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0"/><path d="M12 18v3"/>',
+  /* Une image : le cadre, l'horizon et le soleil — de quoi désigner un fichier
+     d'enseigne sans écrire « photo ». */
+  image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/>'
+       + '<path d="M21 16l-5-5-5 5-2-2-6 5"/>',
   question: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 114 2.3c-.9.6-1.6 1-1.6 2.1"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/>'
 };
 /* Les dimensions sont écrites dans la balise : un SVG sans taille ni règle CSS
@@ -4744,8 +4803,11 @@ function toast(txt) {
   el.className = 'toast';
   el.textContent = txt;
   z.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 2400);
-  setTimeout(() => el.remove(), 2800);
+  /* Les mains dans le moteur, on ne lit pas un message en deux secondes. La
+     durée se règle — bornée, pour qu'un message ne s'installe jamais. */
+  const d = Math.min(15, Math.max(1, Number(DB.etat && DB.etat.reglages.dureeMessages) || 2.4)) * 1000;
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, d);
+  setTimeout(() => el.remove(), d + 400);
 }
 
 function enregistrer(texte) {
@@ -5108,6 +5170,58 @@ function prefAccueil(cle, userId) {
   return commun[cle] !== false;
 }
 
+/** Un réglage personnel simple : le sien, sinon le repli donné. */
+function maPref(cle, defaut, userId) {
+  const u = DB.utilisateur(userId || S.userId);
+  const v = u && u.prefs && u.prefs[cle];
+  return v === undefined || v === null || v === '' ? defaut : v;
+}
+function poserMaPref(cle, valeur, userId) {
+  const u = DB.utilisateur(userId || S.userId);
+  if (!u) return;
+  u.prefs = u.prefs || {};
+  if (valeur === null || valeur === undefined) delete u.prefs[cle];
+  else u.prefs[cle] = valeur;
+  DB.sauver();
+}
+
+/* L'écran qui s'ouvre en arrivant. L'atelier pour la plupart ; le planning
+   pour qui commence sa journée par les rendez-vous, le parc pour qui range les
+   voitures avant tout. */
+const ECRANS_OUVERTURE = [
+  ['atelier', 'L\'atelier'], ['planning', 'Le planning'], ['parking', 'Le parc'],
+  ['clients', 'Les clients'], ['devis', 'Tous les devis'], ['memos', 'Le pense-bête'],
+  ['tarifs', 'Les tarifs']
+];
+const monEcranOuverture = (userId) => {
+  const v = maPref('ouverture', 'atelier', userId);
+  return ECRANS_OUVERTURE.some(([k]) => k === v) ? v : 'atelier';
+};
+
+/* La densité : la même application, plus serrée ou plus grosse. Sur le poste
+   de l'atelier on lit de loin, les mains sales ; au bureau on veut tout voir
+   d'un écran. */
+const DENSITES = [['serre', 'Serré', .92], ['normal', 'Normal', 1], ['large', 'Large', 1.09],
+                  ['tres-large', 'Très large', 1.2]];
+const maDensite = (userId) => {
+  const v = maPref('densite', 'normal', userId);
+  return DENSITES.some(([k]) => k === v) ? v : 'normal';
+};
+/** Ce que l'écran peut réellement grossir : agrandir revient à rétrécir la
+ *  place disponible, et sous 360 px la mise en page n'en a plus. On plafonne
+ *  plutôt que de laisser la page déborder sur le côté. */
+const echelleMax = () => Math.max(1, (window.innerWidth || 1024) / 360);
+
+function poserDensite(cle) {
+  const d = DENSITES.find(([k]) => k === cle) || DENSITES[1];
+  document.documentElement.style.setProperty('--echelle', String(Math.min(d[2], echelleMax())));
+  document.documentElement.dataset.densite = d[0];
+}
+
+/* Un téléphone qu'on tourne change de largeur sans redessiner : l'échelle, elle,
+   doit suivre — sinon le paysage reste bridé comme le portrait. */
+window.addEventListener('resize', () => { if (DB.etat) poserDensite(maDensite()); });
+
 /** Le canal retenu pour quelqu'un : le sien, sinon celui de l'atelier. */
 function canalDe(u) {
   const n = DB.etat.reglages.notifs || {};
@@ -5340,6 +5454,38 @@ function veilleAlertes() {
         `${nom} : ${eur(montant)} non encaissé${du.length > 1 ? 's' : ''} depuis ${jours} jours`,
         { vue: 'client-fiche', ref: c.id })) posees++;
     });
+  }
+
+  /* 5 bis · une sauvegarde qui date. Les données vivent dans ce navigateur :
+     un fichier récent est la seule chose qui les rendra s'il les perd. */
+  const seuilSauve = Number(DB.etat.reglages.rappelSauvegarde) || 0;
+  if (seuilSauve) {
+    const q = DB.etat.reglages.derniereSauvegarde;
+    const jours = q ? joursDepuis(q) : null;
+    if (jours === null || jours >= seuilSauve) {
+      // une clé par semaine : le rappel revient, sans se répéter chaque jour
+      const sem = Math.floor(minuit(Date.now()) / (7 * JOUR));
+      if (poser('sauvegarde:' + sem, 'tous', 'devis',
+        jours === null ? 'Aucune sauvegarde depuis cet appareil — un fichier vous rendrait tout'
+                       : `Dernière sauvegarde il y a ${jours} jours — pensez à en refaire une`,
+        { vue: 'reglages' })) posees++;
+    }
+  }
+
+  /* 5 ter · le parc bientôt plein : il vaut mieux le savoir avant d'accepter
+     la voiture que devant le client, la clé à la main. */
+  const seuilParc = Number(DB.etat.reglages.parcAlerte) || 0;
+  if (seuilParc) {
+    const utiles = PLACES.filter(p => p.type !== 'hs');
+    const prises = DB.etat.occupations.filter(o => utiles.some(p => p.id === o.placeId)).length;
+    const taux = utiles.length ? Math.round(prises * 100 / utiles.length) : 0;
+    if (taux >= seuilParc) {
+      const jourCle = minuit(Date.now());
+      if (poser('parc-plein:' + jourCle, 'tous', 'parc',
+        `Le parc est occupé à ${taux} % — ${utiles.length - prises} place${
+          utiles.length - prises > 1 ? 's' : ''} libre${utiles.length - prises > 1 ? 's' : ''}`,
+        { vue: 'parking' })) posees++;
+    }
   }
 
   /* 6 · ce qu'un client vient de décommander tout seul. Personne ne l'a
@@ -8391,11 +8537,14 @@ function blocImpression(d) {
   return `<div class="impression">
     <header class="imp-tete">
       <div>
-        <div class="imp-nom">${esc(r.nom)}</div>
+        ${r.logo ? `<img class="imp-logo" src="${esc(r.logo)}" alt="">` : ''}
+        <div class="imp-nom">${esc(r.nom)}${r.formeJuridique ? ' — ' + esc(r.formeJuridique) : ''}</div>
         <div class="imp-coord">
           ${[r.adresse, [r.cp, r.ville].filter(Boolean).join(' ')].filter(Boolean).map(esc).join('<br>')}
           ${r.tel ? `<br>Tél. ${esc(r.tel)}` : ''}${r.email ? `<br>${esc(r.email)}` : ''}
           ${r.siret ? `<br>SIRET ${esc(r.siret)}` : ''}${r.tva ? `<br>TVA ${esc(r.tva)}` : ''}
+          ${r.rcs ? `<br>${esc(r.rcs)}` : ''}${r.ape ? `<br>APE ${esc(r.ape)}` : ''}
+          ${r.capital ? `<br>Capital ${esc(r.capital)}` : ''}
         </div>
       </div>
       <div class="imp-ref">
@@ -8452,6 +8601,21 @@ function blocImpression(d) {
               elle, un devis en franchise n'est pas en règle. */ ''}
         ${tvaDu(d).franchise ? '<p><b>TVA non applicable, article 293 B du CGI.</b></p>' : ''}
         <p>Le devis est réputé accepté par la mention « Bon pour accord », datée et signée.</p>
+        ${r.acompte > 0 ? `<p><b>Acompte de ${Math.min(100, Math.max(0, Number(r.acompte)))} %
+          (${eur(t.ttc * Math.min(100, Math.max(0, Number(r.acompte))) / 100)}) demandé à la commande.</b></p>` : ''}
+        <p>Règlement : ${Number(r.delaiPaiement) > 0
+          ? `à ${Math.round(Number(r.delaiPaiement))} jours à compter de la facture`
+          : 'comptant à l\'enlèvement du véhicule'}${
+          r.moyensPaiement ? ' — ' + esc(r.moyensPaiement) : ''}.</p>
+        ${r.iban ? `<p>Virement : IBAN <span class="num">${esc(r.iban)}</span>${
+          r.bic ? ' · BIC <span class="num">' + esc(r.bic) + '</span>' : ''}</p>` : ''}
+        ${/* Ces deux mentions sont obligatoires entre professionnels, et
+              n'engagent à rien face à un particulier : on les propose, le
+              garage décide. */ ''}
+        ${r.penalites ? `<p>Tout retard de paiement entraîne des pénalités au taux de trois fois
+          l'intérêt légal, ainsi qu'une indemnité forfaitaire de 40 € pour frais de recouvrement
+          (art. L. 441-10 et D. 441-5 du code de commerce).</p>` : ''}
+        ${r.assurance ? `<p>Assurance : ${esc(r.assurance)}.</p>` : ''}
       </div>
       <table class="imp-totaux">
         <tr><td>Total pièces HT</td><td class="d">${eur(pieces.reduce((s, l) => s + l.qte * l.prixHT, 0))}</td></tr>
@@ -8475,7 +8639,13 @@ function blocImpression(d) {
     </section>
 
     <footer class="imp-pied">
-      ${esc(r.nom)}${r.siret ? ' · SIRET ' + esc(r.siret) : ''}${r.tva ? ' · TVA ' + esc(r.tva) : ''}${r.tel ? ' · ' + esc(r.tel) : ''}
+      ${[esc(r.nom) + (r.formeJuridique ? ' ' + esc(r.formeJuridique) : ''),
+         r.capital ? 'capital ' + esc(r.capital) : '',
+         r.siret ? 'SIRET ' + esc(r.siret) : '',
+         r.rcs ? esc(r.rcs) : '',
+         r.ape ? 'APE ' + esc(r.ape) : '',
+         r.tva ? 'TVA ' + esc(r.tva) : '',
+         r.tel ? esc(r.tel) : ''].filter(Boolean).join(' · ')}
     </footer>
   </div>`;
 }
@@ -10028,13 +10198,31 @@ function plierReglages() {
   const zone = document.querySelector('.corps.grille');
   if (!zone) return;
 
+  /* Chercher un réglage : on lit le contenu de chaque volet, accents et
+     ponctuation mis de côté, et on n'affiche que ceux qui en parlent — ouverts,
+     puisqu'on sait déjà ce qu'on veut y faire. */
+  const q = sansAccent(String(S.rechReglage || '').trim()).toLowerCase();
+  const mots = q ? q.split(/\s+/).filter(Boolean) : [];
+  let trouves = 0;
+
   zone.classList.add('volets');
+  zone.classList.toggle('en-recherche', !!mots.length);
   zone.querySelectorAll(':scope > .carte').forEach(section => {
     const id = nomVolet(section);
     const tete = section.querySelector('.carte-tete');
     if (!id || !tete) return;             // une carte sans titre reste ouverte
 
-    const ouvert = S.volet === id;
+    let colle = true;
+    if (mots.length) {
+      const texte = sansAccent(section.textContent || '').toLowerCase();
+      colle = mots.every(m => texte.includes(m));
+      section.hidden = !colle;
+      if (colle) trouves++;
+    } else {
+      section.hidden = false;
+    }
+
+    const ouvert = mots.length ? colle : S.volet === id;
     section.dataset.volet = id;
     section.classList.toggle('ouvert', ouvert);
 
@@ -10051,6 +10239,23 @@ function plierReglages() {
       tete.insertBefore(f, tete.firstChild);
     }
   });
+
+  /* Rien trouvé : le dire, plutôt que de laisser un écran vide qui ressemble à
+     une panne. */
+  let vide = zone.querySelector('.rech-rien');
+  if (mots.length && !trouves) {
+    if (!vide) {
+      vide = document.createElement('div');
+      vide.className = 'carte rech-rien';
+      vide.style.gridColumn = '1/-1';
+      zone.appendChild(vide);
+    }
+    vide.innerHTML = `<div class="vide"><h3>Aucun réglage pour « ${esc(S.rechReglage)} »</h3>
+      <p class="mini">Essayez un mot plus court : « tva », « heure », « parc », « voix », « couleur ».</p></div>`;
+    vide.hidden = false;
+  } else if (vide) {
+    vide.hidden = true;
+  }
 }
 
 /* Au clavier, un titre de volet s'ouvre comme le bouton qu'il est devenu. */
@@ -10327,6 +10532,16 @@ function vueReglages() {
           : 'Votre écran, vos avertissements, votre voix — le reste appartient à l\'atelier') + `
   <div class="corps large grille g-2">
 
+    ${/* Une vingtaine de volets, c'est déjà trop pour retrouver un réglage à
+          l'œil. On le cherche par son nom — « tva », « samedi », « micro » —
+          et seuls les volets qui en parlent restent à l'écran. */ ''}
+    <div class="rech-reglages" style="grid-column:1/-1">
+      ${ic('loupe')}
+      <input class="saisie" id="rech-reglage" value="${esc(S.rechReglage || '')}"
+             placeholder="Chercher un réglage — tva, horaires, micro, couleurs…">
+      ${S.rechReglage ? `<button class="btn nu" data-act="rech-reglage-vider" title="Effacer">${ic('croix')}</button>` : ''}
+    </div>
+
     ${admin ? `
     ${blocReglagesEquipe(r)}
 
@@ -10342,6 +10557,28 @@ function vueReglages() {
         <div class="champ-duo">${ch('Code postal', 'cp')}${ch('Ville', 'ville')}</div>
         <div class="champ-duo">${ch('Téléphone', 'tel', 'tel')}${ch('E-mail', 'email', 'email')}</div>
         <div class="champ-duo">${ch('SIRET', 'siret')}${ch('N° TVA intracom.', 'tva')}</div>
+        <div class="champ-duo">
+          ${ch('Forme juridique', 'formeJuridique', 'text', 'SARL, SAS, EI, EURL… Laissez vide si vous n\'y êtes pas tenu.')}
+          ${ch('Capital social', 'capital', 'text', 'Obligatoire pour une société : « 10 000 € ».')}
+        </div>
+        <div class="champ-duo">
+          ${ch('RCS', 'rcs', 'text', 'Ville et numéro : « RCS Marseille 512 345 678 ».')}
+          ${ch('Code APE / NAF', 'ape', 'text', '4520A pour l\'entretien et la réparation de véhicules légers.')}
+        </div>
+        ${ch('Assurance professionnelle', 'assurance', 'text',
+             'Assureur et n° de contrat. S\'imprime en bas du devis — vos clients pros le demandent.')}
+
+        <div class="sep"></div>
+        <div class="etiq">Votre enseigne sur le devis</div>
+        <div class="rangee" style="gap:11px;align-items:center;flex-wrap:wrap">
+          ${r.logo ? `<img src="${esc(r.logo)}" alt="" class="apercu-logo">` : '<span class="aide">Aucun logo</span>'}
+          <label class="btn">${ic('image')} ${r.logo ? 'Changer' : 'Choisir une image'}
+            <input type="file" accept="image/*" id="champ-logo" hidden></label>
+          ${r.logo ? `<button class="btn nu danger" data-act="logo-retirer">Retirer</button>` : ''}
+        </div>
+        <span class="aide">Elle se pose en haut de vos devis imprimés. L'image est rangée avec vos
+        données, sur cet appareil : gardez-la légère — <b>200 Ko au plus</b>, un PNG ou un JPEG.</span>
+
         <p class="aide">Ces informations forment l'en-tête de vos devis PDF.</p>
       </div>
     </section>
@@ -10373,6 +10610,31 @@ function vueReglages() {
             <b>« TVA non applicable, article 293 B du CGI »</b> s'imprime sur les devis — elle est
             obligatoire. À cocher si vous êtes en franchise.</span></div>
         </label>
+        <div class="sep"></div>
+        <div class="etiq">Le règlement</div>
+        <p class="aide" style="margin:0">Ce qui s'imprime en bas de chaque devis. Un devis qui ne dit
+        pas comment on règle, ni sous combien de jours, se paie quand le client y pense.</p>
+        <div class="champ-duo">
+          ${ch('Délai de paiement (jours, 0 = comptant)', 'delaiPaiement', 'number',
+               'Comptant à l\'enlèvement du véhicule, ou à 30 jours pour un compte pro.')}
+          ${ch('Acompte à la commande (%)', 'acompte', 'number',
+               '0 = aucun. Le montant correspondant s\'imprime sur le devis.')}
+        </div>
+        ${ch('Moyens de paiement acceptés', 'moyensPaiement', 'text',
+             'Tels qu\'ils s\'écriront sur le devis.')}
+        <div class="champ-duo">
+          ${ch('IBAN', 'iban', 'text', 'Imprimé sous les conditions, pour un règlement par virement.')}
+          ${ch('BIC', 'bic', 'text')}
+        </div>
+        <label class="voix-reglage">
+          <input type="checkbox" data-champ-oui="penalites" ${r.penalites !== false ? 'checked' : ''}>
+          <div><b>Imprimer les pénalités de retard</b>
+            <span class="aide">Trois fois l'intérêt légal et l'indemnité forfaitaire de 40 €. Ces deux
+            mentions sont <b>obligatoires entre professionnels</b> et n'engagent à rien face à un
+            particulier — laissez coché si vous travaillez avec des confrères ou des flottes.</span></div>
+        </label>
+
+        <div class="sep"></div>
         ${ch('Relancer après (jours sans réponse)', 'relanceApres', 'number', 'Un devis envoyé et sans réponse passe en « à relancer ».')}
         ${ch('Alerte immobilisation (jours)', 'immobilisationAlerte', 'number', 'Un véhicule qui dort sur le parc au-delà de ce délai passe en rouge.')}
         ${ch('Alerte impayé (jours, 0 = jamais)', 'impayeAlerte', 'number',
@@ -10414,6 +10676,21 @@ function vueReglages() {
         </div>
         ${nombre('Colonnes côté ' + NATURES.meca.nom.toLowerCase(), 'parcMeca', 0, r.parcColonnes,
           `Les ${meca} places de gauche sont en ${esc(NATURES.meca.nom.toLowerCase())}, les ${PLACES.length - meca} de droite en ${esc(NATURES.electro.nom.toLowerCase())}.`)}
+        <div class="champ" style="max-width:340px">
+          <label>Prévenir quand le parc est occupé à</label>
+          <select class="saisie" data-champ-parc="parcAlerte">
+            ${[[0, 'Jamais'], [70, '70 %'], [80, '80 %'], [85, '85 %'], [90, '90 %'], [100, '100 % — complet']]
+              .map(([v, t]) => `<option value="${v}" ${Number(r.parcAlerte) === v ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+          <span class="aide">${(() => {
+            const utiles = PLACES.filter(x => x.type !== 'hs');
+            const prises = DB.etat.occupations.filter(o => utiles.some(x => x.id === o.placeId)).length;
+            const taux = utiles.length ? Math.round(prises * 100 / utiles.length) : 0;
+            return `Occupé à <b>${taux} %</b> en ce moment — ${prises} place${prises > 1 ? 's' : ''} sur ${utiles.length}.`;
+          })()} Mieux vaut le savoir avant d'accepter une voiture que devant le client, la clé à la main.
+          Les places hors service ne comptent pas.</span>
+        </div>
+
         <div class="encart">
           Modifier le parc redessine le plan aussitôt. Une voiture dont la place
           disparaît n'est jamais perdue : elle est <b>déplacée dans la rue</b>, et vous
@@ -10511,6 +10788,41 @@ function vueReglages() {
           <input class="saisie" data-champ-reglage="nomOutil" value="${esc(r.nomOutil)}" placeholder="Atelier">
           <span class="aide">Celui-là appartient à l'atelier : tout le monde le voit.</span>
         </div>` : ''}
+        <div class="champ">
+          <label>Densité de l'affichage</label>
+          <div class="segments" style="max-width:440px">
+            ${DENSITES.map(([v, t]) => `<button data-act="densite" data-id="${v}"
+              class="${maDensite() === v ? 'on' : ''}">${t}</button>`).join('')}
+          </div>
+          <span class="aide">Tout grossit ou se resserre — le texte comme les boutons. Sur le poste de
+          l'atelier on lit de loin avec les mains sales ; au bureau on veut tout voir d'un écran.
+          Ce choix est le vôtre.${(() => {
+            const d = DENSITES.find(([k]) => k === maDensite());
+            return d && d[2] > echelleMax() + .001
+              ? ' <b>Sur cet écran, l\'agrandissement est plafonné</b> : au-delà, la mise en page n\'aurait plus la place. Il reprendra sa taille entière sur un écran plus large.'
+              : '';
+          })()}</span>
+        </div>
+        ${admin ? `<div class="champ">
+          <label>Les messages restent à l'écran</label>
+          <select class="saisie" style="max-width:340px" data-champ-reglage="dureeMessages">
+            ${[[1.5, 'Une seconde et demie'], [2.4, '2,4 secondes — d\'origine'], [4, '4 secondes'],
+               [6, '6 secondes'], [10, '10 secondes']]
+              .map(([v, t]) => `<option value="${v}" ${
+                Math.abs((Number(r.dureeMessages) || 2.4) - v) < .01 ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+          <span class="aide">Les petits messages qui passent en bas de l'écran. Les mains dans le
+          moteur, on ne lit pas une confirmation en deux secondes.</span>
+        </div>` : ''}
+        <div class="champ">
+          <label>Écran d'ouverture</label>
+          <select class="saisie" style="max-width:340px" data-champ-perso="ouverture">
+            ${ECRANS_OUVERTURE.map(([v, t]) => `<option value="${v}" ${
+              monEcranOuverture() === v ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+          <span class="aide">L'écran sur lequel l'outil s'ouvre quand vous prenez la main. Le bouton
+          maison y ramène toujours d'un clic.</span>
+        </div>
         <div class="champ">
           <label>Clair ou sombre</label>
           <div class="segments" style="max-width:340px">
@@ -10995,6 +11307,16 @@ function vueReglages() {
               ${vieux ? ' Un fichier récent est la seule chose qui vous rendra vos données si ce navigateur les perd.' : ''}
             </div>`;
           })()}
+          <div class="champ" style="max-width:340px">
+            <label>Me rappeler de sauvegarder</label>
+            <select class="saisie" data-champ-parc="rappelSauvegarde">
+              ${[[0, 'Jamais'], [3, 'Après 3 jours'], [7, 'Après une semaine'],
+                 [14, 'Après deux semaines'], [30, 'Après un mois']]
+                .map(([v, t]) => `<option value="${v}" ${Number(r.rappelSauvegarde) === v ? 'selected' : ''}>${t}</option>`).join('')}
+            </select>
+            <span class="aide">Passé ce délai sans fichier de sauvegarde, la cloche le rappelle —
+            une fois par semaine, pas tous les jours.</span>
+          </div>
           <div class="encart">
             <b>La restauration remplace tout</b> sur l'appareil qui reçoit. Faites-la toujours
             de l'appareil à jour vers l'autre, jamais l'inverse.
@@ -12248,7 +12570,11 @@ const COULEURS_REGLABLES = [
 /* Une annulation est de type « rdv » sans être une demande de confrère : elle
    n'a rien à faire dans la cloche des pros, qui ne sert qu'à ce qu'ils
    attendent de nous. Le drapeau `pro` les sépare. */
-const TYPES_CLOCHE = { atelier: ['demande', 'memo', 'client', 'rdv'], pro: ['rdv', 'devis'] };
+/* « devis » et « parc » manquaient à la cloche de l'atelier : les rappels
+   d'impayés étaient posés et n'apparaissaient nulle part. Le drapeau `pro`
+   suffit à garder hors d'ici ce qui ne regarde qu'un confrère. */
+const TYPES_CLOCHE = { atelier: ['demande', 'memo', 'client', 'rdv', 'devis', 'parc'],
+                       pro: ['rdv', 'devis'] };
 
 const estCloche = (a, quoi) => quoi === 'pro'
   ? !!a.pro
@@ -12819,7 +13145,8 @@ function ouvrirSession(userId) {
   S.connexionPour = null;
   S.erreurCode = null;
   S.memoDe = null;
-  S.vue = 'atelier';
+  // chacun ouvre sur l'écran par lequel il commence sa journée
+  S.vue = monEcranOuverture(userId);
   S.proConnecte = null;                     // et réciproquement
   S.grilleToken = null;
   stock.effacer('atelier.pro');
@@ -13159,6 +13486,7 @@ document.addEventListener('visibilitychange', () => {
 
 function apresRendu() {
   poserTheme(monTheme());
+  poserDensite(maDensite());
   appliquerCouleurs();
   brancherRangements();
   temoinEnregistrement();
@@ -13212,6 +13540,8 @@ function apresRendu() {
   if (r && S.focusRech) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); }
   const rt = $('#rech-tarif');
   if (rt && S.focusRechTarif) { rt.focus(); rt.setSelectionRange(rt.value.length, rt.value.length); }
+  const rr = $('#rech-reglage');
+  if (rr && S.focusRechReglage) { rr.focus(); rr.setSelectionRange(rr.value.length, rr.value.length); }
 
   /* Réglage du parc en cours de saisie : le champ garde la main.
      setSelectionRange n'existe que sur les champs texte — l'appeler sur un
@@ -13677,6 +14007,34 @@ function apresRendu() {
     if (pris) toast(`${pris} rendez-vous ${pris > 1 ? 'sont' : 'est'} déjà posé${
       pris > 1 ? 's' : ''} sur ces dates — pensez à prévenir`);
     rendre();
+  });
+
+  /* L'enseigne : elle est rangée avec les données, sur cet appareil. Une image
+     lourde ferait grossir la sauvegarde d'autant — on la refuse plutôt que de
+     laisser l'enregistrement échouer plus tard, sans prévenir. */
+  const lg = $('#champ-logo');
+  if (lg) lg.addEventListener('change', () => {
+    const f = lg.files && lg.files[0];
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { toast('Choisissez une image'); lg.value = ''; return; }
+    if (f.size > 200 * 1024) {
+      toast('Image trop lourde : ' + Math.round(f.size / 1024) + ' Ko pour 200 Ko au plus');
+      lg.value = ''; return;
+    }
+    const lecteur = new FileReader();
+    lecteur.onload = () => {
+      DB.etat.reglages.logo = String(lecteur.result || '');
+      if (!DB.sauver()) {
+        DB.etat.reglages.logo = '';
+        toast('Pas assez de place pour garder cette image');
+      } else {
+        enregistrer('Enseigne changée');
+        toast('Enseigne enregistrée');
+      }
+      rendre();
+    };
+    lecteur.onerror = () => toast('Cette image n\'a pas pu être lue');
+    lecteur.readAsDataURL(f);
   });
 
   // pose ou modification d'un créneau
@@ -16075,6 +16433,16 @@ document.addEventListener('click', (e) => {
 
     /* Retirer une fermeture : l'atelier rouvre ces jours-là, et le planning
        recommence à y proposer des créneaux. Rien d'autre ne bouge. */
+    'rech-reglage-vider'() { S.rechReglage = ''; S.focusRechReglage = true; rendre(); },
+
+    'densite'() { poserMaPref('densite', id); poserDensite(id); rendre(); },
+
+    'logo-retirer'() {
+      if (!exigeAdmin('Changer l\'enseigne')) return;
+      DB.etat.reglages.logo = '';
+      DB.sauver(); enregistrer('Enseigne retirée'); toast('Enseigne retirée'); rendre();
+    },
+
     'suppr-fermeture'() {
       if (!exigeAdmin('Modifier les fermetures')) return;
       const r = DB.etat.reglages;
@@ -16786,6 +17154,7 @@ document.addEventListener('input', (e) => {
 
   /* Chaque écran a sa propre recherche : celle des tarifs ne doit pas suivre
      dans les clients, ni l'inverse. On retrouve son écran comme on l'a laissé. */
+  if (t.id === 'rech-reglage') { S.rechReglage = t.value; S.focusRechReglage = true; rendre(); return; }
   if (t.id === 'rech-tarif') { S.rechTarif = t.value; S.focusRechTarif = true; rendre(); return; }
   if (t.id === 'rech') { S.recherche = t.value; S.focusRech = true; rendre(); return; }
 
@@ -17027,6 +17396,12 @@ document.addEventListener('input', (e) => {
   }
   /* Les horaires d'un jour : « 5:debut », « 2:pauseFin ». Vide = ce jour suit
      l'horaire général, ce qui permet de revenir en arrière sans tout retaper. */
+  /* Un réglage qui n'appartient qu'à la personne connectée. */
+  if (t.dataset.champPerso) {
+    poserMaPref(t.dataset.champPerso, t.type === 'checkbox' ? t.checked : t.value);
+    rendre();
+    return;
+  }
   if (t.dataset.champJour) {
     const [n, quoi] = t.dataset.champJour.split(':');
     const r = DB.etat.reglages;
