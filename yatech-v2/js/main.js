@@ -48,7 +48,8 @@ const ECRANS = {
   electronique: () => import('./views/electronique.js'),
   ebp:          () => import('./views/ebp.js'),
   reglages:     () => import('./views/reglages.js'),
-  portail:      () => import('./views/portail.js')
+  portail:      () => import('./views/portail.js'),
+  grille:       () => import('./views/grille.js')
 };
 
 const ROUTES = [
@@ -74,7 +75,10 @@ const ROUTES = [
   { chemin: '/reglages',      ecran: 'reglages',     titre: 'Réglages' },
   { chemin: '/reglages/:onglet', ecran: 'reglages',  titre: 'Réglages' },
   /* Le portail confrère vit hors de l'outil : pas de menu, pas de session. */
-  { chemin: '/pro/:jeton',    ecran: 'portail',      titre: 'Espace professionnel', libre: true, nu: true }
+  { chemin: '/pro/:jeton',    ecran: 'portail',      titre: 'Espace professionnel', libre: true, nu: true },
+  /* La grille tarifaire transportée dans l'adresse : elle ne lit rien dans
+     l'appareil, et s'ouvre donc sur le téléphone du confrère. */
+  { chemin: '/grille/:charge', ecran: 'grille',      titre: 'Grille tarifaire', libre: true, nu: true }
 ];
 
 /* ==========================================================================

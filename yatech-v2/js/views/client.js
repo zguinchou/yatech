@@ -23,6 +23,7 @@ import * as fmt from '../core/fmt.js';
 import { id, telNu, telJoli, pluriel, plaqueJolie } from '../core/util.js';
 import { copier } from '../core/fichiers.js';
 import { codeLisible, verrou } from '../core/crypto.js';
+import { lienGrille } from '../domain/grille.js';
 import { adresseComplete } from '../core/routeur.js';
 import * as lit from '../domain/selecteurs.js';
 import { totaux } from '../domain/calculs.js';
@@ -527,19 +528,104 @@ function blocPro(e, c, codeMontre, gestes) {
      fabriquer un lien qui ne mène nulle part. */
   const p = c.portail && c.portail.jeton ? c.portail : null;
 
+  return h('div.pile', [
+    blocGrilleTarifaire(e, c),
+    h('div.panneau', [
+      h('div.panneau__tete', [
+        icone('portail', { taille: 16 }),
+        h('h2.grandit', 'Suivi en ligne'),
+        p ? h('span.pastille.pastille--ok', 'ouvert') : null
+      ]),
+      h('div.panneau__corps.pile-s',
+        p ? accesOuvert(e, c, p, codeMontre, gestes) : accesFerme(c, gestes))
+    ])
+  ]);
+}
+
+/* ==========================================================================
+   LA GRILLE TARIFAIRE QUI VOYAGE
+   --------------------------------------------------------------------------
+   C'est CE lien-là qu'on envoie à un confrère. Il porte la grille avec lui :
+   il s'ouvre sur n'importe quel téléphone, sans réseau et sans compte, parce
+   qu'il ne va rien chercher dans l'appareil.
+   ========================================================================== */
+
+function blocGrilleTarifaire(e, c) {
+  const zone = h('div.pile-s');
+  let lien = null;
+
+  const fabriquer = async () => {
+    if (lien) return lien;
+    lien = await lienGrille(e, c);
+    return lien;
+  };
+
+  const peindre = () => poser(zone, [
+    h('p.petit.faible', 'Le lien contient la grille : il s’ouvre sur le téléphone du '
+      + 'confrère, sans réseau et sans code. Il donne une photographie de vos tarifs '
+      + 'du jour — après un changement de prix, renvoyez-en un.'),
+    h('div.rang.enroule', [
+      h('button.bt.bt--fort', {
+        type: 'button',
+        onclick: async (ev) => {
+          const l = await fabriquer();
+          const ok = await copier(l);
+          message(ok ? 'Lien de la grille copié' : 'Copie impossible',
+            { ton: ok ? 'ok' : 'danger' });
+        }
+      }, [icone('copier'), h('span', 'Copier le lien de la grille')]),
+      h('button.bt.bt--contour', {
+        type: 'button',
+        onclick: async (ev) => {
+          const l = await fabriquer();
+          menuEnvoi(ev.currentTarget, {
+            tel: c.tel, email: c.email,
+            sujet: 'Votre grille tarifaire — ' + (e.reglages.raisonSociale || e.reglages.nomOutil || ''),
+            texte: (e.reglages.messageGrille
+              || 'Bonjour,\n\nVoici votre grille tarifaire :\n{lien}\n\nElle s’ouvre '
+                 + 'directement, sans code. Gardez le lien.').replace('{lien}', l)
+          });
+        }
+      }, [icone('partage'), h('span', 'Envoyer')]),
+      h('button.bt.bt--nu', {
+        type: 'button',
+        onclick: async () => { const l = await fabriquer(); window.open(l, '_blank', 'noopener'); }
+      }, [icone('oeil'), h('span', 'Voir ce qu’il verra')])
+    ])
+  ]);
+
+  peindre();
+
   return h('div.panneau', [
     h('div.panneau__tete', [
-      icone('portail', { taille: 16 }),
-      h('h2.grandit', 'Espace professionnel'),
-      p ? h('span.pastille.pastille--ok', 'ouvert') : null
+      icone('tarifs', { taille: 16 }),
+      h('h2.grandit', 'Sa grille tarifaire'),
+      h('span.pastille.pastille--ok.pastille--sans-point', 'marche partout')
     ]),
-    h('div.panneau__corps.pile-s',
-      p ? accesOuvert(e, c, p, codeMontre, gestes) : accesFerme(c, gestes))
+    h('div.panneau__corps', zone)
+  ]);
+}
+
+/* Le suivi en ligne lit les données de l'outil, et ces données vivent dans CE
+   navigateur : le lien ne montre donc quelque chose que sur un appareil qui les
+   possède — le vôtre, la tablette du comptoir. Tant qu'il n'y a pas de base
+   partagée, il faut le dire ici plutôt que laisser le confrère tomber sur une
+   page vide. */
+function avertissementSuivi() {
+  return h('div.bandeau.bandeau--alerte', [
+    icone('alerte'),
+    h('div', [
+      h('b', 'Ce lien-ci ne fonctionne que sur un appareil qui a déjà les données du garage.'),
+      h('div', 'Le suivi des véhicules et les demandes de créneau se lisent dans la base '
+        + 'locale, et le téléphone du confrère n’en a pas. Utilisez-le sur la tablette de '
+        + 'l’atelier ; pour ce qu’il consulte de chez lui, envoyez-lui la grille ci-dessus.')
+    ])
   ]);
 }
 
 function accesFerme(c, gestes) {
   return [
+    avertissementSuivi(),
     h('p.petit.faible', 'Un accès permet à ce confrère de suivre ses véhicules '
       + 'et de demander des créneaux, sans voir le reste du garage.'),
     h('button.bt.bt--contour.bt--plein', {
@@ -554,6 +640,7 @@ function accesOuvert(e, c, p, codeMontre, gestes) {
 
   return [
     codeMontre ? boiteCode(codeMontre, gestes) : null,
+    avertissementSuivi(),
 
     h('div.champ', [
       h('label', 'Lien à donner au confrère'),

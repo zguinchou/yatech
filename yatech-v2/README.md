@@ -107,6 +107,7 @@ yatech-v2/
       selecteurs.js     les questions qu'on pose aux données
       actions.js        les gestes qui modifient (le seul chemin autorisé)
       ebp.js            la passerelle EBP
+      grille.js         la grille tarifaire qui voyage dans un lien
       demo.js           le jeu de démonstration
 
     ui/                 les briques partagées entre écrans
@@ -209,19 +210,36 @@ qui a été lu et écrit, ce qui suffit à retrouver une sauvegarde.
 
 ---
 
-## L'espace professionnel
+## Ce qu'on envoie à un confrère
 
-Depuis la fiche d'un client professionnel : « Ouvrir un accès ». L'outil génère
-un lien et un code court à lui transmettre une fois.
+Deux choses différentes, sur la fiche d'un client professionnel.
 
-Le confrère y trouve, depuis son téléphone :
-- **ses** tarifs, à jour, sans avoir à appeler ;
-- l'avancement des véhicules qu'il a confiés ;
-- de quoi **demander** un créneau — une demande, pas un rendez-vous : rien
-  n'entre au planning tant que le garage ne l'a pas acceptée ;
-- ses factures.
+**Sa grille tarifaire — c'est celle-ci qu'on envoie.**
+« Copier le lien de la grille » fabrique un lien qui **contient** ses tarifs.
+Il s'ouvre sur le téléphone du confrère, sans réseau, sans code, sans compte :
+la grille voyage dans l'adresse elle-même (environ 1 500 caractères, ça tient
+dans un SMS). Il y trouve son taux horaire, sa remise, et le prix qui lui est
+appliqué sur chaque prestation — cherchable, imprimable.
 
-Il ne voit ni les notes internes, ni les marges, ni les prix d'achat.
+C'est une **photographie**, pas un direct : la page affiche la date de la
+grille, et après un changement de tarif il faut renvoyer un lien. C'est écrit
+sur la page qu'il reçoit, il ne peut pas s'y tromper.
+
+Ni les marges, ni les prix d'achat, ni les autres clients n'y figurent : le
+lien ne contient que ce qui le concerne.
+
+**Le suivi en ligne — seulement sur un appareil du garage.**
+« Ouvrir un accès » crée un lien avec code qui montre au confrère l'avancement
+de ses véhicules, ses factures, et lui permet de *demander* un créneau (une
+demande, pas un rendez-vous : rien n'entre au planning sans acceptation).
+
+Mais ce suivi-là lit les données de l'outil, et ces données vivent dans le
+navigateur du garage : **le lien ne montre rien depuis le téléphone du
+confrère**, dont la base est vide. Il sert sur la tablette du comptoir, pas
+à distance. L'écran le dit clairement à l'endroit où on crée l'accès.
+
+Le jour où une base partagée existe (voir « Où sont les données »), ce lien
+fonctionnera de partout sans qu'il y ait une ligne à changer.
 
 ---
 
@@ -244,9 +262,16 @@ Dit franchement, pour éviter les mauvaises surprises :
 ## Vérifier que tout va bien
 
 ```
-node tests/verifs.mjs
+node tests/verifs.mjs    # les calculs, les formats, les données
+node tests/metier.mjs    # les règles du métier
 ```
 
-Vérifie les montants, la TVA à plusieurs taux, les remises, les arrondis au
-centime, les dates (changement d'heure, fin de mois), les plaques, le CSV, la
-numérotation qui ne recule jamais, et les empreintes des codes d'accès.
+`verifs.mjs` vérifie les montants, la TVA à plusieurs taux, les remises, les
+arrondis au centime, les dates (changement d'heure, fin de mois), les plaques,
+le CSV, la numérotation qui ne recule jamais, les empreintes des codes d'accès,
+la reconnaissance d'une vraie sauvegarde, et la grille tarifaire transportable.
+
+`metier.mjs` vérifie ce qui coûte de l'argent quand ça cède : le stock sorti
+deux fois, la place de parc occupée par deux voitures, le devis accepté qui
+écrase le travail en cours, les crédits Autotuner débités en double, le ménage
+qui emporterait un dossier encore ouvert.

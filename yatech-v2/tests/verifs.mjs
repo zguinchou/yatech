@@ -402,6 +402,24 @@ groupe('Empreintes', () => {
 });
 
 /* ==========================================================================
+   LA GRILLE QUI VOYAGE
+   Elle part dans l'adresse d'un lien pour s'ouvrir sur le téléphone d'un
+   confrère, qui n'a rien de notre base. Si l'emballage se casse, il ne voit
+   rien du tout — et il rappelle, ce qui était exactement le problème à régler.
+   ========================================================================== */
+
+const grilleDeDemo = async () => {
+  const { preparerGrille, emballer, deballer, compteGrille } = await import('../js/domain/grille.js');
+  const { jeuDemo } = await import('../js/domain/demo.js');
+  const e = normaliser(jeuDemo());
+  const pro = e.clients.find(c => c.type === 'pro');
+  const part = e.clients.find(c => c.type === 'part' && c.grille !== 'pro');
+  return { e, pro, part, preparerGrille, emballer, deballer, compteGrille };
+};
+
+groupe('Grille tarifaire transportable', () => { /* rempli plus bas, c'est asynchrone */ });
+
+/* ==========================================================================
    LE MAGASIN — modifier, annuler, refaire
    ========================================================================== */
 
@@ -441,6 +459,44 @@ groupe('Modifications et annulation', () => {
   vrai('l’erreur remonte à l’appelant', leve);
   verifie('l’état est remis comme avant', JSON.stringify(S.etat.clients), avant);
 });
+
+/* --- la grille, qui demande de l'asynchrone ------------------------------ */
+{
+  const { e, pro, part, preparerGrille, emballer, deballer, compteGrille } = await grilleDeDemo();
+  groupeCourant = groupes.find(g => g.nom === 'Grille tarifaire transportable');
+
+  const gPro = preparerGrille(e, pro);
+  const gPart = preparerGrille(e, part);
+
+  verifie('la grille confrère prend le taux confrère', gPro.th, e.reglages.tauxHorairePro);
+  verifie('la grille particulier prend le taux public', gPart.th, e.reglages.tauxHoraire);
+  vrai('les prix confrère sont plus bas', gPro.f[0][1][0][2] < gPart.f[0][1][0][2]);
+  vrai('elle porte sa date', gPro.d > 0);
+  verifie('elle nomme le destinataire', gPro.c, pro.societe || pro.nom);
+  vrai('elle contient les prestations actives',
+    compteGrille(gPro) === e.prestations.filter(p => p.actif).length);
+
+  /* Rien d'interne ne doit se retrouver dans ce qui part chez le confrère. */
+  const texte = JSON.stringify(gPro);
+  verifie('aucun prix d’achat ne fuit', /prixAchat/.test(texte), false);
+  verifie('aucune note interne ne fuit', /notes/.test(texte), false);
+  verifie('aucun autre client ne fuit',
+    e.clients.filter(c => c.id !== pro.id).some(c => texte.includes(c.nom || c.societe || 'zzz')), false);
+
+  const paquet = await emballer(gPro);
+  vrai('le paquet ne contient que des caractères sûrs pour une adresse',
+    /^[zp][A-Za-z0-9_-]+$/.test(paquet));
+  vrai('il tient dans un message (moins de 4000 caractères)', paquet.length < 4000);
+
+  const relu = await deballer(paquet);
+  vrai('le déballage rend la même grille', relu && JSON.stringify(relu) === JSON.stringify(gPro));
+
+  verifie('un paquet tronqué est refusé', await deballer(paquet.slice(0, paquet.length - 30)), null);
+  verifie('un paquet vide est refusé', await deballer(''), null);
+  verifie('n’importe quel texte est refusé', await deballer('pbonjour'), null);
+  verifie('une grille d’une version future est refusée',
+    await deballer(await emballer(Object.assign({}, gPro, { v: 99 }))), null);
+}
 
 /* ==========================================================================
    BILAN
