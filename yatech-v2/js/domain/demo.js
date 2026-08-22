@@ -527,13 +527,16 @@ export function jeuDemo() {
       credits: 1, slave: 'AT-SLV-0042', etat: 'ok', dureeMin: 45,
       resultat: 'Lecture complète. Sauvegarde d’origine archivée.',
       quand: ilYa(1), par: 'usr_patron',
-      fichiers: [{ id: id('fic'), nom: 'CRD2_origine.bin', role: 'origine', quand: ilYa(1) }]
+      fichiers: [{ id: id('fic'), nom: 'CRD2_origine.bin', role: 'origine',
+        ou: 'D:\\ECU\\2026\\GJ-159-KL', taille: 2048, quand: ilYa(1) }]
     }),
     nouvelleIntervention({
       dossierId: d8.id, vehiculeId: v9.id, clientId: c4.id,
       outil: 'autotuner', operation: 'ecriture', protocole: 'obd',
       ecu: { marque: 'Ford', type: 'SID209', hw: '', sw: '' },
       credits: 1, etat: 'ok', dureeMin: 70,
+      modifications: ['stage1', 'ssop'],
+      controles: { origine: true, charge: true, checksum: true, relecture: true, essai: true, defauts: true },
       resultat: 'Écriture réussie, essai routier concluant.',
       quand: ilYa(2), par: 'usr_patron'
     }),
@@ -572,6 +575,8 @@ export function jeuDemo() {
       outil: 'autotuner', operation: 'ecriture', protocole: 'obd',
       ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
       credits: 0, etat: 'echec', dureeMin: 55,
+      modifications: ['stage1', 'egr'],
+      controles: { origine: true, charge: true },
       resultat: 'Refuse l’écriture par OBD : coupe la communication à 12 %.',
       quand: ilYa(73), par: 'usr_patron'
     }),
@@ -580,6 +585,8 @@ export function jeuDemo() {
       outil: 'autotuner', operation: 'ecriture', protocole: 'bench',
       ecu: { marque: 'Bosch', type: 'EDC17C64', hw: '0281019112', sw: '1037543210' },
       credits: 2, slave: 'AT-SLV-0042', etat: 'ok', dureeMin: 50,
+      modifications: ['stage1', 'egr', 'dtc'],
+      controles: { origine: true, charge: true, checksum: true, relecture: true, essai: true, defauts: true },
       resultat: 'Écrit au bench du premier coup, boîtier déposé.',
       notes: 'Alimentation 12 V bien stable, sinon il décroche en fin d’écriture.',
       quand: ilYa(73), par: 'usr_patron'
@@ -589,6 +596,8 @@ export function jeuDemo() {
       outil: 'autotuner', operation: 'ecriture', protocole: 'obd',
       ecu: { marque: 'Bosch', type: 'EDC17C64' },
       credits: 0, etat: 'echec', dureeMin: 40,
+      modifications: ['stage1'],
+      controles: { origine: true, charge: true },
       resultat: 'Même refus que la dernière fois par la prise.',
       quand: ilYa(40), par: 'usr_tech'
     }),
@@ -605,6 +614,8 @@ export function jeuDemo() {
       outil: 'autotuner', operation: 'ecriture', protocole: 'bench',
       ecu: { marque: 'Delphi', type: 'CRD2', hw: 'A6519002100', sw: '28345678' },
       credits: 2, slave: 'AT-SLV-0042', etat: 'ok', dureeMin: 60,
+      modifications: ['stage1', 'fap', 'adblue'],
+      controles: { origine: true, charge: true, checksum: true, relecture: true, essai: true, defauts: true },
       resultat: 'Écriture au bench, essai routier concluant.',
       notes: 'Le CRD2 ne se laisse pas faire par la prise : bench d’emblée.',
       quand: ilYa(1), par: 'usr_patron'

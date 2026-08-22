@@ -135,6 +135,72 @@ export const OPERATIONS_ELECTRO = {
   autre:        { nom: 'Autre', aide: '' }
 };
 
+/* --- ce qu'on a fait au fichier ------------------------------------------
+   Le protocole dit par où on est entré ; ça, c'est ce qu'on a changé une fois
+   dedans. C'est la seule chose qu'un client rappelle deux ans plus tard :
+   « vous m'aviez fait quoi, déjà ? » — et la seule qu'un confrère demande
+   avant de reprendre une voiture qu'on a touchée.
+
+   `route: false` marque ce qui n'est pas homologué pour un usage routier. Ce
+   n'est pas un jugement, c'est une mention à reporter sur le document remis
+   au client : c'est lui qui roule avec. */
+export const FAMILLES_MODIF = {
+  puissance:   { nom: 'Puissance' },
+  depollution: { nom: 'Dépollution' },
+  agrement:    { nom: 'Agrément' },
+  codage:      { nom: 'Codage' }
+};
+
+export const MODIFICATIONS_ELECTRO = {
+  stage1:     { nom: 'Stage 1', famille: 'puissance', aide: 'Cartographie sur véhicule d’origine.' },
+  stage2:     { nom: 'Stage 2', famille: 'puissance', aide: 'Avec mécanique modifiée : ligne, admission, échangeur.' },
+  perso:      { nom: 'Sur mesure', famille: 'puissance', aide: 'Cartographie faite pour ce véhicule seul.' },
+  e85:        { nom: 'Conversion E85', famille: 'puissance' },
+  vmax:       { nom: 'Vmax', famille: 'puissance', aide: 'Limiteur de vitesse relevé ou retiré.', route: false },
+  couple:     { nom: 'Limiteur de couple', famille: 'puissance' },
+  egr:        { nom: 'EGR', famille: 'depollution', route: false },
+  fap:        { nom: 'FAP / DPF', famille: 'depollution', route: false },
+  adblue:     { nom: 'AdBlue / SCR', famille: 'depollution', route: false },
+  lambda:     { nom: 'Sonde lambda', famille: 'depollution', route: false },
+  cata:       { nom: 'Catalyseur', famille: 'depollution', route: false },
+  volets:     { nom: 'Volets d’admission', famille: 'depollution' },
+  ssop:       { nom: 'Start & Stop', famille: 'agrement' },
+  pedale:     { nom: 'Réponse pédale', famille: 'agrement' },
+  crackle:    { nom: 'Crackle / popcorn', famille: 'agrement', route: false },
+  hotstart:   { nom: 'Hot start', famille: 'agrement' },
+  boite:      { nom: 'Boîte / TCU', famille: 'agrement' },
+  dtc:        { nom: 'DTC off', famille: 'codage' },
+  immo:       { nom: 'Immo off', famille: 'codage' },
+  injecteurs: { nom: 'Codage injecteurs', famille: 'codage' },
+  cluster:    { nom: 'Compteur', famille: 'codage' },
+  cleModif:   { nom: 'Clé', famille: 'codage' },
+  autreModif: { nom: 'Autre', famille: 'codage' }
+};
+
+/* --- le déroulé qu'on ne saute pas ---------------------------------------
+   Six cases. Elles ne servent pas à faire joli : `bloquant` marque celles
+   sans lesquelles on refuse de déclarer une écriture réussie. Un calculateur
+   écrit sans original sauvegardé, c'est une voiture qu'on ne peut plus
+   remettre d'aplomb. */
+export const CONTROLES_ELECTRO = {
+  origine:   { nom: 'Original sauvegardé', bloquant: true,
+    aide: 'Lu, rangé et nommé AVANT la moindre écriture.' },
+  charge:    { nom: 'Maintien de charge', bloquant: true,
+    aide: 'Chargeur branché du début à la fin. Une coupure en pleine écriture brique le boîtier.' },
+  checksum:  { nom: 'Checksum corrigé',
+    aide: 'Somme de contrôle recalculée sur le fichier écrit.' },
+  relecture: { nom: 'Relecture vérifiée',
+    aide: 'On relit le calculateur : il rend bien ce qu’on lui a écrit.' },
+  defauts:   { nom: 'Défauts effacés',
+    aide: 'Mémoire de défauts vidée après l’essai, pas avant.' },
+  essai:     { nom: 'Essai routier fait',
+    aide: 'Moteur chaud, sous charge, avec le client si possible.' }
+};
+
+/* Les opérations qui écrivent dans le calculateur : ce sont les seules où
+   les contrôles bloquants s'appliquent. Relever des défauts ne risque rien. */
+export const OPERATIONS_QUI_ECRIVENT = ['ecriture', 'codage', 'cle'];
+
 export const ETATS_INTERVENTION = {
   prevu:   { nom: 'Prévue',      ton: 'neutre' },
   encours: { nom: 'En cours',    ton: 'accent' },
@@ -580,7 +646,9 @@ export function nouvelleIntervention(champs) {
     creditsDebites: 0,
     slave: '',               // identifiant de l'appareil utilisé
     etat: 'prevu',
-    fichiers: [],            // [{ id, nom, role:'origine'|'modifie'|'sauvegarde', quand, cle }]
+    modifications: [],       // clés de MODIFICATIONS_ELECTRO : ce qu'on a changé
+    controles: {},           // clés de CONTROLES_ELECTRO -> vrai quand la case est cochée
+    fichiers: [],            // [{ id, nom, role, ou, taille, quand }]
     dureeMin: 0,
     resultat: '',
     notes: '',
@@ -851,7 +919,29 @@ export function normaliser(e) {
     if (!OPERATIONS_ELECTRO[i.operation]) i.operation = 'autre';
     if (!PROTOCOLES[i.protocole]) i.protocole = 'obd';
     if (!i.ecu || typeof i.ecu !== 'object') i.ecu = { marque: '', type: '', hw: '', sw: '' };
+
+    /* Ce qu'on a changé dans le fichier. On jette les clés inconnues plutôt
+       que d'afficher des pastilles vides, et on dédoublonne : une liste
+       recopiée d'une intervention à l'autre peut avoir été enrichie deux fois. */
+    i.modifications = Array.isArray(i.modifications)
+      ? i.modifications.filter((m, n, l) => MODIFICATIONS_ELECTRO[m] && l.indexOf(m) === n)
+      : [];
+    /* Les contrôles : on ne garde que des vrais. Une case décochée n'a pas à
+       occuper de place, et son absence se lit pareil. */
+    const coches = {};
+    if (i.controles && typeof i.controles === 'object') {
+      for (const k in CONTROLES_ELECTRO) if (i.controles[k]) coches[k] = true;
+    }
+    i.controles = coches;
+
     if (!Array.isArray(i.fichiers)) i.fichiers = [];
+    i.fichiers.forEach(f => {
+      if (!f.id) f.id = id('fic');
+      if (typeof f.nom !== 'string') f.nom = '';
+      if (typeof f.ou !== 'string') f.ou = '';
+      if (typeof f.taille !== 'number' || !isFinite(f.taille) || f.taille < 0) f.taille = 0;
+      if (typeof f.quand !== 'number') f.quand = Date.now();
+    });
     if (typeof i.credits !== 'number') i.credits = 0;
     /* Les interventions d'avant la réconciliation : celles qui étaient
        réussies avaient bien été débitées, on le note pour ne pas les

@@ -15,8 +15,8 @@ import { S } from '../js/core/store.js';
 import * as act from '../js/domain/actions.js';
 import * as lit from '../js/domain/selecteurs.js';
 import { totaux } from '../js/domain/calculs.js';
-import { ficheCalculateur, calculateursConnus, conseilAcces,
-  cleCalculateur } from '../js/domain/calculateurs.js';
+import { ficheCalculateur, calculateursConnus, conseilAcces, cleCalculateur,
+  controlesManquants, ecritDansLeBoitier, programmesFrequents } from '../js/domain/calculateurs.js';
 import { neuf, normaliser, nouveauClient, nouveauVehicule, nouvellePiece } from '../js/domain/schema.js';
 
 let passes = 0, echecs = 0;
@@ -369,6 +369,73 @@ groupe('Par où passe ce calculateur', ({ client, vehicule }) => {
   const connus = calculateursConnus(S.etat);
   verifie('un seul boîtier connu', connus.length, 1);
   verifie('les deux orthographes ne font qu’un', cleCalculateur('EDC17 C64'), 'EDC17C64');
+});
+
+groupe('Le déroulé qu’on ne saute pas', () => {
+  verifie('une écriture écrit', ecritDansLeBoitier('ecriture'), true);
+  verifie('un codage aussi', ecritDansLeBoitier('codage'), true);
+  verifie('une lecture, non', ecritDansLeBoitier('lecture'), false);
+  verifie('un diagnostic non plus', ecritDansLeBoitier('diagnostic'), false);
+
+  /* Relever des défauts ne brique rien : on ne demande rien. */
+  verifie('rien à cocher pour une lecture',
+    controlesManquants({ operation: 'lecture', etat: 'ok', controles: {} }).length, 0);
+
+  /* Une écriture réussie sans original sauvegardé : c'est LA chose à
+     rattraper avant que la voiture reparte. */
+  const nus = controlesManquants({ operation: 'ecriture', etat: 'ok', controles: {} });
+  verifie('deux points clés manquent', nus.map(c => c.cle), ['origine', 'charge']);
+
+  verifie('cochés, plus rien ne manque',
+    controlesManquants({ operation: 'ecriture', etat: 'ok',
+      controles: { origine: true, charge: true } }).length, 0);
+
+  /* Un échec, on ne le sermonne pas : justement, ça n'a pas marché. */
+  verifie('un échec ne réclame rien',
+    controlesManquants({ operation: 'ecriture', etat: 'echec', controles: {} }).length, 0);
+
+  /* Les cases secondaires ne bloquent pas : elles renseignent. */
+  verifie('le checksum ne bloque pas',
+    controlesManquants({ operation: 'ecriture', etat: 'ok',
+      controles: { origine: true, charge: true } }).map(c => c.cle), []);
+});
+
+groupe('Ce que l’atelier programme', ({ client, vehicule }) => {
+  const poser = (o) => act.enregistrerIntervention(Object.assign({
+    vehiculeId: vehicule.id, clientId: client.id,
+    ecu: { marque: 'Bosch', type: 'EDC17C64' }, operation: 'ecriture', protocole: 'bench'
+  }, o));
+
+  poser({ etat: 'ok', dureeMin: 50, modifications: ['stage1', 'egr'] });
+  poser({ etat: 'ok', dureeMin: 60, modifications: ['stage1', 'fap'] });
+  poser({ etat: 'ok', dureeMin: 40, modifications: ['stage1'] });
+  /* Une tentative ratée ne compte pas comme un programme vendu. */
+  poser({ etat: 'echec', dureeMin: 30, modifications: ['stage1', 'adblue'] });
+
+  const top = programmesFrequents(S.etat);
+  verifie('le Stage 1 arrive en tête', top[0].cle, 'stage1');
+  verifie('trois fois, pas quatre', top[0].nb, 3);
+  verifie('en cinquante minutes', top[0].minutesTypiques, 50);
+  verifie('l’AdBlue raté n’est pas compté',
+    top.filter(m => m.cle === 'adblue').length, 0);
+  verifie('le retrait de FAP est marqué hors route',
+    top.find(m => m.cle === 'fap').route, false);
+  verifie('le Stage 1, non', top.find(m => m.cle === 'stage1').route, undefined);
+
+  /* La fiche du boîtier retient aussi ce qu'on y a programmé. */
+  const f = ficheCalculateur(S.etat, 'EDC17C64');
+  verifie('le boîtier sait ce qu’on lui fait', f.modifications[0].cle, 'stage1');
+  verifie('trois fois là aussi', f.modifications[0].nb, 3);
+
+  /* Une clé inconnue ne doit pas polluer : le schéma la jette. */
+  const sale = act.enregistrerIntervention({
+    vehiculeId: vehicule.id, operation: 'ecriture', etat: 'ok',
+    modifications: ['stage1', 'nawak', 'stage1']
+  });
+  const propre = normaliser(JSON.parse(JSON.stringify(S.etat)))
+    .interventions.find(x => x.id === sale.id);
+  verifie('les clés inventées sautent, les doublons aussi',
+    propre.modifications, ['stage1']);
 });
 
 /* ==========================================================================

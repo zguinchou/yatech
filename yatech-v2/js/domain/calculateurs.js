@@ -16,7 +16,8 @@
    lecture et faux en écriture.
    ========================================================================== */
 
-import { PROTOCOLES, OPERATIONS_ELECTRO } from './schema.js';
+import { PROTOCOLES, OPERATIONS_ELECTRO, MODIFICATIONS_ELECTRO,
+  CONTROLES_ELECTRO, OPERATIONS_QUI_ECRIVENT } from './schema.js';
 import { nombre } from '../core/util.js';
 
 /** La clé de regroupement : deux orthographes du même boîtier doivent tomber
@@ -62,10 +63,11 @@ export function ficheCalculateur(etat, type) {
 
   const fiche = {
     type: String(type || '').trim(), marque: '', nb: 0, reussies: 0, dernier: 0,
-    vehicules: [], voies: [], operations: []
+    vehicules: [], voies: [], operations: [], modifications: []
   };
   const voies = new Map();
   const vus = new Set();
+  const modifs = new Map();
 
   for (const i of etat.interventions || []) {
     if (cleCalculateur(typeCalculateur(i)) !== cle) continue;
@@ -80,6 +82,15 @@ export function ficheCalculateur(etat, type) {
       fiche.dernier = i.quand;
       fiche.type = typeCalculateur(i) || fiche.type;
       if (i.ecu && i.ecu.marque) fiche.marque = i.ecu.marque;
+    }
+
+    /* Ce qu'on a déjà fait sur ce boîtier : au troisième Stage 1 sur le même
+       calculateur, on sait ce qu'on vend et combien de temps ça prend. */
+    if (i.etat === 'ok') {
+      for (const m of i.modifications || []) {
+        if (!MODIFICATIONS_ELECTRO[m]) continue;
+        modifs.set(m, (modifs.get(m) || 0) + 1);
+      }
     }
 
     const k = i.operation + '|' + i.protocole;
@@ -128,6 +139,10 @@ export function ficheCalculateur(etat, type) {
     op.echouees = op.voies.filter(v => v.ok === 0 && v.ko > 0);
   }
 
+  fiche.modifications = Array.from(modifs.entries())
+    .map(([cle, nb]) => Object.assign({ cle, nb }, MODIFICATIONS_ELECTRO[cle]))
+    .sort((a, b) => b.nb - a.nb);
+
   const ordre = Object.keys(OPERATIONS_ELECTRO);
   fiche.operations = Array.from(parOp.values())
     .sort((a, b) => ordre.indexOf(a.operation) - ordre.indexOf(b.operation));
@@ -168,4 +183,58 @@ export function conseilAcces(fiche, operation) {
     sure: op.sure, echouees: op.echouees,
     voies: op.voies
   };
+}
+
+
+/* ==========================================================================
+   LE DÉROULÉ QU'ON NE SAUTE PAS
+   ========================================================================== */
+
+/** L'opération écrit-elle dans le calculateur ? */
+export function ecritDansLeBoitier(operation) {
+  return OPERATIONS_QUI_ECRIVENT.indexOf(operation) >= 0;
+}
+
+/**
+ * Les contrôles bloquants qui n'ont pas été cochés, pour une intervention
+ * qu'on s'apprête à déclarer réussie. Vide quand tout va bien — et vide aussi
+ * quand l'opération n'écrit rien : relever des défauts ne brique personne.
+ */
+export function controlesManquants(intervention) {
+  const i = intervention || {};
+  if (!ecritDansLeBoitier(i.operation)) return [];
+  if (i.etat && i.etat !== 'ok') return [];
+  const coches = i.controles || {};
+  return Object.keys(CONTROLES_ELECTRO)
+    .filter(k => CONTROLES_ELECTRO[k].bloquant && !coches[k])
+    .map(k => Object.assign({ cle: k }, CONTROLES_ELECTRO[k]));
+}
+
+/* ==========================================================================
+   CE QUE L'ATELIER PROGRAMME LE PLUS
+   ========================================================================== */
+
+/**
+ * Les modifications les plus faites, sur une période.
+ * @param {object} etat
+ * @param {number} [depuis]  début de période en millisecondes ; tout si absent
+ * @returns {object[]} [{ cle, nom, famille, route, nb, minutes }]
+ */
+export function programmesFrequents(etat, depuis) {
+  const par = new Map();
+  for (const i of etat.interventions || []) {
+    if (i.etat !== 'ok') continue;
+    if (depuis && i.quand < depuis) continue;
+    for (const m of i.modifications || []) {
+      const def = MODIFICATIONS_ELECTRO[m];
+      if (!def) continue;
+      let x = par.get(m);
+      if (!x) { x = Object.assign({ cle: m, nb: 0, minutes: [] }, def); par.set(m, x); }
+      x.nb++;
+      if (nombre(i.dureeMin, 0) > 0) x.minutes.push(nombre(i.dureeMin, 0));
+    }
+  }
+  return Array.from(par.values())
+    .map(x => Object.assign(x, { minutesTypiques: mediane(x.minutes) }))
+    .sort((a, b) => b.nb - a.nb);
 }

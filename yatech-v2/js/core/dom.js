@@ -13,10 +13,16 @@
 
 /** Construit un élément. `sel` : balise + classes + identifiant. */
 export function h(sel, props, enfants) {
-  /* Deuxième argument omis : `h('div', [...])` ou `h('b', 'texte')`. */
-  if (props !== undefined && (Array.isArray(props) || typeof props !== 'object' || props === null
-      || props instanceof Node)) {
-    enfants = props;
+  /* Deuxième argument omis : `h('div', [...])` ou `h('b', 'texte')`.
+
+     Mais si un TROISIÈME argument est là, les enfants sont déjà à leur place :
+     `h('div', condition ? { style } : null, [...])` — des attributs
+     conditionnels qui retombent sur null — ne doit pas les faire disparaître.
+     Ça a coûté un panneau entier qui se peignait vide une ligne sur deux. */
+  const pasDesProps = props !== undefined && (Array.isArray(props)
+    || typeof props !== 'object' || props === null || props instanceof Node);
+  if (pasDesProps) {
+    if (enfants === undefined) enfants = props;
     props = null;
   }
 

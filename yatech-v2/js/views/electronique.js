@@ -30,11 +30,13 @@ import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import { totaux } from '../domain/calculs.js';
 import {
-  OUTILS_ELECTRO, PROTOCOLES, OPERATIONS_ELECTRO, ETATS_INTERVENTION
+  OUTILS_ELECTRO, PROTOCOLES, OPERATIONS_ELECTRO, ETATS_INTERVENTION,
+  MODIFICATIONS_ELECTRO, FAMILLES_MODIF, CONTROLES_ELECTRO
 } from '../domain/schema.js';
 import { enTete, indic, champ, grilleChamps, plaque, filtres } from '../ui/widgets.js';
 import { calculateursConnus, ficheCalculateur, conseilAcces, cleCalculateur,
-  typeCalculateur } from '../domain/calculateurs.js';
+  typeCalculateur, controlesManquants, ecritDansLeBoitier,
+  programmesFrequents } from '../domain/calculateurs.js';
 
 /* Le rôle d'un fichier dans une intervention. Il ne vit que sur cet écran :
    le schéma se contente d'une chaîne, c'est ici qu'on lui donne un nom
@@ -76,8 +78,10 @@ export function peindre(ctx) {
 
   let filtreActif = 'tout';
   let ecuFiltre = '';        // type de calculateur choisi dans la mémoire d'atelier
+  let modifFiltre = '';      // programme choisi dans « ce qu'on fait le plus »
   let toutMontrer = false;
   let historiqueOuvert = false;
+  let cherche = '';
 
   function refaire() { poser(racine, contenu()); }
 
@@ -104,14 +108,21 @@ export function peindre(ctx) {
             filtreActif,
             (cle) => { filtreActif = cle; toutMontrer = false; refaire(); }
           ),
-          panneauInterventions(e, refaire, filtreActif, ecuFiltre, toutMontrer, {
+          panneauInterventions(e, refaire, {
+            filtreActif, ecuFiltre, modifFiltre, toutMontrer, cherche,
             surTout: () => { toutMontrer = true; refaire(); },
-            surVidageEcu: () => { ecuFiltre = ''; refaire(); }
+            surVidageEcu: () => { ecuFiltre = ''; refaire(); },
+            surVidageModif: () => { modifFiltre = ''; refaire(); },
+            surRecherche: (v) => { cherche = v; toutMontrer = false; }
           })
         ]),
         h('div.pile', [
-          memoireCalculateurs(e, ecuFiltre, (type) => {
-            ecuFiltre = (ecuFiltre === type ? '' : type);
+          memoireCalculateurs(e, refaire, ecuFiltre, (type) => {
+            ecuFiltre = (cleCalculateur(ecuFiltre) === cleCalculateur(type) ? '' : type);
+            refaire();
+          }),
+          panneauProgrammes(e, modifFiltre, (cle) => {
+            modifFiltre = (modifFiltre === cle ? '' : cle);
             refaire();
           }),
           suitLesCredits(e) ? panneauHistorique(e, historiqueOuvert, () => {
@@ -278,11 +289,20 @@ function indicateurs(e) {
   const ratees = duMois.filter(i => i.etat === 'echec').length;
   const jugees = reussies + ratees;
   const ca = caElectronique(e, depuis);
+  /* Un « programme », c'est une écriture réussie qui a changé quelque chose
+     au fichier. Une lecture n'en est pas un, et c'est bien ce qu'on veut
+     compter quand on se demande combien on en fait par mois. */
+  const programmes = duMois.filter(i => i.etat === 'ok' && (i.modifications || []).length);
+  const top = programmesFrequents(e, depuis)[0];
 
   return h('div.grille-indics', [
     indic({
       nom: 'Interventions', valeur: duMois.length,
       detail: fmt.nomMois(Date.now(), true)
+    }),
+    indic({
+      nom: 'Programmes', valeur: programmes.length,
+      detail: top ? 'surtout ' + top.nom.toLowerCase() + ' (' + top.nb + ')' : 'aucun ce mois'
     }),
     indic({
       nom: 'Taux de réussite',
@@ -342,53 +362,134 @@ function garde(i, cle) {
   return true;
 }
 
-function panneauInterventions(e, refaire, filtreActif, ecuFiltre, toutMontrer, rappels) {
-  const toutes = lit.interventionsRecentes(e, (e.interventions || []).length);
-  let liste = toutes.filter(i => garde(i, filtreActif));
-  if (ecuFiltre) liste = liste.filter(i => memeEcu(i, ecuFiltre));
+/** Le texte cherché touche-t-il cette intervention ? On ratisse large : la
+ *  plaque, le client, le boîtier, le programme, le nom d'un fichier, une note.
+ *  Devant l'établi, on se souvient d'un mot, pas d'une colonne. */
+function correspond(e, i, mots) {
+  if (!mots.length) return true;
+  const v = i.vehiculeId ? lit.vehicule(e, i.vehiculeId) : null;
+  const c = lit.client(e, i.clientId || (v ? v.clientId : null));
+  const ecu = i.ecu || {};
+  const foin = [
+    v ? v.immat : '', v ? lit.nomVehicule(v) : '',
+    c ? lit.nomClient(c) : '',
+    ecu.marque, ecu.type, ecu.hw, ecu.sw,
+    (OPERATIONS_ELECTRO[i.operation] || {}).nom,
+    (PROTOCOLES[i.protocole] || {}).nom,
+    i.slave, i.resultat, i.notes,
+    (i.modifications || []).map(m => (MODIFICATIONS_ELECTRO[m] || {}).nom).join(' '),
+    (i.fichiers || []).map(f => f.nom + ' ' + (f.ou || '')).join(' ')
+  ].join(' ').toLowerCase();
+  return mots.every(m => foin.indexOf(m) >= 0);
+}
 
-  const tronque = !toutMontrer && liste.length > LIMITE_LISTE;
+function panneauInterventions(e, refaire, o) {
+  const mots = String(o.cherche || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const toutes = lit.interventionsRecentes(e, (e.interventions || []).length);
+  let liste = toutes.filter(i => garde(i, o.filtreActif));
+  if (o.ecuFiltre) liste = liste.filter(i => memeEcu(i, o.ecuFiltre));
+  if (o.modifFiltre) liste = liste.filter(i => (i.modifications || []).indexOf(o.modifFiltre) >= 0);
+  liste = liste.filter(i => correspond(e, i, mots));
+
+  const tronque = !o.toutMontrer && liste.length > LIMITE_LISTE;
   const visibles = tronque ? liste.slice(0, LIMITE_LISTE) : liste;
+
+  /* Le champ garde son contenu et le curseur d'un repeint à l'autre : on ne
+     repeint pas la liste à chaque lettre, on la filtre à la volée. */
+  const recherche = h('input.saisie', {
+    type: 'search', value: o.cherche || '', spellcheck: false,
+    placeholder: 'Plaque, client, boîtier, programme, fichier…',
+    'aria-label': 'Rechercher une intervention',
+    oninput: (ev) => { o.surRecherche(ev.target.value); tout = false; rafraichirCorps(); }
+  });
+
+  /* Une nouvelle recherche referme la liste à sa longueur normale : on cherche
+     pour réduire, pas pour dérouler trois ans d'un coup. */
+  let tout = o.toutMontrer;
+  const corps = h('div');
+  const compteur = h('span.compte', String(liste.length));
+
+  function rafraichirCorps() {
+    const m = String(recherche.value || '').toLowerCase().split(/\s+/).filter(Boolean);
+    let l = toutes.filter(i => garde(i, o.filtreActif));
+    if (o.ecuFiltre) l = l.filter(i => memeEcu(i, o.ecuFiltre));
+    if (o.modifFiltre) l = l.filter(i => (i.modifications || []).indexOf(o.modifFiltre) >= 0);
+    l = l.filter(i => correspond(e, i, m));
+    compteur.textContent = String(l.length);
+    poser(corps, tableau(l.slice(0, tout ? l.length : LIMITE_LISTE), l));
+  }
+
+  function tableau(vus, tous) {
+    if (!vus.length) {
+      return h('div.panneau__corps', vide({
+        icone: 'electro',
+        titre: 'Aucune intervention',
+        texte: o.filtreActif === 'tout' && !o.ecuFiltre && !o.modifFiltre && !recherche.value
+          ? 'Chaque lecture et chaque écriture notée ici devient la mémoire de l’atelier.'
+          : 'Rien ne correspond.',
+        action: o.filtreActif === 'tout' && !o.ecuFiltre && !o.modifFiltre && !recherche.value
+          ? { texte: 'Nouvelle intervention', faire: () => modaleIntervention(e, refaire, null) }
+          : null
+      }));
+    }
+    return [
+      h('div.panneau__corps', h('div.tableau-cadre', h('table.grille.repliable', [
+        h('thead', h('tr', [
+          h('th', 'Date'),
+          h('th', 'Véhicule'),
+          h('th', 'Client'),
+          h('th', 'Calculateur'),
+          h('th', 'Opération'),
+          h('th', 'Accès'),
+          h('th', 'Programme'),
+          suitLesCredits(e) ? h('th.num', 'Crédits') : null,
+          h('th.num', 'Durée'),
+          h('th', 'État')
+        ])),
+        h('tbody', vus.map(i => ligneIntervention(e, i, refaire)))
+      ]))),
+      tous.length > vus.length ? h('div.panneau__pied', h('button.bt.bt--nu.bt--plein', {
+        type: 'button', onclick: o.surTout
+      }, 'Afficher les ' + tous.length + ' interventions')) : null
+    ];
+  }
+
+  poser(corps, tableau(visibles, liste));
 
   return h('div.panneau', [
     h('div.panneau__tete', [
       icone('electro', { taille: 16 }),
       h('h2.grandit', 'Interventions'),
-      h('span.compte', String(liste.length))
+      compteur
     ]),
-    ecuFiltre ? h('div.panneau__corps', { style: { paddingBottom: '0' } },
-      h('button.etiq.etiq--accent', {
-        type: 'button', onclick: rappels.surVidageEcu
-      }, [h('span', 'Calculateur ' + ecuFiltre), icone('croix', { taille: 13 })])
-    ) : null,
-    visibles.length
-      ? h('div.panneau__corps', h('div.tableau-cadre', h('table.grille.repliable', [
-          h('thead', h('tr', [
-            h('th', 'Date'),
-            h('th', 'Véhicule'),
-            h('th', 'Client'),
-            h('th', 'Calculateur'),
-            h('th', 'Opération'),
-            h('th', 'Protocole'),
-            suitLesCredits(e) ? h('th.num', 'Crédits') : null,
-            h('th.num', 'Durée'),
-            h('th', 'État')
-          ])),
-          h('tbody', visibles.map(i => ligneIntervention(e, i, refaire)))
-        ])))
-      : h('div.panneau__corps', vide({
-          icone: 'electro',
-          titre: 'Aucune intervention',
-          texte: filtreActif === 'tout' && !ecuFiltre
-            ? 'Chaque lecture et chaque écriture notée ici devient la mémoire de l’atelier.'
-            : 'Rien ne correspond à ce filtre.',
-          action: filtreActif === 'tout' && !ecuFiltre
-            ? { texte: 'Nouvelle intervention', faire: () => modaleIntervention(e, refaire, null) }
-            : null
-        })),
-    tronque ? h('div.panneau__pied', h('button.bt.bt--nu.bt--plein', {
-      type: 'button', onclick: rappels.surTout
-    }, 'Afficher les ' + liste.length + ' interventions')) : null
+    h('div.panneau__corps', { style: { paddingBottom: '0' } }, h('div.pile-s', [
+      recherche,
+      o.ecuFiltre || o.modifFiltre ? h('div.rang-s.enroule', [
+        o.ecuFiltre ? h('button.etiq.etiq--accent', {
+          type: 'button', onclick: o.surVidageEcu
+        }, [h('span', 'Boîtier ' + o.ecuFiltre), icone('croix', { taille: 13 })]) : null,
+        o.modifFiltre ? h('button.etiq.etiq--accent', {
+          type: 'button', onclick: o.surVidageModif
+        }, [h('span', (MODIFICATIONS_ELECTRO[o.modifFiltre] || {}).nom || o.modifFiltre),
+            icone('croix', { taille: 13 })]) : null
+      ]) : null
+    ])),
+    corps
+  ]);
+}
+
+/** Les programmes d'une intervention, en pastilles. */
+function pastillesModifs(i, limite) {
+  const l = (i.modifications || []).map(m => MODIFICATIONS_ELECTRO[m] ? m : null).filter(Boolean);
+  if (!l.length) return null;
+  const montrees = limite ? l.slice(0, limite) : l;
+  return h('div.rang-s.enroule', [
+    ...montrees.map(m => h('span.pastille.pastille--'
+      + (MODIFICATIONS_ELECTRO[m].route === false ? 'alerte' : 'violet')
+      + '.pastille--sans-point', MODIFICATIONS_ELECTRO[m].nom)),
+    l.length > montrees.length
+      ? h('span.minus.tres-faible', '+' + (l.length - montrees.length))
+      : null
   ]);
 }
 
@@ -418,7 +519,9 @@ function ligneIntervention(e, i, refaire) {
     h('td', { donnees: { col: 'Calculateur' } },
       [ecu.marque, ecu.type].filter(Boolean).join(' ') || h('span.tres-faible', '—')),
     h('td', { donnees: { col: 'Opération' } }, ope ? ope.nom : i.operation),
-    h('td', { donnees: { col: 'Protocole' } }, proto ? proto.nom : i.protocole),
+    h('td', { donnees: { col: 'Accès' } }, proto ? proto.nom : i.protocole),
+    h('td', { donnees: { col: 'Programme' } },
+      pastillesModifs(i, 3) || h('span.tres-faible', '—')),
     suitLesCredits(e) ? h('td.num', { donnees: { col: 'Crédits' } },
       nombre(i.credits, 0) ? String(nombre(i.credits, 0)) : '') : null,
     h('td.num', { donnees: { col: 'Durée' } },
@@ -481,7 +584,7 @@ function ligneOperation(e, op, opts) {
   ]);
 }
 
-function memoireCalculateurs(e, ecuFiltre, surChoix) {
+function memoireCalculateurs(e, refaire, ecuFiltre, surChoix) {
   const fiches = calculateursConnus(e);
 
   return h('div.panneau', [
@@ -492,22 +595,19 @@ function memoireCalculateurs(e, ecuFiltre, surChoix) {
     ]),
     fiches.length
       ? h('div.liste', fiches.slice(0, 14).map(f => {
-          const plaques = f.vehicules
-            .map(vid => lit.vehicule(e, vid))
-            .filter(Boolean)
-            .map(v => plaqueJolie(v.immat));
           const choisi = cleCalculateur(ecuFiltre) === cleCalculateur(f.type);
 
-          return h('button.liste__ligne', {
-            type: 'button',
-            'aria-pressed': choisi ? 'true' : 'false',
-            style: choisi ? { background: 'var(--accent-voile)' } : null,
-            onclick: () => surChoix(f.type)
-          }, [
-            h('div.grandit.coupe.pile-s', [
+          return h('div.liste__ligne',
+            choisi ? { style: { background: 'var(--accent-voile)' } } : null, [
+            h('button.bt.bt--nu.grandit.coupe', {
+              type: 'button',
+              style: { textAlign: 'left', display: 'block', padding: '0' },
+              'aria-pressed': choisi ? 'true' : 'false',
+              onclick: () => surChoix(f.type)
+            }, h('div.pile-s', [
               h('div.rang-s', [
                 h('span.gras.coupe', f.type),
-                h('span.petit.tres-faible', f.nb + (f.nb > 1 ? ' fois' : ' fois'))
+                h('span.petit.tres-faible', f.nb + ' fois')
               ]),
               f.marque ? h('div.petit.faible.coupe', f.marque) : null,
               /* L'essentiel, visible sans ouvrir : par où passe chaque
@@ -517,18 +617,138 @@ function memoireCalculateurs(e, ecuFiltre, surChoix) {
                   h('span.minus.tres-faible', op.nom),
                   ...op.voies.slice(0, 3).map(v => pastilleVoie(v, true))
                 ]))),
-              plaques.length
-                ? h('div.minus.tres-faible.coupe', plaques.slice(0, 4).join(' · ')
-                    + (plaques.length > 4 ? ' +' + (plaques.length - 4) : ''))
+              f.modifications.length
+                ? h('div.rang-s.enroule', f.modifications.slice(0, 4).map(m =>
+                    h('span.pastille.pastille--violet.pastille--sans-point',
+                      m.nom + (m.nb > 1 ? ' ×' + m.nb : ''))))
                 : null
-            ]),
-            icone(choisi ? 'croix' : 'filtre', { taille: 14, classe: 'tres-faible' })
+            ])),
+            h('button.bt.bt--nu.bt--icone.bt--s', {
+              type: 'button', 'aria-label': 'Fiche du ' + f.type,
+              onclick: () => ficheCalculateurModale(e, refaire, f.type)
+            }, icone('oeil'))
           ]);
         }))
       : h('div.panneau__corps', h('div.petit.faible.centre',
           'Renseignez le type de calculateur, l’opération et l’accès sur vos '
           + 'interventions : l’atelier se souviendra tout seul par où passer '
           + 'la prochaine fois.'))
+  ]);
+}
+
+/* ==========================================================================
+   LA FICHE D'UN CALCULATEUR
+   Tout ce que l'atelier sait d'un boîtier, sur une page : par où on entre
+   pour chaque opération, ce qu'on y a programmé, sur quelles voitures, et le
+   détail des tentatives — les ratées comprises, ce sont les plus utiles.
+   ========================================================================== */
+
+function ficheCalculateurModale(e, refaire, type) {
+  const f = ficheCalculateur(e, type);
+  if (!f) { message('Ce calculateur n’a pas encore d’histoire ici.'); return; }
+
+  const passees = (e.interventions || [])
+    .filter(i => memeEcu(i, type) && (i.etat === 'ok' || i.etat === 'echec'))
+    .sort((a, b) => b.quand - a.quand);
+
+  const plaques = f.vehicules.map(vid => lit.vehicule(e, vid)).filter(Boolean);
+  const modale_ = modale({
+    titre: f.type + (f.marque ? ' — ' + f.marque : ''),
+    taille: 'large',
+    corps: h('div.pile', [
+      h('div.rang-s.enroule', [
+        h('span.pastille', f.nb + (f.nb > 1 ? ' tentatives' : ' tentative')),
+        h('span.pastille.pastille--ok', f.reussies + ' réussies'),
+        f.nb > f.reussies
+          ? h('span.pastille.pastille--danger', (f.nb - f.reussies) + ' ratées') : null,
+        f.dernier ? h('span.petit.faible', 'la dernière ' + fmt.quand(f.dernier)) : null
+      ]),
+
+      h('div.majuscule', 'Par où on entre'),
+      h('div.pile', f.operations.map(op => ligneOperation(e, op, { astuces: true }))),
+
+      f.modifications.length ? h('div.majuscule', 'Ce qu’on y programme') : null,
+      f.modifications.length
+        ? h('div.rang-s.enroule', f.modifications.map(m =>
+            h('span.pastille.pastille--' + (m.route === false ? 'alerte' : 'violet'),
+              m.nom + ' ×' + m.nb)))
+        : null,
+
+      plaques.length ? h('div.majuscule', 'Sur ces véhicules') : null,
+      plaques.length
+        ? h('div.rang-s.enroule', plaques.map(v => h('button.etiq', {
+            type: 'button',
+            onclick: () => { modale_.fermer(); location.hash = '#/vehicule/' + v.id; }
+          }, plaqueJolie(v.immat) + ' — ' + lit.nomVehicule(v))))
+        : null,
+
+      h('div.majuscule', 'Les tentatives, une par une'),
+      h('div.liste', passees.slice(0, 12).map(i => {
+        const etat = ETATS_INTERVENTION[i.etat] || ETATS_INTERVENTION.prevu;
+        const v = i.vehiculeId ? lit.vehicule(e, i.vehiculeId) : null;
+        return h('div.liste__ligne', [
+          h('div.grandit.coupe.pile-s', [
+            h('div.rang-s.enroule', [
+              h('span.num.petit', fmt.date(i.quand, 'court')),
+              h('span.pastille.pastille--' + etat.ton + '.pastille--sans-point', etat.nom),
+              h('span.petit', (OPERATIONS_ELECTRO[i.operation] || {}).nom || i.operation),
+              h('span.petit.faible', (PROTOCOLES[i.protocole] || {}).nom || i.protocole),
+              v ? h('span.petit.tres-faible', plaqueJolie(v.immat)) : null
+            ]),
+            pastillesModifs(i),
+            i.resultat ? h('div.minus.faible.coupe-2', i.resultat) : null
+          ]),
+          h('button.bt.bt--nu.bt--s', {
+            type: 'button',
+            onclick: () => { modale_.fermer(); modaleIntervention(e, refaire, null, i); }
+          }, 'Refaire')
+        ]);
+      }))
+    ]),
+    actions: [{ texte: 'Fermer', ton: 'contour' }]
+  });
+}
+
+/* ==========================================================================
+   CE QU'ON PROGRAMME LE PLUS
+   ========================================================================== */
+
+function panneauProgrammes(e, modifFiltre, surChoix) {
+  const tous = programmesFrequents(e);
+
+  return h('div.panneau', [
+    h('div.panneau__tete', [
+      icone('etiquette', { taille: 16 }),
+      h('h2.grandit', 'Ce qu’on programme'),
+      tous.length ? h('span.compte', String(tous.length)) : null
+    ]),
+    tous.length
+      ? h('div.liste', tous.slice(0, 10).map(m => {
+          const choisi = modifFiltre === m.cle;
+          return h('button.liste__ligne', {
+            type: 'button',
+            'aria-pressed': choisi ? 'true' : 'false',
+            style: choisi ? { background: 'var(--accent-voile)' } : null,
+            onclick: () => surChoix(m.cle)
+          }, [
+            h('div.grandit.coupe', [
+              h('div.rang-s', [
+                h('span.gras.coupe', m.nom),
+                m.route === false
+                  ? h('span.pastille.pastille--alerte.pastille--sans-point', 'hors route')
+                  : null
+              ]),
+              h('div.minus.tres-faible', [
+                (FAMILLES_MODIF[m.famille] || {}).nom,
+                m.minutesTypiques ? '≈ ' + fmt.duree(m.minutesTypiques * 60000) : null
+              ].filter(Boolean).join(' · '))
+            ]),
+            h('span.compte', String(m.nb))
+          ]);
+        }))
+      : h('div.panneau__corps', h('div.petit.faible.centre',
+          'Cochez ce que vous avez fait au fichier sur vos interventions : '
+          + 'l’atelier saura ce qu’il vend le plus, et en combien de temps.'))
   ]);
 }
 
@@ -583,8 +803,19 @@ function panneauHistorique(e, ouvert, surBascule) {
    LA MODALE D'INTERVENTION
    ========================================================================== */
 
-function modaleIntervention(e, refaire, existante) {
+/**
+ * La fiche d'une intervention.
+ * @param {object}  e          l'état
+ * @param {function} refaire   repeindre l'écran
+ * @param {object}  [existante] l'intervention à modifier
+ * @param {object}  [modele]   une intervention passée à recopier : même boîtier,
+ *                             même opération, mêmes programmes. Le véhicule et
+ *                             le résultat, eux, ne se recopient pas — c'est une
+ *                             autre voiture et une autre journée.
+ */
+function modaleIntervention(e, refaire, existante, modele) {
   const i = existante || null;
+  const dep = i || modele || null;
   const soldeActuel = lit.soldeCredits(e);
 
   /* --- dossier et véhicule ------------------------------------------------ */
@@ -628,24 +859,24 @@ function modaleIntervention(e, refaire, existante) {
   /* --- outil, opération, protocole ---------------------------------------- */
   const chOutil = champ({
     etiquette: 'Outil', type: 'liste',
-    valeur: i ? i.outil : (e.reglages.outilDefaut || 'autotuner'),
+    valeur: dep ? dep.outil : (e.reglages.outilDefaut || 'autotuner'),
     options: Object.keys(OUTILS_ELECTRO).map(k => ({ valeur: k, texte: OUTILS_ELECTRO[k] }))
   });
   const chOperation = champ({
     etiquette: 'Opération', type: 'liste',
-    valeur: i ? i.operation : 'lecture',
+    valeur: dep ? dep.operation : 'lecture',
     options: Object.keys(OPERATIONS_ELECTRO).map(k => ({ valeur: k, texte: OPERATIONS_ELECTRO[k].nom }))
   });
   const chProtocole = champ({
-    etiquette: 'Protocole', type: 'liste',
-    valeur: i ? i.protocole : 'obd',
+    etiquette: 'Accès', type: 'liste',
+    valeur: dep ? dep.protocole : 'obd',
     options: Object.keys(PROTOCOLES).map(k => ({ valeur: k, texte: PROTOCOLES[k].nom }))
   });
   aideVivante(chOperation, (v) => (OPERATIONS_ELECTRO[v] || {}).aide);
   aideVivante(chProtocole, (v) => (PROTOCOLES[v] || {}).aide);
 
   /* --- le calculateur ------------------------------------------------------ */
-  const ecuDepart = (i && i.ecu) || {};
+  const ecuDepart = (dep && dep.ecu) || {};
   const chMarque = champ({ etiquette: 'Marque calculateur', valeur: ecuDepart.marque || '', exemple: 'Bosch' });
   const chType   = champ({ etiquette: 'Type', valeur: ecuDepart.type || '', exemple: 'EDC17C10' });
   const chHw     = champ({ etiquette: 'HW', valeur: ecuDepart.hw || '', exemple: '03…' });
@@ -654,7 +885,9 @@ function modaleIntervention(e, refaire, existante) {
   /* Tant que personne n'a touché aux champs du calculateur, ils suivent la
      fiche du véhicule choisi. Dès la première frappe, on arrête de les
      écraser : rien n'est plus agaçant qu'une saisie qui s'efface. */
-  let ecuTouche = false;
+  /* Quand on recopie une intervention passée, le boîtier vient d'elle : la
+     fiche du nouveau véhicule ne doit pas l'effacer. */
+  let ecuTouche = !!(modele && !i);
   for (const c of [chMarque, chType, chHw, chSw]) {
     c.entree.addEventListener('input', () => { ecuTouche = true; });
   }
@@ -690,9 +923,31 @@ function modaleIntervention(e, refaire, existante) {
   const avertCredits = h('div');
   const memoEcu = h('div');
 
+  /* Ce qu'on a fait au fichier, et le déroulé qu'on ne saute pas. Un modèle
+     recopié apporte ses programmes : c'est tout l'intérêt de « Refaire ». */
+  const programmes = choixProgrammes(dep ? dep.modifications : []);
+  /* Les contrôles, eux, ne se recopient jamais : cocher « original
+     sauvegardé » sur une voiture qu'on n'a pas encore lue serait un mensonge
+     qui coûte cher. */
+  const controles = listeControles(i ? i.controles : {});
+
+  /* Une lecture ne change rien au fichier : lui proposer vingt-quatre
+     pastilles serait du bruit. La section n'apparaît que pour les opérations
+     qui écrivent — et reste là si une intervention en porte déjà, pour ne
+     jamais escamoter ce qui a été saisi. */
+  const blocProgramme = h('div.pile-s');
+  function rafraichirProgramme() {
+    const utile = ecritDansLeBoitier(chOperation.lire()) || programmes.lire().length > 0;
+    poser(blocProgramme, utile
+      ? [h('div.majuscule', 'Le programme'), programmes.noeud]
+      : null);
+  }
+  chOperation.entree.addEventListener('change', rafraichirProgramme);
+  rafraichirProgramme();
+
   /* L'accès suit ce qui a marché la dernière fois, tant que personne n'y
      touche : c'est le quart d'heure qu'on ne repasse pas à chercher. */
-  let protoTouche = !!i;
+  let protoTouche = !!dep;
   chProtocole.entree.addEventListener('change', () => { protoTouche = true; });
 
   /* --- les liaisons vivantes ---------------------------------------------- */
@@ -805,7 +1060,9 @@ function modaleIntervention(e, refaire, existante) {
     h('div.majuscule', 'Le calculateur'),
     grilleChamps([chMarque, chType, chHw, chSw]),
     memoEcu,
+    blocProgramme,
     h('div.majuscule', 'Le déroulé'),
+    controles.noeud,
     suitLesCredits(e)
       ? grilleChamps([chCredits, chDuree, chSlave])
       : grilleChamps([chDuree, chSlave]),
@@ -824,11 +1081,27 @@ function modaleIntervention(e, refaire, existante) {
   ]);
 
   modale({
-    titre: i ? 'Intervention du ' + fmt.date(i.quand, 'normal') : 'Nouvelle intervention',
+    titre: i
+      ? 'Intervention du ' + fmt.date(i.quand, 'normal')
+      : (modele
+        /* On dit d'où vient ce qui est déjà rempli : sinon on croit à une
+           fiche vierge et on ne relit pas ce qui a été recopié. */
+        ? 'Nouvelle intervention — d’après celle du ' + fmt.date(modele.quand, 'court')
+        : 'Nouvelle intervention'),
     taille: 'large',
     corps,
     actions: [
       { texte: 'Annuler', ton: 'contour' },
+      /* La fiche papier : ce qu'on classe au dossier, et ce qu'on fait signer
+         quand on a touché à la dépollution. On imprime ce qui est ENREGISTRÉ,
+         pas ce qui est à l'écran — sinon on fait signer un brouillon. */
+      i ? {
+        texte: 'Imprimer', ton: 'contour', ferme: false,
+        faire: async () => {
+          const { imprimerFicheElectro } = await import('./impression.js');
+          imprimerFicheElectro(e, i);
+        }
+      } : null,
       {
         texte: i ? 'Enregistrer' : 'Enregistrer l’intervention', ton: 'fort',
         faire: async () => {
@@ -846,6 +1119,29 @@ function modaleIntervention(e, refaire, existante) {
           const protocole = chProtocole.lire();
           const etatVoulu = chEtat.lire();
 
+          /* Le garde-fou. Déclarer réussie une écriture sans original
+             sauvegardé ni maintien de charge, c'est ce qui transforme une
+             prestation en litige six mois plus tard. On ne bloque pas — c'est
+             l'atelier qui sait — mais on ne laisse pas passer en silence. */
+          const manquants = controlesManquants({
+            operation: chOperation.lire(), etat: etatVoulu, controles: controles.lire()
+          });
+          if (manquants.length) {
+            const ok = await confirmer({
+              titre: 'Enregistrer quand même ?',
+              texte: 'Cette écriture est déclarée réussie, mais '
+                + (manquants.length > 1 ? 'ces points ne sont pas cochés' : 'ce point n’est pas coché')
+                + ' : ' + manquants.map(c => c.nom.toLowerCase()).join(', ') + '.',
+              detail: 'Cochez-les si c’est un oubli de saisie. Sinon, notez-le : '
+                + 'c’est exactement ce qu’on cherche quand la voiture revient.',
+              avertissement: manquants.some(c => c.cle === 'origine')
+                ? 'Sans original sauvegardé, ce calculateur ne peut plus être remis d’aplomb.'
+                : null,
+              ok: 'Enregistrer quand même', annuler: 'Revenir cocher', danger: true
+            });
+            if (!ok) return false;
+          }
+
           /* On garde l'heure d'origine tant que le jour ne change pas : une
              intervention notée « aujourd'hui » ne doit pas reculer à minuit
              au premier passage en modification. */
@@ -862,6 +1158,8 @@ function modaleIntervention(e, refaire, existante) {
             protocole,
             ecu,
             credits: nombre(chCredits.lire(), 0),
+            modifications: programmes.lire(),
+            controles: controles.lire(),
             slave: chSlave.lire(),
             dureeMin: nombre(chDuree.lire(), 0),
             resultat: chResultat.lire(),
@@ -927,6 +1225,113 @@ async function proposerMajFicheVehicule(v, ecu, protocole) {
 }
 
 /* ==========================================================================
+   CE QU'ON A FAIT AU FICHIER
+   --------------------------------------------------------------------------
+   Des pastilles qu'on tape du pouce, groupées par famille. Pas une liste
+   déroulante : on en coche trois ou quatre d'un coup, et on veut les voir
+   toutes en même temps pour ne pas en oublier une au moment de facturer.
+   ========================================================================== */
+
+function choixProgrammes(depart) {
+  const choisis = new Set((depart || []).filter(m => MODIFICATIONS_ELECTRO[m]));
+  const zone = h('div.pile-s');
+  const avert = h('div');
+
+  function basculer(cle) {
+    if (choisis.has(cle)) choisis.delete(cle); else choisis.add(cle);
+    peindreTout();
+  }
+
+  function peindreTout() {
+    poser(zone, Object.keys(FAMILLES_MODIF).map(fam => {
+      const cles = Object.keys(MODIFICATIONS_ELECTRO)
+        .filter(k => MODIFICATIONS_ELECTRO[k].famille === fam);
+      if (!cles.length) return null;
+      return h('div.pile-s', [
+        h('div.minus.tres-faible', FAMILLES_MODIF[fam].nom),
+        h('div.rang-s.enroule', cles.map(k => {
+          const m = MODIFICATIONS_ELECTRO[k];
+          const actif = choisis.has(k);
+          return h('button.etiq' + (actif ? '.etiq--accent' : ''), {
+            type: 'button',
+            'aria-pressed': actif ? 'true' : 'false',
+            title: m.aide || '',
+            onclick: () => basculer(k)
+          }, [
+            actif ? icone('coche', { taille: 12 }) : null,
+            h('span', m.nom)
+          ]);
+        }))
+      ]);
+    }));
+
+    /* Une mention, pas une leçon : c'est le client qui roule avec, et c'est
+       sur son document que ça doit figurer. */
+    const horsRoute = Array.from(choisis).filter(k => MODIFICATIONS_ELECTRO[k].route === false);
+    poser(avert, horsRoute.length
+      ? h('div.bandeau.bandeau--alerte', [
+          icone('alerte'),
+          h('div.grandit', [
+            h('div.gras', 'Hors homologation route'),
+            h('div.petit', horsRoute.map(k => MODIFICATIONS_ELECTRO[k].nom).join(', ')
+              + ' — à reporter sur le document remis au client.')
+          ])
+        ])
+      : null);
+  }
+
+  peindreTout();
+
+  return {
+    noeud: h('div.pile-s', [zone, avert]),
+    lire: () => Object.keys(MODIFICATIONS_ELECTRO).filter(k => choisis.has(k))
+  };
+}
+
+/* ==========================================================================
+   LE DÉROULÉ QU'ON NE SAUTE PAS
+   --------------------------------------------------------------------------
+   Six cases. Deux d'entre elles — l'original sauvegardé et le maintien de
+   charge — sont celles qui séparent une prestation d'un boîtier mort. Elles
+   portent une marque, et l'enregistrement les redemande si elles manquent.
+   ========================================================================== */
+
+function listeControles(depart) {
+  const coches = {};
+  for (const k in CONTROLES_ELECTRO) if (depart && depart[k]) coches[k] = true;
+
+  const noeud = h('div.pile-s', Object.keys(CONTROLES_ELECTRO).map(cle => {
+    const c = CONTROLES_ELECTRO[cle];
+    const case_ = h('input', {
+      type: 'checkbox', checked: !!coches[cle],
+      style: { accentColor: 'var(--accent)', flex: 'none', marginTop: '2px' },
+      onchange: (ev) => { coches[cle] = !!ev.target.checked; }
+    });
+    /* L'entrée est DANS l'étiquette : toute la ligne devient cliquable, ce
+       qui compte quand on coche avec des gants. */
+    return h('label.rang.rang-haut', { style: { cursor: 'pointer' } }, [
+      case_,
+      h('div.grandit', [
+        h('div.rang-s', [
+          h('span', c.nom),
+          c.bloquant ? h('span.pastille.pastille--alerte.pastille--sans-point', 'clé') : null
+        ]),
+        c.aide ? h('div.minus.tres-faible', c.aide) : null
+      ])
+    ]);
+  }));
+
+  return {
+    noeud,
+    lire: () => {
+      const sortie = {};
+      for (const k in CONTROLES_ELECTRO) if (coches[k]) sortie[k] = true;
+      return sortie;
+    }
+  };
+}
+
+/* ==========================================================================
    LES FICHIERS D'UNE INTERVENTION
    --------------------------------------------------------------------------
    On note des NOMS, pas des binaires. Un fichier de calculateur pèse de
@@ -940,23 +1345,40 @@ async function proposerMajFicheVehicule(v, ecu, protocole) {
 function editeurFichiers(depart) {
   const fichiers = (depart || []).map(f => Object.assign({}, f));
   const liste = h('div.pile-s');
-  const chNom = champ({ etiquette: 'Nom du fichier', exemple: 'EDC17C10_origine.bin' });
+  const chNom = champ({ etiquette: 'Nom du fichier', exemple: 'EDC17C64_origine.bin' });
   const chRole = champ({
     etiquette: 'Rôle', type: 'liste',
     options: Object.keys(ROLES_FICHIER).map(k => ({ valeur: k, texte: ROLES_FICHIER[k].nom }))
+  });
+  /* Où il est rangé. C'est ce qui manque toujours deux ans plus tard : le nom
+     du fichier, on l'a ; savoir sur quel disque et dans quel dossier, non. */
+  const chOu = champ({
+    etiquette: 'Rangé où', exemple: 'D:\\ECU\\2026\\FT-789-AB',
+    aide: 'Disque, dossier, sauvegarde en ligne — de quoi remettre la main dessus.'
   });
 
   function peindre() {
     poser(liste, fichiers.length
       ? fichiers.map((f, index) => {
           const r = ROLES_FICHIER[f.role] || ROLES_FICHIER.origine;
-          return h('div.carte.rang.carte--muette', [
-            h('span.pastille.pastille--' + r.ton, r.nom),
-            h('span.grandit.coupe.num', f.nom || 'sans nom'),
-            h('button.bt.bt--nu.bt--icone.bt--s', {
-              type: 'button', 'aria-label': 'Retirer ' + (f.nom || 'ce fichier'),
-              onclick: () => { fichiers.splice(index, 1); peindre(); }
-            }, icone('croix'))
+          return h('div.carte.carte--muette.pile-s', [
+            h('div.rang', [
+              h('span.pastille.pastille--' + r.ton, r.nom),
+              h('span.grandit.coupe.num', f.nom || 'sans nom'),
+              /* Recopier le nom à la main devant le PC, c'est une faute de
+                 frappe assurée. */
+              h('button.bt.bt--nu.bt--icone.bt--s', {
+                type: 'button', 'aria-label': 'Copier le nom de ' + (f.nom || 'ce fichier'),
+                onclick: () => copier(f.nom)
+              }, icone('copier')),
+              h('button.bt.bt--nu.bt--icone.bt--s', {
+                type: 'button', 'aria-label': 'Retirer ' + (f.nom || 'ce fichier'),
+                onclick: () => { fichiers.splice(index, 1); peindre(); }
+              }, icone('croix'))
+            ]),
+            f.ou ? h('div.minus.tres-faible.coupe', [
+              icone('dossier', { taille: 12 }), ' ' + f.ou
+            ]) : null
           ]);
         })
       : h('div.petit.faible', 'Aucun fichier noté pour l’instant.'));
@@ -966,7 +1388,10 @@ function editeurFichiers(depart) {
     const n = chNom.lire();
     if (!n) { chNom.erreur('Recopiez le nom du fichier tel qu’il est rangé sur le PC.'); return; }
     chNom.erreur('');
-    fichiers.push({ id: id('fic'), nom: n, role: chRole.lire() || 'origine', quand: Date.now() });
+    fichiers.push({
+      id: id('fic'), nom: n, role: chRole.lire() || 'origine',
+      ou: chOu.lire(), taille: 0, quand: Date.now()
+    });
     chNom.ecrire('');
     chNom.focus();
     peindre();
@@ -978,23 +1403,42 @@ function editeurFichiers(depart) {
     h('div.bandeau', [
       icone('info'),
       h('div.grandit', [
-        h('div.gras', 'On note le nom, pas le fichier.'),
+        h('div.gras', 'On note le nom et l’endroit, pas le fichier.'),
         h('div.petit', 'Les binaires restent sur le PC de l’atelier, avec l’outil qui les a lus. '
-          + 'Ce que Yatech garde, c’est la trace de ce qui a été lu et écrit — de quoi retrouver '
-          + 'la bonne sauvegarde d’origine sans fouiller trois disques.')
+          + 'Ce que Yatech garde, c’est la trace de ce qui a été lu et écrit, et où c’est rangé — '
+          + 'de quoi retrouver la bonne sauvegarde d’origine sans fouiller trois disques.')
       ])
     ]),
     liste,
-    h('div.rang.enroule', { style: { alignItems: 'flex-end' } }, [
-      h('div.grandit', chNom.noeud),
-      chRole.noeud,
-      h('button.bt.bt--contour', {
-        type: 'button', onclick: ajouter
-      }, [icone('plus'), h('span', 'Ajouter')])
+    h('div.pile-s', [
+      h('div.rang.enroule', { style: { alignItems: 'flex-end' } }, [
+        h('div.grandit', chNom.noeud),
+        chRole.noeud
+      ]),
+      h('div.rang.enroule', { style: { alignItems: 'flex-end' } }, [
+        h('div.grandit', chOu.noeud),
+        h('button.bt.bt--contour', {
+          type: 'button', onclick: ajouter
+        }, [icone('plus'), h('span', 'Ajouter')])
+      ])
     ])
   ]);
 
   return { noeud, lire: () => fichiers.map(f => Object.assign({}, f)) };
+}
+
+/** Mettre un texte dans le presse-papiers, sans faire d'histoires si le
+ *  navigateur refuse : on le dit, on ne casse rien. */
+function copier(texte) {
+  const t = String(texte || '');
+  if (!t) return;
+  const dire = (ok) => message(ok ? 'Copié' : 'Copie impossible sur cet appareil',
+    { ton: ok ? 'ok' : 'danger', duree: 1600 });
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(() => dire(true), () => dire(false));
+    return;
+  }
+  dire(false);
 }
 
 /* ==========================================================================

@@ -14,6 +14,48 @@ import * as util from '../js/core/util.js';
 import { quand as fmtQuand } from '../js/core/fmt.js';
 import { sha256, verrou, verifier } from '../js/core/crypto.js';
 import { versCsv, depuisCsv, csvEnObjets } from '../js/core/fichiers.js';
+/* Un document de poche, juste assez pour éprouver la fabrique d'éléments.
+   Les écrans, eux, se testent dans un vrai navigateur ; ici on ne vérifie que
+   la façon dont h() lit ses arguments. */
+class NoeudEssai {
+  constructor(nom) {
+    this.tagName = String(nom).toUpperCase();
+    this.id = '';
+    /* Les propriétés que h() cherche sur un vrai élément : sans elles, il
+       retomberait sur setAttribute et le test ne prouverait rien. */
+    if (this.tagName === 'INPUT' || this.tagName === 'TEXTAREA') {
+      this.value = ''; this.checked = false; this.disabled = false;
+      this.type = 'text'; this.spellcheck = true;
+    }
+    this.childNodes = [];
+    this.attributs = {};
+    this.dataset = {};
+    this.style = { setProperty() {} };
+    this._classes = [];
+    this.classList = { add: (c) => this._classes.push(c) };
+  }
+  get className() { return this._classes.join(' '); }
+  set className(v) { this._classes = String(v).split(/\s+/).filter(Boolean); }
+  get firstChild() { return this.childNodes[0] || null; }
+  get texteDedans() {
+    return this.childNodes.map(n => n.donnee !== undefined ? n.donnee : n.texteDedans).join('');
+  }
+  appendChild(n) { this.childNodes.push(n); return n; }
+  removeChild(n) { this.childNodes.splice(this.childNodes.indexOf(n), 1); return n; }
+  setAttribute(k, v) { this.attributs[k] = String(v); }
+  getAttribute(k) { return this.attributs[k] === undefined ? null : this.attributs[k]; }
+  addEventListener() {}
+}
+class TexteEssai { constructor(t) { this.donnee = String(t); } }
+globalThis.Node = NoeudEssai;
+globalThis.document = {
+  createElement: (n) => new NoeudEssai(n),
+  createTextNode: (t) => new TexteEssai(t),
+  createDocumentFragment: () => new NoeudEssai('#frag'),
+  addEventListener() {}
+};
+
+import { h } from '../js/core/dom.js';
 import { normaliser, neuf, nouvelleLigne, prochainNumero, estUneSauvegarde,
   VERSION_MODELE } from '../js/domain/schema.js';
 import { equipeDepart } from '../js/domain/demo.js';
@@ -323,6 +365,32 @@ groupe('Normalisation d’un état', () => {
     devis: [{ id: 'v1', statut: 'envoye', valableJusquau: Date.now() - 86400000 }]
   });
   verifie('un devis dépassé devient périmé', perime.devis[0].statut, 'expire');
+});
+
+groupe('La fabrique d’éléments', () => {
+  verifie('le sélecteur pose la balise', h('span').tagName, 'SPAN');
+  verifie('et les classes', h('div.a.b').className, 'a b');
+  verifie('l’identifiant aussi', h('div#x').id, 'x');
+
+  /* Le deuxième argument omis : les enfants glissent à sa place. */
+  verifie('un texte direct', h('b', 'salut').texteDedans, 'salut');
+  verifie('un tableau direct', h('div', ['a', 'b']).texteDedans, 'ab');
+
+  /* Le piège : des attributs conditionnels qui retombent sur null. Les
+     enfants sont au troisième argument et doivent y rester. */
+  verifie('des attributs nuls ne mangent pas les enfants',
+    h('div', null, ['ici']).texteDedans, 'ici');
+  verifie('des attributs présents non plus',
+    h('div', { id: 'y' }, ['là']).texteDedans, 'là');
+  verifie('et l’attribut est bien posé', h('div', { id: 'y' }, ['là']).id, 'y');
+
+  /* Rien ne doit s'afficher pour un enfant absent : c'est ce qui permet
+     d'écrire `condition ? h(...) : null` partout. */
+  verifie('null, faux et undefined ne rendent rien',
+    h('div', [null, false, undefined, 'reste']).texteDedans, 'reste');
+
+  /* Un attribut booléen reçu en texte : « false » vaut faux. */
+  verifie('spellcheck « false » est bien faux', h('input', { spellcheck: 'false' }).spellcheck, false);
 });
 
 groupe('L’accès à l’outil', () => {

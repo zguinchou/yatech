@@ -215,6 +215,63 @@ ils sont affichés dans l'écran EBP, à vérifier au premier import.
 
 ---
 
+## Le poste électronique
+
+C'est la partie la plus travaillée de l'outil, parce que c'est celle où une
+information manquante coûte le plus cher.
+
+### Ce qu'une intervention retient
+
+| | |
+|---|---|
+| **Le calculateur** | marque, type, HW, SW — repris de la fiche du véhicule, corrigés ici si le boîtier dit autre chose |
+| **L'accès** | OBD, bench, boot, JTAG, CAN |
+| **Le programme** | ce qu'on a changé dans le fichier : Stage 1/2, sur mesure, E85, EGR, FAP, AdBlue, Start & Stop, DTC, immo, injecteurs… en pastilles qu'on coche du pouce |
+| **Le déroulé** | six cases, dont deux clés : original sauvegardé et maintien de charge |
+| **Les fichiers** | leur nom, leur rôle, et **où ils sont rangés** |
+| **Le reste** | outil, slave, crédits, durée, résultat, notes |
+
+### Le garde-fou
+
+Déclarer *réussie* une écriture sans original sauvegardé ni maintien de charge,
+c'est ce qui transforme une prestation en litige six mois plus tard. L'outil ne
+bloque pas — c'est l'atelier qui sait — mais il redemande, et il nomme ce qui
+manque. Les cases secondaires (checksum, relecture, défauts, essai) renseignent
+sans jamais interrompre.
+
+Les contrôles ne se recopient **jamais** d'une intervention à l'autre : cocher
+« original sauvegardé » sur une voiture qu'on n'a pas encore lue serait un
+mensonge qui coûte cher.
+
+### Refaire la même
+
+Sur la fiche d'un calculateur, chaque tentative passée porte un bouton
+**Refaire** : le boîtier, l'opération, l'accès et les programmes sont recopiés
+dans une fiche neuve. Le véhicule, le résultat et le déroulé, non — c'est une
+autre voiture et une autre journée.
+
+### La fiche papier
+
+Une intervention enregistrée s'imprime : calculateur, accès, ce qui a été
+programmé, le déroulé coché, les fichiers conservés et où, l'intervenant, la
+durée, et un cadre de signature. Quand le programme comporte quelque chose qui
+n'est pas homologué pour la route, la fiche porte la mention correspondante et
+la fait signer. C'est ce papier-là qui règle une discussion deux ans plus tard.
+
+### Chercher
+
+Un seul champ, au-dessus de la liste : plaque, client, boîtier, programme, nom
+de fichier, note. On se souvient d'un mot, pas d'une colonne.
+
+### Sur la fiche du véhicule
+
+Une voiture déjà touchée porte son histoire électronique : la sauvegarde
+d'origine est mise en évidence **avec l'endroit où elle est rangée**, et le
+tableau des interventions montre l'accès et le programme appliqué. C'est ce
+qu'on regarde en premier quand elle revient.
+
+---
+
 ## La mémoire des calculateurs
 
 Le temps perdu en électronique, ce n'est pas la lecture : c'est la demi-heure
@@ -236,7 +293,8 @@ lecture et faux en écriture. Pour chaque type de calculateur, l'écran
   qu'on ne repasse pas dessus ;
 - le temps typique et les crédits typiques, en médiane ;
 - la note laissée la dernière fois que ça a marché — souvent le vrai piège de
-  branchement.
+  branchement ;
+- ce qu'on programme sur ce boîtier, et combien de fois.
 
 Pendant la saisie d'une intervention, dès que le type du calculateur est
 renseigné, tout ça s'affiche dans la fiche, et **l'accès se pose tout seul sur
@@ -278,6 +336,23 @@ Compteur allumé, l'outil tient le compte :
 Les fichiers binaires (lectures d'origine, fichiers modifiés) ne sont **pas**
 stockés ici : ils restent sur le PC de l'atelier. L'outil garde la trace de ce
 qui a été lu et écrit, ce qui suffit à retrouver une sauvegarde.
+
+---
+
+## Ce qu'on programme le plus
+
+À côté de la mémoire des calculateurs, un panneau classe les programmes par
+fréquence, avec leur durée typique. Cliquer sur l'un d'eux filtre la liste des
+interventions : « montre-moi tous les Stage 1 ». Sur le tableau de bord du
+mois, un compteur dit combien de programmes sont sortis, et lequel domine.
+
+Un programme, ici, c'est une **écriture réussie qui a changé quelque chose au
+fichier**. Une lecture n'en est pas un, une tentative ratée non plus — c'est
+bien ce qu'on veut compter quand on se demande ce qu'on a vendu.
+
+Les retraits de dépollution portent la mention **hors route**, partout où ils
+apparaissent : dans la liste, dans la fiche de saisie, et sur le document remis
+au client. C'est lui qui roule avec.
 
 ---
 

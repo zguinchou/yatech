@@ -22,7 +22,8 @@ import { id, nombre, JOUR, nu, tronque, plaqueJolie } from '../core/util.js';
 import { choisirFichier, reduireImage, copier } from '../core/fichiers.js';
 import * as lit from '../domain/selecteurs.js';
 import {
-  ETAPES_OUVERTES, PROTOCOLES, OPERATIONS_ELECTRO, ETATS_INTERVENTION, OUTILS_ELECTRO
+  ETAPES_OUVERTES, PROTOCOLES, OPERATIONS_ELECTRO, ETATS_INTERVENTION, OUTILS_ELECTRO,
+  MODIFICATIONS_ELECTRO
 } from '../domain/schema.js';
 import {
   plaque, champ, grilleChamps, lienTel, pastilleEtape, choixClient
@@ -497,7 +498,10 @@ function bandeauSauvegardes(e, interventions) {
             operationNom(t.intervention.operation),
             protocoleNom(t.intervention.protocole),
             fmt.date(t.fichier.quand || t.intervention.quand)
-          ].filter(Boolean).join(' · '))
+          ].filter(Boolean).join(' · ')),
+          /* Le nom ne suffit pas quand on a trois disques : l'endroit compte
+             autant, et c'est là qu'on le lit sans ouvrir l'intervention. */
+          t.fichier.ou ? h('div.minus.tres-faible.num', t.fichier.ou) : null
         ])
       )),
       h('div.minus.tres-faible', { style: { marginTop: 'var(--e-1)' } },
@@ -511,7 +515,8 @@ function tableauInterventions(e, liste) {
     h('thead', h('tr', [
       h('th', 'Date'),
       h('th', 'Opération'),
-      h('th', 'Protocole'),
+      h('th', 'Accès'),
+      h('th', 'Programme'),
       h('th', 'État'),
       h('th.num', 'Crédits'),
       h('th', 'Résultat')
@@ -526,7 +531,8 @@ function tableauInterventions(e, liste) {
             ? h('div.minus.tres-faible', OUTILS_ELECTRO[i.outil])
             : null
         ]),
-        h('td', { donnees: { col: 'Protocole' } }, protocoleNom(i.protocole)),
+        h('td', { donnees: { col: 'Accès' } }, protocoleNom(i.protocole)),
+        h('td', { donnees: { col: 'Programme' } }, programmesLus(i)),
         h('td', { donnees: { col: 'État' } },
           h('span.pastille.pastille--' + (etat ? etat.ton : 'neutre'), etat ? etat.nom : i.etat)),
         h('td.num', { donnees: { col: 'Crédits' } }, i.credits ? String(i.credits) : '—'),
@@ -535,6 +541,16 @@ function tableauInterventions(e, liste) {
       ]);
     }))
   ]));
+}
+
+/** Ce qui a été changé dans le fichier, en pastilles. C'est la première chose
+ *  qu'on cherche quand une voiture déjà touchée revient. */
+function programmesLus(i) {
+  const l = (i.modifications || []).filter(m => MODIFICATIONS_ELECTRO[m]);
+  if (!l.length) return h('span.tres-faible', '—');
+  return h('div.rang-s.enroule', l.map(m => h('span.pastille.pastille--'
+    + (MODIFICATIONS_ELECTRO[m].route === false ? 'alerte' : 'violet')
+    + '.pastille--sans-point', MODIFICATIONS_ELECTRO[m].nom)));
 }
 
 const operationNom = (cle) => (OPERATIONS_ELECTRO[cle] ? OPERATIONS_ELECTRO[cle].nom : (cle || '—'));

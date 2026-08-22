@@ -18,7 +18,8 @@ import * as fmt from '../core/fmt.js';
 import { nombre, plaqueJolie } from '../core/util.js';
 import { totaux, contexte, ligneChiffree } from '../domain/calculs.js';
 import * as lit from '../domain/selecteurs.js';
-import { TYPES_LIGNE } from '../domain/schema.js';
+import { TYPES_LIGNE, OPERATIONS_ELECTRO, PROTOCOLES, OUTILS_ELECTRO,
+  MODIFICATIONS_ELECTRO, CONTROLES_ELECTRO, ETATS_INTERVENTION } from '../domain/schema.js';
 
 /**
  * Prépare le document puis lance l'impression.
@@ -309,6 +310,140 @@ export function imprimerOrdre(e, d) {
       h('div.doc__cadre-signature', [h('div', 'Signature du client')])
     ])
   ]));
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => poser(zone, []), 800);
+  }, 120);
+}
+
+
+/* ==========================================================================
+   LA FICHE D'UNE INTERVENTION ÉLECTRONIQUE
+   --------------------------------------------------------------------------
+   Ce qu'on garde au dossier, et ce qu'on remet au client quand il le demande :
+   quel calculateur, par où on est entré, ce qu'on a changé dans le fichier,
+   quels fichiers ont été sauvegardés et où. Deux ans plus tard, c'est ce
+   papier-là qui règle une discussion.
+
+   La mention hors route n'est pas une formalité : c'est le client qui roule
+   avec, et il doit l'avoir lue et signée.
+   ========================================================================== */
+
+export function imprimerFicheElectro(e, i) {
+  const zone = document.getElementById('impression');
+  if (!zone) return;
+  const r = e.reglages;
+  const v = i.vehiculeId ? lit.vehicule(e, i.vehiculeId) : null;
+  const c = lit.client(e, i.clientId || (v ? v.clientId : null));
+  const ecu = i.ecu || {};
+  const etat = ETATS_INTERVENTION[i.etat] || ETATS_INTERVENTION.prevu;
+  const modifs = (i.modifications || []).filter(m => MODIFICATIONS_ELECTRO[m]);
+  const horsRoute = modifs.filter(m => MODIFICATIONS_ELECTRO[m].route === false);
+  const coches = i.controles || {};
+  const par = i.par ? lit.utilisateur(e, i.par) : null;
+
+  const bloc = (titre, contenu) => contenu
+    ? h('div', { style: { marginBottom: '4mm' } }, [
+        h('div', { style: { fontWeight: '700', fontSize: '9pt' } }, titre),
+        h('div', contenu)
+      ])
+    : null;
+
+  poser(zone, h('div.doc', [
+    h('div.doc__tete', [
+      h('div.doc__emetteur', [
+        h('strong', r.raisonSociale || r.nomOutil || 'Garage'),
+        h('div', [r.adresse, r.cp, r.ville].filter(Boolean).join(' — ')),
+        r.tel ? h('div', 'Tél. ' + r.tel) : null
+      ]),
+      h('div.doc__type', [
+        h('b', 'Fiche d’intervention électronique'),
+        h('span', { style: { display: 'block' } }, 'du ' + fmt.date(i.quand, 'normal')),
+        h('span', { style: { display: 'block' } }, etat.nom)
+      ])
+    ]),
+
+    h('div.doc__parties', [
+      h('div.doc__bloc', [
+        h('h4', 'Client'),
+        h('div', { style: { fontWeight: '700' } }, c ? lit.nomClient(c) : '—'),
+        c && c.tel ? h('div', 'Tél. ' + c.tel) : null
+      ]),
+      h('div.doc__bloc', [
+        h('h4', 'Véhicule'),
+        h('div', { style: { fontWeight: '700' } }, v ? lit.nomVehiculeLong(v) : '—'),
+        v ? h('div', plaqueJolie(v.immat)) : null,
+        v && v.vin ? h('div', 'VIN ' + v.vin) : null
+      ])
+    ]),
+
+    h('div', { style: { fontWeight: '700', fontSize: '9pt', marginBottom: '2mm' } }, 'Le calculateur'),
+    h('table', { style: { marginBottom: '4mm' } }, h('tbody', [
+      ['Marque et type', [ecu.marque, ecu.type].filter(Boolean).join(' ') || '—'],
+      ['Références', [ecu.hw ? 'HW ' + ecu.hw : '', ecu.sw ? 'SW ' + ecu.sw : ''].filter(Boolean).join(' · ') || '—'],
+      ['Opération', (OPERATIONS_ELECTRO[i.operation] || {}).nom || i.operation],
+      ['Accès', (PROTOCOLES[i.protocole] || {}).nom || i.protocole],
+      ['Outil', (OUTILS_ELECTRO[i.outil] || i.outil) + (i.slave ? ' — ' + i.slave : '')]
+    ].map(([g, d]) => h('tr', [
+      h('td', { style: { width: '38mm', fontWeight: '700' } }, g),
+      h('td', d)
+    ])))),
+
+    modifs.length ? h('div', { style: { marginBottom: '4mm' } }, [
+      h('div', { style: { fontWeight: '700', fontSize: '9pt', marginBottom: '2mm' } },
+        'Ce qui a été programmé'),
+      h('table', h('tbody', modifs.map(m => h('tr', [
+        h('td', { style: { width: '8mm', textAlign: 'center' } }, '•'),
+        h('td', MODIFICATIONS_ELECTRO[m].nom),
+        h('td', { style: { width: '42mm' } },
+          MODIFICATIONS_ELECTRO[m].route === false ? 'hors homologation route' : '')
+      ]))))
+    ]) : null,
+
+    h('div', { style: { fontWeight: '700', fontSize: '9pt', marginBottom: '2mm' } }, 'Déroulé'),
+    h('table', { style: { marginBottom: '4mm' } },
+      h('tbody', Object.keys(CONTROLES_ELECTRO).map(k => h('tr', [
+        h('td', { style: { width: '8mm', textAlign: 'center' } }, coches[k] ? '☑' : '☐'),
+        h('td', CONTROLES_ELECTRO[k].nom)
+      ])))),
+
+    (i.fichiers || []).length ? h('div', { style: { marginBottom: '4mm' } }, [
+      h('div', { style: { fontWeight: '700', fontSize: '9pt', marginBottom: '2mm' } },
+        'Fichiers conservés à l’atelier'),
+      h('table', [
+        h('thead', h('tr', [h('th', 'Rôle'), h('th', 'Nom'), h('th', 'Rangé')])),
+        h('tbody', i.fichiers.map(f => h('tr', [
+          h('td', { style: { width: '24mm' } }, f.role || ''),
+          h('td', f.nom || ''),
+          h('td', { style: { width: '48mm' } }, f.ou || '')
+        ])))
+      ])
+    ]) : null,
+
+    bloc('Résultat', i.resultat),
+    bloc('Notes d’atelier', i.notes),
+
+    h('div', { style: { fontSize: '8.5pt', marginTop: '2mm' } },
+      'Intervenant : ' + (par ? lit.nomUtilisateur(par) : '—')
+      + (nombre(i.dureeMin, 0) ? ' · Durée : ' + fmt.duree(nombre(i.dureeMin, 0) * 60000) : '')),
+
+    horsRoute.length ? h('div', {
+      style: { border: '.5pt solid #000', padding: '3mm', marginTop: '4mm', fontSize: '8.5pt' }
+    }, [
+      h('div', { style: { fontWeight: '700' } }, 'Mention importante'),
+      h('div', 'Les modifications suivantes ne sont pas homologuées pour un usage sur '
+        + 'la voie publique : ' + horsRoute.map(m => MODIFICATIONS_ELECTRO[m].nom).join(', ')
+        + '. Le véhicule est remis à son propriétaire, qui en assume l’usage.')
+    ]) : null,
+
+    h('div.doc__signature', [
+      h('div', h('div', { style: { fontSize: '8.5pt' } },
+        'Le client reconnaît avoir pris connaissance des travaux réalisés '
+        + 'sur le calculateur de son véhicule.')),
+      h('div.doc__cadre-signature', [h('div', 'Signature du client')])
+    ])
+  ]));
+
   setTimeout(() => {
     window.print();
     setTimeout(() => poser(zone, []), 800);
