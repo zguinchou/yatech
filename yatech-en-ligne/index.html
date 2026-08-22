@@ -4087,8 +4087,17 @@ const DB = {
   nouvelId: (prefixe) => prefixe + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
 
   nouveauNumero() {
-    DB.etat.compteur += 1;
-    return (DB.etat.reglages.prefixeDevis || 'DV-') + DB.etat.compteur;
+    /* Deux dossiers ne doivent JAMAIS porter le même numéro : c'est par lui
+       qu'EBP retrouve la facture. Le compteur peut pourtant retomber en
+       arrière — on le règle à la main dans les paramètres pour reprendre une
+       numérotation. Alors on avance jusqu'à un numéro encore libre. */
+    const prefixe = DB.etat.reglages.prefixeDevis || 'DV-';
+    let numero;
+    do {
+      DB.etat.compteur += 1;
+      numero = prefixe + DB.etat.compteur;
+    } while (DB.etat.devis.some(d => d.numero === numero));
+    return numero;
   },
 
   /** Une teinte encore libre pour une nouvelle personne. */
@@ -4492,9 +4501,14 @@ function figerTva(d) {
             franchise: !!DB.etat.reglages.tvaFranchise };
 }
 
+/* Une remise se lit toujours entre 0 et 100 %. La saisie le tient déjà, mais
+   une base reprise d'ailleurs peut porter n'importe quoi : sans cette borne,
+   un devis finissait en négatif — le garage devant de l'argent au client. */
+const partRemise = (v) => Math.min(100, Math.max(0, Number(v) || 0)) / 100;
+
 function totaux(d) {
-  const brut = (d.lignes || []).reduce((s, l) => s + (Number(l.qte) || 0) * (Number(l.prixHT) || 0) * (1 - (Number(l.remise) || 0) / 100), 0);
-  const rem = brut * (Number(d.remise) || 0) / 100;
+  const brut = (d.lignes || []).reduce((s, l) => s + (Number(l.qte) || 0) * (Number(l.prixHT) || 0) * (1 - partRemise(l.remise)), 0);
+  const rem = brut * partRemise(d.remise);
   const ht = brut - rem;
   /* Le taux qui s'applique est celui du jour où le devis est parti, pas celui
      d'aujourd'hui. Sans ça, changer la TVA dans les réglages réécrivait le
@@ -5670,7 +5684,7 @@ function lignesDevisCsv(liste) {
       x ? (x.code || x.ref || '') : '', x ? x.libelle : '(devis sans ligne)',
       x ? prixCsv(x.qte) : '', x ? prixCsv(x.prixHT) : '', x ? prixCsv(x.remise || 0) : '',
       x ? prixCsv(x.qte * x.prixHT * (1 - (x.remise || 0) / 100)) : '',
-      prixCsv(DB.etat.reglages.tauxTva), s ? s.nom : d.statut
+      prixCsv(tvaDu(d).franchise ? 0 : tvaDu(d).taux), s ? s.nom : d.statut
     ]));
   });
   return versCsv(l);
@@ -5929,7 +5943,7 @@ function importerFacturesEbp(texte) {
     d.facture = {
       numero,
       date: depuisInputDate(dateEbp(lire(l, 'date'))) || Date.now(),
-      ht: ht, ttc: ttc != null ? ttc : (ht != null ? ht * (1 + DB.etat.reglages.tauxTva / 100) : null)
+      ht: ht, ttc: ttc != null ? ttc : (ht != null ? ht * (1 + (tvaDu(d).franchise ? 0 : tvaDu(d).taux) / 100) : null)
     };
     if (d.statut !== 'facture') { d.statut = 'facture'; d.maj = Date.now(); }
     if (!d.ebp) d.ebp = Date.now();
@@ -8200,7 +8214,7 @@ function blocImpression(d) {
         <p>${esc(remplirModele(r.mentionsDevis, { validite: r.validiteDevis, garage: r.nom }))}</p>
         ${/* La mention est obligatoire dès qu'on ne facture pas la TVA : sans
               elle, un devis en franchise n'est pas en règle. */ ''}
-        ${r.tvaFranchise ? '<p><b>TVA non applicable, article 293 B du CGI.</b></p>' : ''}
+        ${tvaDu(d).franchise ? '<p><b>TVA non applicable, article 293 B du CGI.</b></p>' : ''}
         <p>Le devis est réputé accepté par la mention « Bon pour accord », datée et signée.</p>
       </div>
       <table class="imp-totaux">
@@ -10111,7 +10125,9 @@ function vueReglages() {
           ${ch('Préfixe des numéros', 'prefixeDevis', 'text')}
           <div class="champ"><label>Prochain numéro</label>
             <input class="saisie num" type="number" data-champ-reglage="__compteur" value="${DB.etat.compteur + 1}">
-            <span class="aide">Pour reprendre votre numérotation actuelle.</span>
+            <span class="aide">Pour reprendre votre numérotation actuelle.${
+              DB.etat.devis.some(d => d.numero === (r.prefixeDevis || 'DV-') + (DB.etat.compteur + 1))
+                ? ' <b>Ce numéro est déjà pris : le prochain devis prendra le suivant de libre.</b>' : ''}</span>
           </div>
         </div>
         <label class="voix-reglage">
