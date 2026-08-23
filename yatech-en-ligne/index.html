@@ -1078,6 +1078,25 @@ body { zoom: var(--echelle, 1); }
 }
 .rech-reglages .saisie:focus { outline: none; box-shadow: none; }
 .volets.en-recherche > .carte.ouvert { box-shadow: 0 0 0 1.5px var(--accent-voile), var(--ombre); }
+/* --- choisir son ambiance -------------------------------------------------
+   Une vignette montre les quatre couleurs qui portent tout : l'accent, le
+   libre, l'occupé, l'attente. On choisit sur ce qu'on va voir, pas sur un nom. */
+.ambiances {
+  display: grid; gap: 9px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.ambiance {
+  display: grid; gap: 4px; text-align: left; cursor: pointer;
+  padding: 11px 13px 12px; border: 1px solid var(--trait); border-radius: var(--r);
+  background: var(--plan); color: var(--encre); transition: border-color .15s, box-shadow .15s;
+}
+.ambiance:hover { border-color: var(--encre-3); }
+.ambiance.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.amb-bande { display: flex; height: 16px; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.amb-bande i { flex: 1; display: block; }
+.amb-nom { font-family: var(--din); font-size: 14px; font-weight: 600; }
+.amb-aide { font-size: 11.5px; color: var(--encre-3); line-height: 1.4; }
+.ambiance.on .amb-nom { color: var(--accent); }
+
 .apercu-logo {
   max-height: 46px; max-width: 150px; border: 1px solid var(--trait);
   border-radius: var(--r-s); padding: 5px 8px; background: #fff;
@@ -5652,6 +5671,68 @@ const monEcranOuverture = (userId) => {
   const v = maPref('ouverture', 'atelier', userId);
   return ECRANS_OUVERTURE.some(([k]) => k === v) ? v : 'atelier';
 };
+
+/* --- les ambiances --------------------------------------------------------
+   Une ambiance, c'est le jeu complet de couleurs de l'outil. « Atelier » est
+   celui de la feuille de style : elle ne repose donc rien, elle laisse faire.
+   Les autres reposent les jetons par-dessus, sur la racine du document — un
+   style en ligne l'emporte sur toute règle, quel que soit le thème en cours.
+
+   Chaque ambiance porte SES DEUX THÈMES. Le sombre d'une ambiance n'est jamais
+   l'inverse de son clair : un atelier éclairé au néon et un bureau en plein
+   jour ne demandent pas la même chose. */
+const JETONS_AMBIANCE = ['fond','plan','plan-2','relief','trait','trait-fin',
+  'encre','encre-2','encre-3','accent','accent-vif','accent-sur','accent-voile',
+  'libre','libre-voile','occupe','occupe-voile','attente','attente-voile',
+  'actif','actif-voile','pret','gros','gros-voile','perso','perso-voile','mort',
+  'bitume','bitume-2','marquage','marquage-txt'];
+
+const AMBIANCES = {
+  atelier: {
+    nom: 'Atelier',
+    aide: 'Le bleu d\'origine, franc et froid. Celui que vous connaissez.',
+    apercu: ['#1a4fd6', '#16874e', '#c33527', '#a86a00'],
+    clair: null, sombre: null       // rien à reposer : c'est la feuille de style
+  }
+};
+
+/** Le thème réellement affiché, une fois « comme l'appareil » résolu. */
+function themeEffectif(userId) {
+  const t = monTheme(userId);
+  if (t === 'dark' || t === 'light') return t;
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    ? 'dark' : 'light';
+}
+
+const monAmbiance = (userId) => {
+  const v = maPref('ambiance', 'atelier', userId);
+  return AMBIANCES[v] ? v : 'atelier';
+};
+
+function poserAmbiance(cle, userId) {
+  const a = AMBIANCES[cle] || AMBIANCES.atelier;
+  const jeu = a[themeEffectif(userId) === 'dark' ? 'sombre' : 'clair'] || null;
+  const style = document.documentElement.style;
+  JETONS_AMBIANCE.forEach(j => {
+    const v = jeu && jeu[j];
+    if (v) style.setProperty('--' + j, v);
+    else style.removeProperty('--' + j);
+  });
+  document.documentElement.dataset.ambiance = cle;
+}
+
+/* « Comme l'appareil » suit le jour et la nuit : quand le téléphone bascule,
+   l'ambiance doit rebasculer avec lui, sans qu'on ait rien à toucher. */
+if (window.matchMedia) {
+  const veilleNuit = window.matchMedia('(prefers-color-scheme: dark)');
+  const suivre = () => {
+    if (!DB.etat) return;
+    poserAmbiance(monAmbiance());
+    appliquerCouleurs();
+  };
+  if (veilleNuit.addEventListener) veilleNuit.addEventListener('change', suivre);
+  else if (veilleNuit.addListener) veilleNuit.addListener(suivre);
+}
 
 /* La densité : la même application, plus serrée ou plus grosse. Sur le poste
    de l'atelier on lit de loin, les mains sales ; au bureau on veut tout voir
@@ -11259,6 +11340,24 @@ function vueReglages() {
           <span class="aide">Celui-là appartient à l'atelier : tout le monde le voit.</span>
         </div>` : ''}
         <div class="champ">
+          <label>Ambiance</label>
+          <div class="ambiances">
+            ${Object.keys(AMBIANCES).map(cle => { const a = AMBIANCES[cle];
+              const on = monAmbiance() === cle;
+              return `<button class="ambiance ${on ? 'on' : ''}" data-act="ambiance" data-id="${cle}"
+                      aria-pressed="${on}" title="${esc(a.aide)}">
+                <span class="amb-bande">${(a.apercu || []).map(c =>
+                  `<i style="background:${esc(c)}"></i>`).join('')}</span>
+                <span class="amb-nom">${esc(a.nom)}</span>
+                <span class="amb-aide">${esc(a.aide)}</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <span class="aide">Le jeu de couleurs de tout l'outil, thème clair et thème sombre compris.
+          C'est votre choix à vous : vos collègues gardent le leur, sur le même poste. Les couleurs
+          que vous réglez vous-même plus bas passent par-dessus l'ambiance.</span>
+        </div>
+        <div class="champ">
           <label>Densité de l'affichage</label>
           <div class="segments" style="max-width:440px">
             ${DENSITES.map(([v, t]) => `<button data-act="densite" data-id="${v}"
@@ -13765,6 +13864,15 @@ function poserTheme(valeur) {
 function appliquerCouleurs() {
   const c = mesCouleurs();
   const style = document.documentElement.style;
+  /* Sans couleur personnelle, on ne retire pas le jeton : on rend la main à
+     l'ambiance, qui vient de poser le sien juste avant. L'effacer d'un coup
+     ramenait la feuille de style, et l'ambiance choisie ne tenait pas. */
+  const amb = AMBIANCES[monAmbiance()];
+  const jeu = (amb && amb[themeEffectif() === 'dark' ? 'sombre' : 'clair']) || {};
+  const rendre1 = (nom) => {
+    if (jeu[nom]) style.setProperty('--' + nom, jeu[nom]);
+    else style.removeProperty('--' + nom);
+  };
   COULEURS_REGLABLES.forEach(({ cle }) => {
     const v = c[cle];
     if (v) {
@@ -13775,9 +13883,9 @@ function appliquerCouleurs() {
         style.setProperty('--accent-sur', `color-mix(in srgb, ${v} 18%, #000)`);
       }
     } else {
-      style.removeProperty('--' + cle);
-      style.removeProperty('--' + cle + '-voile');
-      if (cle === 'accent') { style.removeProperty('--accent-vif'); style.removeProperty('--accent-sur'); }
+      rendre1(cle);
+      rendre1(cle + '-voile');
+      if (cle === 'accent') { rendre1('accent-vif'); rendre1('accent-sur'); }
     }
   });
 }
@@ -14000,6 +14108,9 @@ document.addEventListener('visibilitychange', () => {
 function apresRendu() {
   poserTheme(monTheme());
   poserDensite(maDensite());
+  /* L'ordre compte : l'ambiance pose le jeu complet, les couleurs personnelles
+     repassent par-dessus. Ce qu'on a choisi soi-même gagne toujours. */
+  poserAmbiance(monAmbiance());
   appliquerCouleurs();
   brancherRangements();
   temoinEnregistrement();
@@ -16949,6 +17060,14 @@ document.addEventListener('click', (e) => {
     'rech-reglage-vider'() { S.rechReglage = ''; S.focusRechReglage = true; rendre(); },
 
     'densite'() { poserMaPref('densite', id); poserDensite(id); rendre(); },
+
+    'ambiance'() {
+      if (!AMBIANCES[id]) return;
+      poserMaPref('ambiance', id);
+      poserAmbiance(id); appliquerCouleurs();
+      toast('Ambiance : ' + AMBIANCES[id].nom);
+      rendre();
+    },
 
     'logo-retirer'() {
       if (!exigeAdmin('Changer l\'enseigne')) return;
