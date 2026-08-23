@@ -21,7 +21,8 @@ import {
 import { nouveauDossierModale } from './dossier-nouveau.js';
 import {
   BLOCS_HAUT, BLOCS_COLONNES, RACCOURCIS, hautVisible, colonnesVisibles,
-  deuxColonnes, blocVisible, ordreColonnes, rangees, raccourcisDe, nomBloc
+  colonnes, blocVisible, ordreColonnes, rangees, raccourcisDe, nomBloc,
+  CACHES_DORIGINE
 } from '../domain/accueil.js';
 
 export function peindre(ctx) {
@@ -40,21 +41,28 @@ export function peindre(ctx) {
     indicateurs: () => indicateurs(e),
     journee:     () => maJournee(e, moi, refaire),
     rendre:      () => aRendre(e),
+    commandes:   () => piecesAttendues(e, refaire),
     attente:     () => enAttente(e),
     appels:      () => appels(e, refaire),
     pensebetes:  () => penseBetes(e, moi, refaire)
   };
 
   function contenu() {
-    const [gauche, droite] = deuxColonnes(colonnesVisibles(moi));
+    /* Trois colonnes sur un grand écran, deux sur un portable, une sur un
+       téléphone. Le but est de tout voir sans faire défiler : un accueil
+       qu'on parcourt en trois coups de molette ne sert pas à grand-chose. */
+    const defaut = auTelephone() ? CACHES_DORIGINE.telephone : CACHES_DORIGINE.grand;
+    const visibles = colonnesVisibles(moi, defaut);
+    const combien = window.matchMedia('(min-width: 1240px)').matches ? 3
+      : (window.matchMedia('(min-width: 1000px)').matches ? 2 : 1);
+    const paquets = colonnes(visibles, combien);
+
     return [
       salutation(e, moi, refaire),
-      ...hautVisible(moi).map(b => DESSIN[b.cle]()),
-      gauche.length || droite.length
-        ? h('div.deux-colonnes', [
-            h('div.pile', gauche.map(k => DESSIN[k]())),
-            h('div.pile', droite.map(k => DESSIN[k]()))
-          ])
+      ...hautVisible(moi, defaut).map(b => DESSIN[b.cle]()),
+      visibles.length
+        ? h('div.colonnes-accueil', { donnees: { colonnes: String(combien) } },
+            paquets.map(bloc => h('div.pile', bloc.map(k => DESSIN[k]()))))
         : h('div.petit.faible.centre',
             'Vous avez tout masqué. « Ranger mon accueil » remet ce que vous voulez.')
     ];
@@ -146,8 +154,9 @@ function raccourcis(e, moi, refaire) {
 
 function modaleRanger(e, moi, refaire) {
   let ordre = ordreColonnes(moi);
+  const defaut = auTelephone() ? CACHES_DORIGINE.telephone : CACHES_DORIGINE.grand;
   let caches = BLOCS_HAUT.concat(BLOCS_COLONNES)
-    .map(b => b.cle).filter(k => !blocVisible(moi, k));
+    .map(b => b.cle).filter(k => !blocVisible(moi, k, defaut));
   let courts = raccourcisDe(moi).slice();
 
   const corps = h('div.pile');
@@ -266,7 +275,11 @@ function bandeAlertes(e) {
      pliure. On en montre trois — ce qui presse vraiment — et on déplie si on
      veut le détail. La cloche du haut garde la liste complète de toute façon. */
   const toutes = lit.alertes(e);
-  const seuil = window.matchMedia('(max-width: 900px)').matches ? 3 : 5;
+  /* Sur un téléphone, trois cartes : au-delà, tout le reste passe sous la
+     pliure. Sur un écran de bureau elles se rangent en colonnes sur la même
+     ligne — c'est justement pour ça qu'on peut toutes les montrer. */
+  const petit = window.matchMedia('(max-width: 900px)').matches;
+  const seuil = petit ? 3 : 8;
   const liste = toutes.slice(0, seuil);
   if (!liste.length) {
     return h('div.bandeau.bandeau--ok', [
@@ -274,7 +287,7 @@ function bandeAlertes(e) {
       h('span', 'Rien ne traîne : pas de devis en souffrance, pas d’impayé, pas de véhicule oublié.')
     ]);
   }
-  const zone = h('div.pile-s');
+  const zone = h('div' + (petit ? '.pile-s' : '.grille-alertes'));
   const carte = (a) =>
     h('a.carte.rang', { href: '#' + a.vers }, [
       h('span', {
@@ -513,6 +526,54 @@ function enAttente(e) {
       ]);
     })),
     pied(reste, '/atelier', 'dossiers en attente')
+  ]);
+}
+
+/* ==========================================================================
+   LES PIÈCES QU'ON ATTEND
+   --------------------------------------------------------------------------
+   Ce qu'il faut commander ce matin, et ce qui aurait dû arriver. Les deux
+   coups de téléphone de la journée. Le détail par fournisseur est sur le
+   stock ; ici, on veut juste savoir s'il y en a et lesquelles.
+   ========================================================================== */
+
+function piecesAttendues(e, refaire) {
+  const tout = lit.commandesEnCours(e);
+  if (!tout.length) return null;
+
+  const aCommander = tout.filter(x => x.ligne.commande === 'a_commander');
+  const retard = tout.filter(x => x.retard);
+  const { vus, reste } = borne(tout);
+
+  return h('div.panneau', [
+    h('div.panneau__tete', [
+      icone('camion', { taille: 16 }),
+      h('h2.grandit', 'Pièces attendues'),
+      retard.length ? h('span.pastille.pastille--danger', retard.length + ' en retard') : null,
+      aCommander.length && !retard.length
+        ? h('span.pastille.pastille--alerte', aCommander.length + ' à passer') : null,
+      h('a.bt.bt--nu.bt--s', { href: '#/stock?commandes=1' }, 'Tout')
+    ]),
+    h('div.liste', vus.map(x => {
+      const c = lit.contexteDossier(e, x.dossier);
+      return h('a.liste__ligne', { href: '#/dossier/' + x.dossier.id }, [
+        h('span.pastille.pastille--' + (x.retard ? 'danger' : (x.ligne.commande === 'a_commander' ? 'alerte' : 'info'))
+          + '.pastille--sans-point',
+          x.retard ? 'retard' : (x.ligne.commande === 'a_commander' ? 'à cmd.' : 'cmd.')),
+        h('div.grandit.coupe', [
+          h('div.coupe', x.ligne.libelle || 'Pièce'),
+          h('div.minus.tres-faible.coupe', [
+            c.vehicule ? plaqueJolie(c.vehicule.immat) : null,
+            x.fournisseur ? x.fournisseur.nom : 'sans fournisseur',
+            x.ligne.attendueLe ? fmt.date(x.ligne.attendueLe, 'court') : null
+          ].filter(Boolean).join(' · '))
+        ])
+      ]);
+    })),
+    reste
+      ? h('div.panneau__pied', h('a.bt.bt--nu.bt--plein.bt--s', { href: '#/stock?commandes=1' },
+          'Voir les ' + tout.length + ' pièces'))
+      : null
   ]);
 }
 

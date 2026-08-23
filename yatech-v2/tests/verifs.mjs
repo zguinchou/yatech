@@ -60,8 +60,8 @@ import { normaliser, neuf, nouvelleLigne, prochainNumero, estUneSauvegarde,
   VERSION_MODELE } from '../js/domain/schema.js';
 import { equipeDepart } from '../js/domain/demo.js';
 import {
-  ordreColonnes, colonnesVisibles, deuxColonnes, blocVisible, rangees,
-  raccourcisDe, BLOCS_COLONNES
+  ordreColonnes, colonnesVisibles, deuxColonnes, colonnes, blocVisible, rangees,
+  raccourcisDe, BLOCS_COLONNES, CACHES_DORIGINE
 } from '../js/domain/accueil.js';
 import { S, maj, annuler, refaire, peutAnnuler } from '../js/core/store.js';
 
@@ -457,13 +457,24 @@ groupe('Des données abîmées n’empêchent pas d’ouvrir', () => {
 groupe('L’accueil de chacun', () => {
   const defaut = BLOCS_COLONNES.map(b => b.cle);
   verifie('sans préférence, l’ordre d’origine', ordreColonnes(null), defaut);
-  /* L'accueil d'origine est déjà allégé : « ce qui attend quelqu'un d'autre »
-     redit les alertes, et coûte un écran de défilement sur téléphone. */
-  verifie('et un accueil d’origine allégé', colonnesVisibles(null).includes('attente'), false);
-  verifie('mais tout le reste est là', colonnesVisibles(null).length, defaut.length - 1);
+  /* L'accueil d'origine dépend de l'écran : tout sur un bureau, un panneau de
+     moins sur un téléphone où chacun coûte un tiers d'écran. */
+  verifie('tout est visible sur un bureau',
+    colonnesVisibles(null, CACHES_DORIGINE.grand).length, defaut.length);
+  verifie('les pièces attendues en font partie',
+    colonnesVisibles(null, CACHES_DORIGINE.grand).includes('commandes'), true);
+  verifie('un panneau de moins sur téléphone',
+    colonnesVisibles(null, CACHES_DORIGINE.telephone).length, defaut.length - 1);
+  verifie('et c’est celui qui redit les alertes',
+    colonnesVisibles(null, CACHES_DORIGINE.telephone).includes('attente'), false);
+  /* Qui a rangé son accueil décide, et sur les deux écrans. */
+  verifie('un choix enregistré l’emporte sur l’écran',
+    colonnesVisibles({ preferences: { accueil: { ordre: [], caches: [] } } },
+      CACHES_DORIGINE.telephone).length, defaut.length);
   /* Une personne qui range son accueil décide, même si elle ne masque rien. */
-  verifie('qui range peut tout remettre',
-    colonnesVisibles({ preferences: { accueil: { ordre: [], caches: [] } } }).length, defaut.length);
+  verifie('et qui masque, masque',
+    colonnesVisibles({ preferences: { accueil: { ordre: [], caches: ['attente'] } } }).length,
+    defaut.length - 1);
   verifie('et les raccourcis d’origine',
     raccourcisDe(null), ['dossier', 'appel', 'pensebete', 'planning']);
 
@@ -479,7 +490,8 @@ groupe('L’accueil de chacun', () => {
   verifie('ce qui était choisi passe devant', range.slice(0, 2), ['appels', 'journee']);
   /* Ce qui n'était pas rangé suit, dans l'ordre d'origine — à la fin, pour
      ne pas bousculer ce que la personne a arrangé. */
-  verifie('le reste suit sans bousculer', range.slice(2), ['rendre', 'attente', 'pensebetes']);
+  verifie('le reste suit sans bousculer', range.slice(2),
+    defaut.filter(k => k !== 'appels' && k !== 'journee'));
 
   verifie('un bloc masqué disparaît', blocVisible(bancal, 'rendre'), false);
   verifie('les autres restent', blocVisible(bancal, 'journee'), true);
@@ -492,6 +504,16 @@ groupe('L’accueil de chacun', () => {
   verifie('un seul panneau reste à gauche',
     deuxColonnes(['a']).map(c => c.length), [1, 0]);
   verifie('aucun ne casse rien', deuxColonnes([]).map(c => c.length), [0, 0]);
+
+  /* Sur grand écran, trois colonnes. Découper en tranches égales laisserait
+     la troisième vide avec quatre panneaux — et un grand blanc à droite. */
+  verifie('quatre panneaux sur trois colonnes',
+    colonnes(['a', 'b', 'c', 'd'], 3).map(c => c.length), [2, 1, 1]);
+  verifie('cinq sur trois', colonnes(['a', 'b', 'c', 'd', 'e'], 3).map(c => c.length), [2, 2, 1]);
+  verifie('un seul ne laisse pas deux vides derrière lui',
+    colonnes(['a'], 3).map(c => c.length), [1, 0, 0]);
+  verifie('l’ordre est respecté', colonnes(['a', 'b', 'c', 'd'], 3), [['a', 'b'], ['c'], ['d']]);
+  verifie('une colonne, tout dedans', colonnes(['a', 'b'], 1), [['a', 'b']]);
 
   /* Tout masquer laisserait une barre de raccourcis vide, sans moyen d'en
      remettre : on garde le geste principal. */

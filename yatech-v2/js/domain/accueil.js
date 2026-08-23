@@ -26,6 +26,7 @@ export const BLOCS_HAUT = [
 export const BLOCS_COLONNES = [
   { cle: 'journee',   nom: 'Ma journée' },
   { cle: 'rendre',    nom: 'À rendre aujourd’hui' },
+  { cle: 'commandes', nom: 'Les pièces qu’on attend' },
   { cle: 'attente',   nom: 'Ce qui attend quelqu’un d’autre' },
   { cle: 'appels',    nom: 'Les appels' },
   { cle: 'pensebetes',nom: 'Les pense-bêtes' }
@@ -34,19 +35,25 @@ export const BLOCS_COLONNES = [
 const TOUS = BLOCS_HAUT.concat(BLOCS_COLONNES);
 const CLES = TOUS.map(b => b.cle);
 
-/* Ce qu'on ne montre pas tant que personne ne l'a demandé. « Ce qui attend
-   quelqu'un d'autre » redit ce que les alertes disent déjà et ce que l'atelier
-   montre mieux : sur un téléphone, c'est un écran de défilement pour rien.
-   Il reste à une case à cocher de distance. */
-const DEFAUT_CACHES = ['attente'];
+/* L'accueil d'origine n'est pas le même selon l'écran, et c'est voulu.
 
-/** Les préférences d'accueil d'une personne, jamais nulles. */
-function prefs(moi) {
+   Sur un écran de bureau les panneaux se rangent en colonnes : on montre tout,
+   c'est justement l'intérêt d'avoir la place. Sur un téléphone, chaque panneau
+   coûte un tiers d'écran de défilement, alors on retire celui qui redit les
+   alertes — « ce qui attend quelqu'un d'autre ».
+
+   Dès que la personne range son accueil, c'est son choix qui vaut, sur les
+   deux écrans : elle a décidé, on n'y revient pas. */
+export const CACHES_DORIGINE = { grand: [], telephone: ['attente'] };
+
+/**
+ * Les préférences d'accueil d'une personne, jamais nulles.
+ * @param {object} moi
+ * @param {string[]} [defaut]  ce qui est masqué tant qu'elle n'a rien rangé
+ */
+function prefs(moi, defaut) {
   const p = (moi && moi.preferences && moi.preferences.accueil) || null;
-  /* Personne n'a encore rangé son accueil : on part de l'accueil d'origine,
-     pas de « tout visible ». Dès qu'elle enregistre, c'est son choix qui
-     compte, même s'il consiste à ne rien masquer. */
-  if (!p) return { ordre: [], caches: DEFAUT_CACHES.slice() };
+  if (!p) return { ordre: [], caches: (defaut || []).slice() };
   return {
     ordre: Array.isArray(p.ordre) ? p.ordre : [],
     caches: Array.isArray(p.caches) ? p.caches : []
@@ -74,26 +81,49 @@ export function ordreColonnes(moi) {
 }
 
 /** Ce bloc est-il visible pour cette personne ? */
-export function blocVisible(moi, cle) {
-  return !prefs(moi).caches.includes(cle);
+export function blocVisible(moi, cle, defaut) {
+  return !prefs(moi, defaut).caches.includes(cle);
 }
 
 /** Les blocs du haut qui restent affichés. */
-export const hautVisible = (moi) => BLOCS_HAUT.filter(b => blocVisible(moi, b.cle));
+export const hautVisible = (moi, defaut) =>
+  BLOCS_HAUT.filter(b => blocVisible(moi, b.cle, defaut));
 
 /** Les panneaux visibles, dans l'ordre choisi. */
-export const colonnesVisibles = (moi) =>
-  ordreColonnes(moi).filter(k => blocVisible(moi, k));
+export const colonnesVisibles = (moi, defaut) =>
+  ordreColonnes(moi).filter(k => blocVisible(moi, k, defaut));
 
 /**
- * Répartit les panneaux sur deux colonnes : la première moitié à gauche.
- * Monter un panneau le fait monter, et rien d'autre — c'est la seule règle
- * qu'on peut expliquer debout devant l'écran.
+ * Répartit les panneaux en colonnes, dans l'ordre : on remplit la première,
+ * puis la deuxième. Monter un panneau le fait monter, et rien d'autre —
+ * c'est la seule règle qu'on peut expliquer debout devant l'écran.
+ *
+ * Le nombre de colonnes vient de l'écran, donc de l'appelant : ce module ne
+ * regarde pas la fenêtre, c'est ce qui le rend vérifiable.
+ *
+ * @param {string[]} cles
+ * @param {number} [combien]  2 par défaut
+ * @returns {string[][]} toujours `combien` colonnes, éventuellement vides
  */
-export function deuxColonnes(cles) {
-  const gauche = Math.ceil(cles.length / 2);
-  return [cles.slice(0, gauche), cles.slice(gauche)];
+export function colonnes(cles, combien) {
+  const n = Math.max(1, combien || 2);
+  /* On répartit au plus juste : quatre panneaux sur trois colonnes donnent
+     2-1-1, pas 2-2-0. Découper bêtement en tranches de `ceil(4/3)` laissait
+     la troisième colonne vide et un grand blanc à droite de l'écran. */
+  const base = Math.floor(cles.length / n);
+  const reste = cles.length % n;
+  const sortie = [];
+  let i = 0;
+  for (let c = 0; c < n; c++) {
+    const combienIci = base + (c < reste ? 1 : 0);
+    sortie.push(cles.slice(i, i + combienIci));
+    i += combienIci;
+  }
+  return sortie;
 }
+
+/** Le cas courant : deux colonnes. */
+export const deuxColonnes = (cles) => colonnes(cles, 2);
 
 /** Le nom lisible d'un bloc. */
 export const nomBloc = (cle) => (TOUS.find(b => b.cle === cle) || {}).nom || cle;

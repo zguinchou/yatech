@@ -273,6 +273,37 @@
   gap: var(--e-4);
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* --------------------------------------------------------------------------
+   CE QUI PRESSE, SUR TOUTE LA LIGNE
+   Cinq alertes empilées sur 1440 px, c'est 400 px de hauteur pour cinq lignes
+   de texte, et tout le reste de l'accueil passe sous l'écran. En colonnes,
+   la même chose tient en deux rangées et le reste remonte.
+   -------------------------------------------------------------------------- */
+.grille-alertes {
+  display: grid;
+  gap: var(--e-2);
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  align-items: start;
+}
+
+/* --------------------------------------------------------------------------
+   LES PANNEAUX DE L'ACCUEIL
+   Une, deux ou trois colonnes selon l'écran. Le découpage est fait en amont —
+   la grille ne fait que poser les paquets côte à côte.
+   -------------------------------------------------------------------------- */
+.colonnes-accueil {
+  display: grid;
+  gap: var(--e-4);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 1000px) {
+  .colonnes-accueil[data-colonnes="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1240px) {
+  .colonnes-accueil[data-colonnes="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (min-width: 1100px) {
   .deux-colonnes { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
   .deux-colonnes--large { grid-template-columns: minmax(0, 1fr) 420px; }

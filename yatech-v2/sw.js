@@ -12,7 +12,7 @@
    Les DONNÉES ne passent jamais par ici : elles vivent dans IndexedDB.
    ========================================================================== */
 
-const VERSION = 'yatech-v2-9';           // à incrémenter à chaque mise en ligne
+const VERSION = 'yatech-v2-10';           // à incrémenter à chaque mise en ligne
 const CACHE = 'coque-' + VERSION;
 
 /* La liste est volontairement courte : tout ce qu'il faut pour peindre l'écran

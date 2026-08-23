@@ -233,6 +233,8 @@ différents :
 - **Sur le dossier** — ce que cette voiture attend, avec le fournisseur et la
   date annoncée. Quand tout est arrivé, l'outil propose de passer en atelier
   plutôt que de laisser le dossier dormir.
+- **Sur l'accueil** — « Pièces attendues » : ce qu'il faut commander ce matin
+  et ce qui aurait dû arriver. Les deux coups de téléphone de la journée.
 - **Sur le stock** — toutes les commandes de l'atelier, **groupées par
   fournisseur**. C'est comme ça qu'on passe une commande : on appelle un
   fournisseur, pas un dossier. Ce qui n'a pas de fournisseur remonte en tête,
@@ -272,20 +274,35 @@ barre du bas mène toujours aux cinq écrans principaux.
 Qui le préfère sous les yeux le rappelle : *avatar → Afficher le menu à
 gauche*. C'est une préférence de personne, comme le thème.
 
-L'accueil, lui, a été taillé pour le téléphone :
+L'accueil, lui, se plie à l'écran qu'il a devant lui.
+
+**Sur un écran de bureau**, il tient en entier, sans faire défiler. « Ce qui
+presse » prend toute la ligne — mais en colonnes, pas en pile : cinq alertes
+empilées sur 1440 px, c'était 400 px de hauteur pour cinq lignes de texte et
+tout le reste passait sous l'écran. Les panneaux se rangent ensuite sur trois
+colonnes au-delà de 1240 px, deux au-delà de 1000.
+
+| écran | avant | après |
+|---|---|---|
+| 1920 × 1080 | 1100 px | **821 px** — 0,76 écran |
+| 1440 × 900 | 1100 px | **821 px** — 0,91 écran |
+| 1366 × 768 | 1100 px | 821 px — il reste un pouce à faire défiler |
+
+**Sur un téléphone**, la même page passe de 1806 px à 1373 px, avec un panneau
+de plus qu'avant :
 
 | | avant | après |
 |---|---|---|
-| Hauteur totale | 1806 px — 2,1 écrans | **1176 px — 1,4 écran** |
 | L'en-tête | 109 px | 45 px, titre et roue sur une ligne |
 | Les raccourcis | 88 px, deux rangées | 44 px, une rangée qui défile du pouce |
 | Les chiffres | 207 px de tuiles | 52 px, une bande qui défile |
 | Les alertes | cinq cartes | trois, et « voir les 5 » si besoin |
+| Chaque panneau | la liste entière | trois lignes, puis l'écran complet |
 
-Rien n'a disparu : les tuiles de chiffres reviennent sur grand écran, les
-alertes se déplient, et « Ce qui attend quelqu'un d'autre » — qui redisait les
-alertes — est à une case à cocher dans *Ranger mon accueil*. Chaque panneau
-s'arrête à trois lignes sur téléphone, avec un pied qui mène à l'écran complet.
+L'accueil d'origine n'est d'ailleurs pas le même des deux côtés : sur téléphone,
+« Ce qui attend quelqu'un d'autre » est retiré — il redit les alertes et coûte
+un tiers d'écran de défilement. **Dès que quelqu'un range son accueil, c'est son
+choix qui vaut, sur les deux écrans** : il a décidé, on n'y revient pas.
 
 ---
 
