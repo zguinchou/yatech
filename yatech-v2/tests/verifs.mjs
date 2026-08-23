@@ -457,6 +457,13 @@ groupe('Des données abîmées n’empêchent pas d’ouvrir', () => {
 groupe('L’accueil de chacun', () => {
   const defaut = BLOCS_COLONNES.map(b => b.cle);
   verifie('sans préférence, l’ordre d’origine', ordreColonnes(null), defaut);
+  /* L'accueil d'origine est déjà allégé : « ce qui attend quelqu'un d'autre »
+     redit les alertes, et coûte un écran de défilement sur téléphone. */
+  verifie('et un accueil d’origine allégé', colonnesVisibles(null).includes('attente'), false);
+  verifie('mais tout le reste est là', colonnesVisibles(null).length, defaut.length - 1);
+  /* Une personne qui range son accueil décide, même si elle ne masque rien. */
+  verifie('qui range peut tout remettre',
+    colonnesVisibles({ preferences: { accueil: { ordre: [], caches: [] } } }).length, defaut.length);
   verifie('et les raccourcis d’origine',
     raccourcisDe(null), ['dossier', 'appel', 'pensebete', 'planning']);
 

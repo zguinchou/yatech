@@ -11,7 +11,7 @@ import { h, poser, q, vider } from './core/dom.js';
 import { icone } from './core/icones.js';
 import { menu, message } from './core/ui.js';
 import * as routeur from './core/routeur.js';
-import { S, ecoute, annuler, peutAnnuler, dernierGeste } from './core/store.js';
+import { S, maj, ecoute, annuler, peutAnnuler, dernierGeste } from './core/store.js';
 import { chercher, nomClient, nomVehicule, alertes } from './domain/selecteurs.js';
 import { compteEnAttente } from './domain/ebp.js';
 import { surligne, attend, plaqueJolie } from './core/util.js';
@@ -117,6 +117,10 @@ function construire() {
 
   racine.className = 'coque';
   poser(racine, [
+    /* Le rail n'est là que si on le demande. Par défaut l'écran est entier :
+       sur un portable de 13 pouces comme sur un téléphone, 240 px de menu
+       permanent, c'est une colonne de tableau en moins. Le menu vit dans le
+       tiroir, à un doigt du bouton en haut à gauche. */
     railLateral(),
     h('div.grandit', { style: { display: 'flex', flexDirection: 'column', minHeight: '100dvh' } }, [
       barreHaut(),
@@ -313,6 +317,13 @@ function menuMoi(ancre) {
       }
     } : null,
     null,
+    /* Le menu de gauche se rappelle, pour qui préfère l'avoir sous les yeux.
+       Sur téléphone la question ne se pose pas : il n'y a pas la place. */
+    window.matchMedia('(min-width: 901px)').matches ? {
+      texte: railAffiche() ? 'Masquer le menu de gauche' : 'Afficher le menu à gauche',
+      icone: 'menu',
+      faire: () => { basculerRail(); routeur.repeindre(); }
+    } : null,
     { texte: 'Réglages', icone: 'reglages', faire: () => routeur.aller('/reglages') },
     { texte: 'Sauvegarder les données', icone: 'telecharger', faire: sauvegarder },
     null,
@@ -552,10 +563,38 @@ export function majMenu() {
 function majBoutonTiroir() {
   const bt = document.getElementById('bt-tiroir');
   if (!bt) return;
-  /* Sur téléphone, la barre du bas suffit pour les cinq écrans principaux ;
-     le bouton du haut n'apparaît que si l'on est ailleurs. */
-  const petit = window.matchMedia('(max-width: 900px)').matches;
-  bt.style.display = petit ? '' : 'none';
+  /* Le bouton de menu est là dès que le rail ne l'est pas — c'est-à-dire
+     presque toujours. Sur téléphone la barre du bas mène aux cinq écrans
+     principaux, mais le reste passe par ici. */
+  bt.style.display = railAffiche() ? 'none' : '';
+}
+
+/** Le rail à gauche est-il demandé ? Non par défaut : l'écran est entier.
+ *  C'est une préférence de personne, comme le thème — le poste du comptoir
+ *  et celui de l'atelier ne se règlent pas pareil. */
+export function railAffiche() {
+  if (!window.matchMedia('(min-width: 901px)').matches) return false;
+  return !!(S.moi && S.moi.preferences && S.moi.preferences.rail);
+}
+
+/** Pose ou retire le rail, tout de suite et pour les fois suivantes. */
+export function basculerRail() {
+  const veut = !railAffiche();
+  if (S.moi) {
+    S.moi.preferences = Object.assign({}, S.moi.preferences, { rail: veut });
+    const id = S.moi.id;
+    maj('Menu de gauche ' + (veut ? 'affiché' : 'masqué'), (etat) => {
+      const u = (etat.utilisateurs || []).find(x => x.id === id);
+      if (u) u.preferences = Object.assign({}, u.preferences, { rail: veut });
+    });
+  }
+  appliquerRail();
+}
+
+/** Répercute le choix sur le document : le CSS fait le reste. */
+export function appliquerRail() {
+  document.documentElement.dataset.rail = railAffiche() ? 'oui' : 'non';
+  majBoutonTiroir();
 }
 
 export function titreEcran(texte) {

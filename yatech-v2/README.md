@@ -262,6 +262,33 @@ plan.
 
 ---
 
+## L'écran entier, et le téléphone d'abord
+
+Le menu de gauche ne s'affiche plus. Un rail permanent, c'est 240 px de moins
+pour un tableau, sur un portable de 13 pouces comme sur un téléphone. Le menu
+vit dans un tiroir, à un doigt du bouton en haut à gauche ; sur téléphone la
+barre du bas mène toujours aux cinq écrans principaux.
+
+Qui le préfère sous les yeux le rappelle : *avatar → Afficher le menu à
+gauche*. C'est une préférence de personne, comme le thème.
+
+L'accueil, lui, a été taillé pour le téléphone :
+
+| | avant | après |
+|---|---|---|
+| Hauteur totale | 1806 px — 2,1 écrans | **1176 px — 1,4 écran** |
+| L'en-tête | 109 px | 45 px, titre et roue sur une ligne |
+| Les raccourcis | 88 px, deux rangées | 44 px, une rangée qui défile du pouce |
+| Les chiffres | 207 px de tuiles | 52 px, une bande qui défile |
+| Les alertes | cinq cartes | trois, et « voir les 5 » si besoin |
+
+Rien n'a disparu : les tuiles de chiffres reviennent sur grand écran, les
+alertes se déplient, et « Ce qui attend quelqu'un d'autre » — qui redisait les
+alertes — est à une case à cocher dans *Ranger mon accueil*. Chaque panneau
+s'arrête à trois lignes sur téléphone, avec un pied qui mène à l'écran complet.
+
+---
+
 ## L'accueil de chacun
 
 Trois personnes ne regardent pas les mêmes choses le matin. La secrétaire veut

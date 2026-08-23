@@ -105,6 +105,9 @@ async function demarrer() {
   base.rendrePersistant();
 
   reprendreSession();
+  /* Le menu de gauche suit la personne : on le pose AVANT de peindre, sinon
+     l'écran s'ouvre pleine largeur puis se décale sous les yeux. */
+  coque.appliquerRail();
 
   routeur.definir(ROUTES.map(r => ({ chemin: r.chemin, vue: r })));
   routeur.garde(garder);
@@ -173,6 +176,7 @@ export function ouvrirSession(utilisateur) {
     theme: p.theme || S.etat.reglages.theme,
     densite: p.densite || S.etat.reglages.densite
   }));
+  coque.appliquerRail();
 }
 
 export function fermerSession() {

@@ -208,6 +208,17 @@
   .tete-ecran { flex-direction: column; align-items: stretch; gap: var(--e-3); }
   .tete-ecran__actions { margin-left: 0; }
   .tete-ecran__actions > .bt { flex: 1 1 auto; min-height: 44px; }
+
+  /* La variante compacte garde tout sur une ligne : un titre, une icône. */
+  .tete-ecran--compacte {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--e-2);
+    margin-bottom: var(--e-3);
+  }
+  .tete-ecran--compacte h1 { font-size: var(--t-xl); }
+  .tete-ecran--compacte .tete-ecran__actions { margin-left: auto; }
+  .tete-ecran--compacte .tete-ecran__actions > .bt { flex: none; }
 }
 
 /* Une barre de filtres qui défile horizontalement sur téléphone. */
@@ -456,14 +467,19 @@
    BASCULE DE MISE EN PAGE
    ========================================================================== */
 @media (min-width: 901px) {
-  .rail { display: flex; }
-  .coque { padding-left: var(--rail); }
   .onglets-bas { display: none; }
   .contenu { padding-bottom: var(--e-7); padding-left: var(--e-5); padding-right: calc(var(--e-5) + var(--safe-r)); }
   .flottant { display: none; }
   .chercher-tout { display: flex; }
-  .barre__marque { display: none; }
-  .messages { left: calc(50% + var(--rail) / 2); }
+  .messages { left: 50%; }
+
+  /* Le rail ne s'affiche que si la personne l'a demandé. Par défaut l'écran
+     est entier : 240 px de menu permanent, c'est une colonne de tableau en
+     moins sur un portable de 13 pouces. */
+  :root[data-rail="oui"] .rail { display: flex; }
+  :root[data-rail="oui"] .coque { padding-left: var(--rail); }
+  :root[data-rail="oui"] .barre__marque { display: none; }
+  :root[data-rail="oui"] .messages { left: calc(50% + var(--rail) / 2); }
 }
 @media (max-width: 900px) {
   .barre__titre { display: none; }

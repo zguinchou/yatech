@@ -34,9 +34,19 @@ export const BLOCS_COLONNES = [
 const TOUS = BLOCS_HAUT.concat(BLOCS_COLONNES);
 const CLES = TOUS.map(b => b.cle);
 
+/* Ce qu'on ne montre pas tant que personne ne l'a demandé. « Ce qui attend
+   quelqu'un d'autre » redit ce que les alertes disent déjà et ce que l'atelier
+   montre mieux : sur un téléphone, c'est un écran de défilement pour rien.
+   Il reste à une case à cocher de distance. */
+const DEFAUT_CACHES = ['attente'];
+
 /** Les préférences d'accueil d'une personne, jamais nulles. */
 function prefs(moi) {
-  const p = (moi && moi.preferences && moi.preferences.accueil) || {};
+  const p = (moi && moi.preferences && moi.preferences.accueil) || null;
+  /* Personne n'a encore rangé son accueil : on part de l'accueil d'origine,
+     pas de « tout visible ». Dès qu'elle enregistre, c'est son choix qui
+     compte, même s'il consiste à ne rien masquer. */
+  if (!p) return { ordre: [], caches: DEFAUT_CACHES.slice() };
   return {
     ordre: Array.isArray(p.ordre) ? p.ordre : [],
     caches: Array.isArray(p.caches) ? p.caches : []

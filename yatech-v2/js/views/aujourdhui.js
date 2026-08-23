@@ -65,6 +65,33 @@ export function peindre(ctx) {
 }
 
 /* ==========================================================================
+   PENSÉ POUR LE TÉLÉPHONE
+   --------------------------------------------------------------------------
+   L'accueil se lit d'abord sur un téléphone, souvent debout, souvent d'une
+   main. Un panneau qui déroule dix lignes pousse le suivant hors de l'écran,
+   et on ne voit jamais qu'un panneau et demi.
+
+   Trois lignes par panneau, donc, et un pied qui mène à l'écran complet. Sur
+   grand écran la place ne manque pas : on montre tout.
+   ========================================================================== */
+
+const auTelephone = () => window.matchMedia('(max-width: 900px)').matches;
+
+/** Les trois premières et le compte de ce qui reste. */
+function borne(liste, combien) {
+  const n = combien || 3;
+  if (!auTelephone() || liste.length <= n) return { vus: liste, reste: 0 };
+  return { vus: liste.slice(0, n), reste: liste.length - n };
+}
+
+/** Le pied « et 4 autres », qui mène là où elles sont toutes. */
+function pied(reste, vers, quoi) {
+  if (!reste) return null;
+  return h('div.panneau__pied', h('a.bt.bt--nu.bt--plein.bt--s', { href: '#' + vers },
+    'Voir les ' + (reste + 3) + ' ' + quoi));
+}
+
+/* ==========================================================================
    L'EN-TÊTE
    ========================================================================== */
 
@@ -72,6 +99,7 @@ function salutation(e, moi, refaire) {
   const heure = new Date().getHours();
   const bonjour = heure < 12 ? 'Bonjour' : (heure < 18 ? 'Bon après-midi' : 'Bonsoir');
   return enTete({
+    compacte: true,
     titre: bonjour + (moi && moi.prenom ? ', ' + moi.prenom : ''),
     sous: fmt.date(Date.now(), 'complet'),
     actions: moi ? [
@@ -96,7 +124,9 @@ function raccourcis(e, moi, refaire) {
     pensebete:() => modaleTache(e, refaire)
   };
 
-  return h('div.rang.enroule', raccourcisDe(moi).map(cle => {
+  /* Une seule rangée, qui défile du pouce : quatre boutons qui passent à la
+     ligne, c'est déjà 88 px avant d'avoir lu quoi que ce soit. */
+  return h('div.rang-defile', raccourcisDe(moi).map(cle => {
     const r = RACCOURCIS[cle];
     const classe = '.bt' + (r.fort ? '.bt--fort' : '.bt--contour');
     return r.vers
@@ -232,14 +262,20 @@ function modaleRanger(e, moi, refaire) {
    ========================================================================== */
 
 function bandeAlertes(e) {
-  const liste = lit.alertes(e).slice(0, 5);
+  /* Sur un téléphone, cinq cartes d'alerte poussent tout le reste sous la
+     pliure. On en montre trois — ce qui presse vraiment — et on déplie si on
+     veut le détail. La cloche du haut garde la liste complète de toute façon. */
+  const toutes = lit.alertes(e);
+  const seuil = window.matchMedia('(max-width: 900px)').matches ? 3 : 5;
+  const liste = toutes.slice(0, seuil);
   if (!liste.length) {
     return h('div.bandeau.bandeau--ok', [
       icone('cocheRonde'),
       h('span', 'Rien ne traîne : pas de devis en souffrance, pas d’impayé, pas de véhicule oublié.')
     ]);
   }
-  return h('div.pile-s', liste.map(a =>
+  const zone = h('div.pile-s');
+  const carte = (a) =>
     h('a.carte.rang', { href: '#' + a.vers }, [
       h('span', {
         style: {
@@ -253,8 +289,22 @@ function bandeAlertes(e) {
         a.detail ? h('div.petit.faible.coupe', a.detail) : null
       ]),
       icone('droite', { taille: 15, classe: 'tres-faible' })
-    ])
-  ));
+    ]);
+
+  let tout = false;
+  function peindreTout() {
+    const vues = tout ? toutes : liste;
+    poser(zone, [
+      ...vues.map(carte),
+      toutes.length > vues.length
+        ? h('button.bt.bt--nu.bt--plein.bt--s', {
+            type: 'button', onclick: () => { tout = true; peindreTout(); }
+          }, 'Voir les ' + toutes.length + ' alertes')
+        : null
+    ]);
+  }
+  peindreTout();
+  return zone;
 }
 
 /* ==========================================================================
@@ -268,6 +318,26 @@ function indicateurs(e) {
   const du = lit.encours(e);
   const solde = lit.soldeCredits(e);
   const libres = lit.placesLibres(e).length;
+
+  /* Sur téléphone, quatre tuiles de chiffres mangent un quart d'écran pour
+     des nombres sur lesquels on n'agit pas. On les met en une bande qui se
+     fait défiler du pouce : la même information, un tiers de la hauteur. */
+  if (window.matchMedia('(max-width: 900px)').matches) {
+    const puce = (nom, valeur, vers, ton) => h('a.chiffre', { href: '#' + vers }, [
+      h('b' + (ton ? '.' + ton : ''), String(valeur)),
+      h('span', nom)
+    ]);
+    return h('div.bande-chiffres', [
+      puce('à l’atelier', ouverts.length, '/atelier'),
+      puce('places libres', libres, '/parc'),
+      puce('à encaisser', fmt.euros(du.total, { sansCentimes: true }), '/factures',
+        du.retard > 0 ? 'danger' : null),
+      puce('facturé ce mois', fmt.euros(ca.ht, { sansCentimes: true }), '/factures'),
+      e.reglages.suiviCredits === false ? null
+        : puce('crédits', solde, '/electronique',
+            solde <= nombre(e.reglages.creditsAlerte, 5) ? 'alerte' : null)
+    ]);
+  }
 
   return h('div.grille-indics', [
     indic({
@@ -301,7 +371,8 @@ function indicateurs(e) {
    ========================================================================== */
 
 function maJournee(e, moi, refaire) {
-  const mien = moi ? lit.creneauxDuJour(e, Date.now(), moi.id) : lit.creneauxDuJour(e, Date.now());
+  const tous = moi ? lit.creneauxDuJour(e, Date.now(), moi.id) : lit.creneauxDuJour(e, Date.now());
+  const { vus: mien, reste } = borne(tous);
   const maintenant = Date.now();
 
   return h('div.panneau', [
@@ -356,7 +427,8 @@ function maJournee(e, moi, refaire) {
           ]);
         }))
       : h('div.panneau__corps', h('div.petit.faible.centre',
-          'Rien de posé au planning pour aujourd’hui.'))
+          'Rien de posé au planning pour aujourd’hui.')),
+    pied(reste, '/planning', 'rendez-vous du jour')
   ]);
 }
 
@@ -365,14 +437,15 @@ function maJournee(e, moi, refaire) {
    ========================================================================== */
 
 function aRendre(e) {
-  const prets = lit.dossiersParEtape(e, 'pret');
-  if (!prets.length) return null;
+  const tous = lit.dossiersParEtape(e, 'pret');
+  if (!tous.length) return null;
+  const { vus: prets, reste } = borne(tous);
 
   return h('div.panneau', [
     h('div.panneau__tete', [
       icone('cocheRonde', { taille: 16 }),
       h('h2.grandit', 'Prêts à rendre'),
-      h('span.compte.compte--accent', String(prets.length))
+      h('span.compte.compte--accent', String(tous.length))
     ]),
     h('div.liste', prets.map(d => {
       const v = lit.vehicule(e, d.vehiculeId);
@@ -395,7 +468,8 @@ function aRendre(e) {
           })
         }, [icone('telephone', { taille: 14 }), h('span', 'Prévenir')]) : null
       ]);
-    }))
+    })),
+    pied(reste, '/atelier', 'véhicules prêts')
   ]);
 }
 
@@ -413,10 +487,11 @@ function messagePret(e, d, c, v, t) {
    ========================================================================== */
 
 function enAttente(e) {
-  const liste = lit.dossiersOuverts(e)
+  const tous = lit.dossiersOuverts(e)
     .filter(d => d.etape === 'accord' || d.etape === 'piece')
     .sort(lit.triDossiers);
-  if (!liste.length) return null;
+  if (!tous.length) return null;
+  const { vus: liste, reste } = borne(tous);
 
   return h('div.panneau', [
     h('div.panneau__tete', [
@@ -436,7 +511,8 @@ function enAttente(e) {
         ]),
         h('span.minus.tres-faible', jours + ' j')
       ]);
-    }))
+    })),
+    pied(reste, '/atelier', 'dossiers en attente')
   ]);
 }
 
@@ -445,8 +521,9 @@ function enAttente(e) {
    ========================================================================== */
 
 function appels(e, refaire) {
-  const liste = (e.appels || []).filter(a => !a.traite)
+  const tous = (e.appels || []).filter(a => !a.traite)
     .sort((a, b) => b.quand - a.quand).slice(0, 8);
+  const { vus: liste, reste } = borne(tous);
 
   return h('div.panneau', [
     h('div.panneau__tete', [
@@ -483,7 +560,8 @@ function appels(e, refaire) {
             ])
           ]);
         }))
-      : h('div.panneau__corps', h('div.petit.faible.centre', 'Aucun appel en attente.'))
+      : h('div.panneau__corps', h('div.petit.faible.centre', 'Aucun appel en attente.')),
+    reste ? h('div.panneau__pied', h('span.petit.faible', 'et ' + reste + ' de plus')) : null
   ]);
 }
 
@@ -550,9 +628,10 @@ function modaleAppel(e, refaire) {
    ========================================================================== */
 
 function penseBetes(e, moi, refaire) {
-  const miennes = (e.taches || []).filter(t => !t.faite
+  const toutes = (e.taches || []).filter(t => !t.faite
     && (!t.pour || (moi && t.pour === moi.id)))
     .sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || (a.echeance || Infinity) - (b.echeance || Infinity));
+  const { vus: miennes, reste: resteTaches } = borne(toutes);
 
   return h('div.panneau', [
     h('div.panneau__tete', [
@@ -563,7 +642,7 @@ function penseBetes(e, moi, refaire) {
       }, icone('plus'))
     ]),
     miennes.length
-      ? h('div.liste', miennes.slice(0, 10).map(t => {
+      ? h('div.liste', miennes.map(t => {
           const par = t.par ? lit.utilisateur(e, t.par) : null;
           const enRetard = t.echeance && t.echeance < jour0();
           return h('div.liste__ligne.liste__ligne--muette', [
@@ -594,7 +673,10 @@ function penseBetes(e, moi, refaire) {
             }, icone('croix'))
           ]);
         }))
-      : h('div.panneau__corps', h('div.petit.faible.centre', 'Rien à faire de noté.'))
+      : h('div.panneau__corps', h('div.petit.faible.centre', 'Rien à faire de noté.')),
+    resteTaches
+      ? h('div.panneau__pied', h('span.petit.faible', 'et ' + resteTaches + ' de plus'))
+      : null
   ]);
 }
 

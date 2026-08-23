@@ -26,7 +26,10 @@ import * as lit from '../domain/selecteurs.js';
  */
 export function enTete(o) {
   const opts = o || {};
-  return h('div.tete-ecran', [
+  /* `compacte` : quand l'action tient dans une icône, le titre et elle
+     restent sur la même ligne, même sur téléphone. Empiler un bouton pleine
+     largeur sous un « Bonsoir, Yanis » coûte un tiers d'écran pour rien. */
+  return h('div.tete-ecran' + (opts.compacte ? '.tete-ecran--compacte' : ''), [
     opts.retour ? h('a.bt.bt--nu.bt--icone', {
       href: '#' + opts.retour, 'aria-label': 'Retour'
     }, icone('retour')) : null,
