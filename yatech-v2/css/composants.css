@@ -316,6 +316,44 @@ input[type="checkbox"], input[type="radio"] {
 .carte:active { transform: scale(.995); }
 .carte--muette { cursor: default; }
 .carte--muette:hover { border-color: var(--trait-fin); background: var(--plan); }
+/* Une carte qui appelle une action : un liseré, pas un aplat rouge. À dix
+   cartes dans une liste, l'aplat crie et on ne voit plus rien. */
+.carte--danger { border-color: var(--danger); }
+.carte--danger:hover { border-color: var(--danger); }
+
+/* --------------------------------------------------------------------------
+   REPLI
+   Ce qu'on ne montre pas d'emblée mais qu'on doit pouvoir déplier : les
+   choix rares, les listes longues. Le titre reste une cible franche au doigt.
+   -------------------------------------------------------------------------- */
+.repli {
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  background: var(--plan-2);
+  padding: var(--e-2) var(--e-3);
+}
+.repli > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 40px;
+  cursor: pointer;
+  font: 600 var(--t-s)/1.3 var(--f-texte);
+  color: var(--encre-2);
+  list-style: none;
+}
+.repli > summary::-webkit-details-marker { display: none; }
+.repli > summary::before {
+  content: '';
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--encre-3);
+  border-bottom: 2px solid var(--encre-3);
+  transform: rotate(-45deg);
+  transition: transform var(--vite);
+  flex: none;
+}
+.repli[open] > summary::before { transform: rotate(45deg); }
+.repli > summary:hover { color: var(--encre); }
 
 /* ==========================================================================
    PASTILLES D'ÉTAT

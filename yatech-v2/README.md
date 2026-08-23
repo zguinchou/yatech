@@ -215,6 +215,70 @@ ils sont affichés dans l'écran EBP, à vérifier au premier import.
 
 ---
 
+## Les pièces qu'on commande
+
+« Attente pièce » est une étape du dossier. Mais une étape ne dit pas **quelle**
+pièce manque, **chez qui** elle est commandée, ni **quand** elle devait arriver.
+C'est pourtant la question du lundi matin.
+
+Sur une ligne de pièce, trois états et rien de plus : **à commander →
+commandée → reçue**. Le suivi est volontaire : une pièce qui dort dans le rayon
+n'a rien à faire dans une commande, et c'est celui qui fait le devis qui le
+sait. Un dossier bloqué en « attente pièce » sans rien de suivi se le fait
+dire, et propose de marquer les bonnes lignes d'un geste.
+
+Deux endroits pour la même information, parce que ce sont deux moments
+différents :
+
+- **Sur le dossier** — ce que cette voiture attend, avec le fournisseur et la
+  date annoncée. Quand tout est arrivé, l'outil propose de passer en atelier
+  plutôt que de laisser le dossier dormir.
+- **Sur le stock** — toutes les commandes de l'atelier, **groupées par
+  fournisseur**. C'est comme ça qu'on passe une commande : on appelle un
+  fournisseur, pas un dossier. Ce qui n'a pas de fournisseur remonte en tête,
+  c'est justement ce qu'il faut décider.
+
+Une pièce annoncée pour une date passée devient **en retard** et remonte en
+alerte sur l'accueil. Deux alertes distinctes — « à commander » et « en
+retard » — parce que ce sont deux gestes : l'une se règle en passant commande,
+l'autre en rappelant le fournisseur.
+
+---
+
+## Le tour du parc
+
+La ronde du matin, téléphone en main. Une ligne par véhicule garé, dans l'ordre
+des places : la plaque, depuis combien de jours il est là, ce qu'il attend
+comme pièce. En dessous, six étapes en pastilles — on touche celle qui
+correspond, c'est enregistré aussitôt.
+
+Pas de fenêtre, pas de bouton Valider. Debout dans la cour, avec des gants, on
+ne remplit pas un formulaire : on tape et on passe à la voiture suivante. Les
+six étapes proposées sont celles d'une ronde, pas les neuf du dossier — entre
+deux voitures, personne ne cherche « Attente accord » dans une liste.
+
+C'est le geste qui garde l'atelier juste, et il ne se fait pas assis devant un
+plan.
+
+---
+
+## L'accueil de chacun
+
+Trois personnes ne regardent pas les mêmes choses le matin. La secrétaire veut
+les appels ; le technicien veut sa journée et les pièces qui manquent ; le
+responsable veut ce qui traîne.
+
+Chacun range donc le sien — l'ordre des panneaux, ce qu'il masque, et les
+raccourcis en haut — depuis la roue dentée à côté de la date. C'est enregistré
+sur la personne, pas sur le garage : le poste du comptoir et celui de l'atelier
+ne montrent pas la même chose, et c'est très bien.
+
+La première moitié des panneaux se range à gauche, le reste à droite : monter
+un panneau le fait monter, et rien d'autre. C'est la seule règle qu'on puisse
+expliquer debout devant l'écran.
+
+---
+
 ## Le poste électronique
 
 C'est la partie la plus travaillée de l'outil, parce que c'est celle où une

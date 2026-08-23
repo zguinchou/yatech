@@ -392,6 +392,62 @@ export const interventionsRecentes = (e, n) =>
   (e.interventions || []).slice().sort(par('quand', 'desc')).slice(0, n || 20);
 
 /* ==========================================================================
+   LES PIÈCES QU'ON ATTEND
+   --------------------------------------------------------------------------
+   « Attente pièce » est une étape ; ça, c'est le détail. Quelle pièce, chez
+   qui, annoncée pour quand. C'est la question du lundi matin.
+   ========================================================================== */
+
+/** Les lignes d'un dossier dont on suit la commande. */
+export const lignesCommandees = (d) =>
+  (d && d.lignes ? d.lignes : []).filter(l => l.commande);
+
+/** Une pièce commandée est en retard si la date annoncée est passée. */
+export function commandeEnRetard(l) {
+  return !!(l && l.commande === 'commandee' && l.attendueLe && l.attendueLe < jour0());
+}
+
+/**
+ * Toutes les commandes en cours de l'atelier, dossier par dossier.
+ * On ne remonte que les dossiers vivants : une commande sur un dossier
+ * archivé, c'est du bruit dans une liste qu'on lit debout.
+ * @returns {object[]} [{ dossier, ligne, fournisseur, retard }]
+ */
+export function commandesEnCours(e) {
+  const sortie = [];
+  for (const d of e.dossiers || []) {
+    if (d.archive || !ETAPES_OUVERTES.includes(d.etape)) continue;
+    for (const l of lignesCommandees(d)) {
+      if (l.commande === 'recue') continue;
+      sortie.push({
+        dossier: d, ligne: l,
+        fournisseur: l.fournisseurId ? fournisseur(e, l.fournisseurId) : null,
+        retard: commandeEnRetard(l)
+      });
+    }
+  }
+  /* En retard d'abord, puis à commander, puis par date annoncée : c'est
+     l'ordre dans lequel on décroche le téléphone. */
+  return sortie.sort((a, b) =>
+    (b.retard ? 1 : 0) - (a.retard ? 1 : 0)
+    || (a.ligne.commande === 'a_commander' ? 0 : 1) - (b.ligne.commande === 'a_commander' ? 0 : 1)
+    || (a.ligne.attendueLe || Infinity) - (b.ligne.attendueLe || Infinity));
+}
+
+/** Où en est un dossier de ses commandes : {total, aCommander, commandees,
+ *  recues, retard}. Tout à zéro quand aucune ligne n'est suivie. */
+export function etatCommandes(d) {
+  const l = lignesCommandees(d);
+  return {
+    total: l.length,
+    aCommander: l.filter(x => x.commande === 'a_commander').length,
+    commandees: l.filter(x => x.commande === 'commandee').length,
+    recues: l.filter(x => x.commande === 'recue').length,
+    retard: l.filter(commandeEnRetard).length
+  };
+}
+
+/* ==========================================================================
    CE QUI DEMANDE UNE ACTION
    Le tableau de bord ne montre pas des chiffres : il montre ce qu'il faut
    faire. Chaque alerte porte de quoi y aller directement.
@@ -456,6 +512,30 @@ export function alertes(e) {
       titre: 'Facture ' + f.numero + ' impayée',
       detail: jours + ' jours de retard',
       vers: '/facture/' + f.id, poids: 70 + Math.min(jours, 60)
+    });
+  }
+
+  /* --- pièces à commander et pièces en retard -------------------------------
+     Deux alertes distinctes, parce que ce sont deux gestes différents : l'une
+     se règle en passant commande, l'autre en rappelant le fournisseur. */
+  const cmds = commandesEnCours(e);
+  const aCommander = cmds.filter(x => x.ligne.commande === 'a_commander');
+  const enRetard = cmds.filter(x => x.retard);
+  if (aCommander.length) {
+    sortie.push({
+      cle: 'a-commander', ton: 'alerte', icone: 'stock',
+      titre: aCommander.length + (aCommander.length > 1 ? ' pièces à commander' : ' pièce à commander'),
+      detail: aCommander.slice(0, 3)
+        .map(x => x.ligne.libelle || 'pièce').join(', '),
+      vers: '/stock?commandes=1', poids: 60
+    });
+  }
+  if (enRetard.length) {
+    sortie.push({
+      cle: 'commandes-retard', ton: 'danger', icone: 'horloge',
+      titre: enRetard.length + (enRetard.length > 1 ? ' pièces en retard' : ' pièce en retard'),
+      detail: 'Annoncées pour une date déjà passée : relancez le fournisseur',
+      vers: '/stock?commandes=1', poids: 72
     });
   }
 

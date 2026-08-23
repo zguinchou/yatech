@@ -25,6 +25,7 @@ import { plusJours, jour0, lundi, id, JOUR, HEURE } from '../core/util.js';
 const j = (jourSemaine, h) => lundi(Date.now()) + (jourSemaine - 1) * JOUR
   + (h === undefined ? 9 : h) * HEURE;
 const ilYa = (n) => Date.now() - n * JOUR;
+const dans = (n) => Date.now() + n * JOUR;
 
 /* ==========================================================================
    LE CATALOGUE — il sert aussi de point de départ à un vrai garage
@@ -369,7 +370,9 @@ export function jeuDemo() {
       L({ type: 'mo', ref: 'MEC-14', libelle: 'Remplacement turbo', qte: 5, unite: 'h', prixHT: 68 }),
       L({ type: 'piece', libelle: 'Turbo échange standard Garrett', qte: 1, prixHT: 690 }),
       L({ type: 'mo', ref: 'MEC-13', libelle: 'Remplacement injecteur (pose)', qte: 1.5, unite: 'h', prixHT: 68 }),
-      L({ type: 'piece', libelle: 'Injecteur Bosch échange standard', qte: 1, prixHT: 245 })
+      L({ type: 'piece', libelle: 'Injecteur Bosch échange standard', qte: 1, prixHT: 245,
+          /* Accord donné, rien de commandé : c'est le coup de fil du matin. */
+          commande: 'a_commander' })
     ]
   });
 
@@ -384,7 +387,11 @@ export function jeuDemo() {
     lignes: [
       L({ type: 'mo', ref: 'ELE-05', libelle: 'Remplacement démarreur (pose)', qte: 1.5, unite: 'h', prixHT: 68 }),
       L({ type: 'piece', ref: 'ELE-D-001', libelle: 'Démarreur Valeo TS12E', qte: 1, prixHT: 265,
-          pieceId: parRef('ELE-D-001') ? parRef('ELE-D-001').id : null })
+          pieceId: parRef('ELE-D-001') ? parRef('ELE-D-001').id : null,
+          /* Commandée hier chez Doyen, annoncée pour demain : le dossier sait
+             ce qu'il attend, et de qui. */
+          commande: 'commandee', fournisseurId: f3.id,
+          commandeLe: ilYa(1), attendueLe: dans(1) })
     ]
   });
 

@@ -201,6 +201,20 @@ export const CONTROLES_ELECTRO = {
    les contrôles bloquants s'appliquent. Relever des défauts ne risque rien. */
 export const OPERATIONS_QUI_ECRIVENT = ['ecriture', 'codage', 'cle'];
 
+/* --- la commande d'une pièce ---------------------------------------------
+   « Attente pièce » est une étape du dossier. Mais une étape ne dit pas QUELLE
+   pièce manque, chez qui elle est commandée, ni quand elle devait arriver.
+   C'est pourtant la question du lundi matin : qu'est-ce que je dois commander
+   aujourd'hui, et qu'est-ce qui aurait dû arriver ?
+
+   L'état vit sur la LIGNE du dossier, pas sur la pièce du stock : c'est cette
+   pièce-là, pour cette voiture-là, qu'on attend. */
+export const ETATS_COMMANDE = {
+  a_commander: { nom: 'À commander', court: 'À cmd.', ton: 'danger', rang: 0 },
+  commandee:   { nom: 'Commandée',   court: 'Cmd.',   ton: 'alerte', rang: 1 },
+  recue:       { nom: 'Reçue',       court: 'Reçue',  ton: 'ok',     rang: 2 }
+};
+
 export const ETATS_INTERVENTION = {
   prevu:   { nom: 'Prévue',      ton: 'neutre' },
   encours: { nom: 'En cours',    ton: 'accent' },
@@ -491,7 +505,15 @@ export function nouvelleLigne(champs) {
     pieceId: null,           // si la ligne sort du stock
     prestationId: null,      // si elle vient du catalogue
     sortieFaite: false,      // la pièce a-t-elle vraiment été décomptée ?
-    fait: false              // le technicien a coché « c'est fait »
+    fait: false,             // le technicien a coché « c'est fait »
+    /* --- la commande, quand la pièce n'est pas dans le rayon --------------
+       `null` : la question ne se pose pas (main-d'œuvre, pièce déjà en stock,
+       forfait). Sinon une des clés d'ETATS_COMMANDE. */
+    commande: null,
+    fournisseurId: null,     // chez qui elle est commandée
+    attendueLe: null,        // la date annoncée par le fournisseur
+    commandeLe: null,        // quand on a passé la commande
+    recueLe: null            // quand elle est arrivée
   }, champs);
 }
 
@@ -719,7 +741,14 @@ export function nouvelUtilisateur(champs) {
     verrou: null,
     actif: true,
     /* Ce qui n'appartient qu'à cette personne : sa façon de travailler. */
-    preferences: { ecranAccueil: null, densite: null, theme: null },
+    /* Ce qui appartient à la personne, pas au garage : son écran de départ,
+       son thème, et la façon dont elle range son accueil. Trois personnes ne
+       regardent pas les mêmes choses le matin. */
+    preferences: {
+      ecranAccueil: null, densite: null, theme: null,
+      accueil: null,       // { ordre: [clés], caches: [clés] }
+      raccourcis: null     // [clés] ; null = ceux d'origine
+    },
     cree: Date.now()
   }, champs);
 }
@@ -1002,6 +1031,11 @@ function normaliserLigne(l) {
   if (typeof l.qte !== 'number' || !isFinite(l.qte)) l.qte = 1;
   if (typeof l.prixHT !== 'number' || !isFinite(l.prixHT)) l.prixHT = 0;
   if (typeof l.remise !== 'number' || !isFinite(l.remise)) l.remise = 0;
+  /* Une commande ne se suit que sur une pièce, et seulement avec un état
+     connu. Le reste retombe à « pas concerné » plutôt que d'afficher une
+     pastille vide sur une ligne de main-d'œuvre. */
+  if (l.type !== 'piece' || !ETATS_COMMANDE[l.commande]) l.commande = null;
+  if (!l.commande) { l.fournisseurId = null; l.attendueLe = null; l.commandeLe = null; l.recueLe = null; }
   return l;
 }
 

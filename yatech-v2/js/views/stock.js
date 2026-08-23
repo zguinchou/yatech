@@ -19,14 +19,15 @@ import { modale, message, messageOk, messageErreur, menu, vide } from '../core/u
 import { maj, ajoute, change } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
 import {
-  id, nombre, cts, pluriel, unique, score, surligne, compareTexte, somme, tronque
+  id, nombre, cts, pluriel, unique, score, surligne, compareTexte, somme, tronque,
+  plaqueJolie
 } from '../core/util.js';
 import {
   versCsv, csvEnObjets, telecharger, nomDate, choisirFichier, lireTexte
 } from '../core/fichiers.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
-import { nouvellePiece } from '../domain/schema.js';
+import { nouvellePiece, ETATS_COMMANDE } from '../domain/schema.js';
 import { prixConseille, marge } from '../domain/calculs.js';
 import { enTete, champ, grilleChamps, barreRecherche, filtres } from '../ui/widgets.js';
 import { imprimerEtiquettes } from './impression.js';
@@ -62,7 +63,12 @@ export function peindre(ctx) {
   let enInventaire = false;
   const comptes = new Map();
 
+  /* L'alerte « pièces à commander » de l'accueil pointe ici avec
+     `?commandes=1` : on ouvre le panneau plutôt que de le faire chercher. */
+  let commandesOuvertes = String((ctx.query && ctx.query.commandes) || '') === '1';
+
   const racine = h('div.pile');
+  const zoneCommandes = h('div');
   const zoneFiltres = h('div');
   const zoneOutils = h('div.rang.enroule.entre');
   const zoneCorps = h('div');
@@ -147,7 +153,15 @@ export function peindre(ctx) {
     ]);
   }
 
-  poser(racine, [tete, zoneRecherche, zoneFiltres, zoneOutils, zoneCorps]);
+  function refaireCommandes() {
+    poser(zoneCommandes, panneauCommandesAtelier(e, commandesOuvertes, {
+      basculer: () => { commandesOuvertes = !commandesOuvertes; refaireCommandes(); },
+      refaire: () => { refaireCommandes(); refaireListe(); }
+    }));
+  }
+  refaireCommandes();
+
+  poser(racine, [tete, zoneRecherche, zoneCommandes, zoneFiltres, zoneOutils, zoneCorps]);
   refaireListe();
 
   /* Au clavier, on arrive ici pour chercher : le curseur est déjà dans le
@@ -159,6 +173,86 @@ export function peindre(ctx) {
   });
 
   return racine;
+
+/* ==========================================================================
+   LES COMMANDES DE L'ATELIER
+   --------------------------------------------------------------------------
+   Ce qu'il faut commander, et ce qui aurait dû arriver. Toutes voitures
+   confondues, parce que c'est comme ça qu'on passe une commande : on appelle
+   un fournisseur, pas un dossier.
+   ========================================================================== */
+
+function panneauCommandesAtelier(e, ouvert, rappels) {
+  const tout = lit.commandesEnCours(e);
+  if (!tout.length) return null;
+
+  const aCommander = tout.filter(x => x.ligne.commande === 'a_commander');
+  const retard = tout.filter(x => x.retard);
+
+  const tete = h('div.panneau__tete', [
+    icone('camion', { taille: 16 }),
+    h('h2.grandit', 'Commandes en cours'),
+    retard.length ? h('span.pastille.pastille--danger', retard.length + ' en retard') : null,
+    aCommander.length ? h('span.pastille.pastille--alerte', aCommander.length + ' à passer') : null,
+    h('button.bt.bt--nu.bt--s', {
+      type: 'button', 'aria-expanded': ouvert ? 'true' : 'false',
+      onclick: rappels.basculer
+    }, ouvert ? 'Replier' : 'Voir (' + tout.length + ')')
+  ]);
+
+  if (!ouvert) return h('div.panneau', [tete]);
+
+  /* Groupé par fournisseur : un appel, une liste. Ce qui n'a pas de
+     fournisseur se retrouve en tête, c'est justement ce qu'il faut décider. */
+  const paquets = new Map();
+  for (const x of tout) {
+    const cle = x.fournisseur ? x.fournisseur.id : '';
+    if (!paquets.has(cle)) paquets.set(cle, { nom: x.fournisseur ? x.fournisseur.nom : 'Sans fournisseur', lignes: [] });
+    paquets.get(cle).lignes.push(x);
+  }
+  const groupes = Array.from(paquets.entries())
+    .sort((a, b) => (a[0] ? 1 : 0) - (b[0] ? 1 : 0) || compareTexte(a[1].nom, b[1].nom));
+
+  return h('div.panneau', [
+    tete,
+    h('div.panneau__corps.pile', groupes.map(([, g]) => h('div.pile-s', [
+      h('div.majuscule', g.nom),
+      h('div.pile-s', g.lignes.map(x => {
+        const c = lit.contexteDossier(e, x.dossier);
+        const etat = ETATS_COMMANDE[x.ligne.commande] || ETATS_COMMANDE.a_commander;
+        return h('div.carte.rang.rang-haut' + (x.retard ? '.carte--danger' : ''), [
+          h('span.qte', fmt.nb(x.ligne.qte, 2)),
+          h('div.grandit.coupe.pile-s', [
+            h('div.rang-s.enroule', [
+              h('span.gras.coupe', x.ligne.libelle || 'Pièce'),
+              h('span.pastille.pastille--' + (x.retard ? 'danger' : etat.ton),
+                x.retard ? 'En retard' : etat.nom)
+            ]),
+            h('div.minus.tres-faible.coupe', [
+              x.ligne.ref || null,
+              c.vehicule ? plaqueJolie(c.vehicule.immat) : null,
+              c.client ? lit.nomClient(c.client) : null,
+              x.ligne.attendueLe ? 'annoncée ' + fmt.date(x.ligne.attendueLe, 'court') : null
+            ].filter(Boolean).join(' · '))
+          ]),
+          h('div.rang-s', [
+            x.ligne.commande === 'commandee'
+              ? h('button.bt.bt--fort.bt--s', {
+                  type: 'button',
+                  onclick: () => {
+                    act.recevoirPiece(x.dossier.id, x.ligne.id);
+                    messageOk('Pièce reçue');
+                    rappels.refaire();
+                  }
+                }, [icone('coche', { taille: 14 }), h('span', 'Reçue')])
+              : null,
+            h('a.bt.bt--nu.bt--s', { href: '#/dossier/' + x.dossier.id }, 'Le dossier')
+          ])
+        ]);
+      }))
+    ])))
+  ]);
+}
 }
 
 function segment(texte, cle, actif, surChoix) {

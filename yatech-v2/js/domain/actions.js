@@ -269,6 +269,99 @@ export function mouvementStock(champs, options) {
   }, { cible: { type: 'pieces', id: champs.pieceId } });
 }
 
+/* ==========================================================================
+   LES PIÈCES QU'ON COMMANDE
+   --------------------------------------------------------------------------
+   Une pièce qu'on n'a pas dans le rayon se commande. Trois états, et c'est
+   tout : à commander, commandée, reçue. Le reste — chez qui, pour quand — se
+   note à la commande, parce que c'est à ce moment-là qu'on l'a sous les yeux.
+   ========================================================================== */
+
+/** Met une ligne de dossier en suivi de commande, ou la retire du suivi. */
+export function suivreCommande(dossierId, ligneId, suivre) {
+  return maj(suivre ? 'Pièce à commander' : 'Pièce retirée des commandes', (e) => {
+    const l = ligneDe(e, dossierId, ligneId);
+    if (!l) return null;
+    if (!suivre) {
+      l.commande = null;
+      l.fournisseurId = null; l.attendueLe = null; l.commandeLe = null; l.recueLe = null;
+    } else if (!l.commande) {
+      /* On ne commande pas une heure de main-d'œuvre. Le schéma le corrige
+         déjà au chargement suivant, mais laisser passer ici ferait apparaître
+         une pastille absurde jusqu'au prochain rechargement. */
+      if (l.type !== 'piece') return null;
+      l.commande = 'a_commander';
+    }
+    return l;
+  }, { cible: { type: 'dossiers', id: dossierId } });
+}
+
+/**
+ * Passe la commande d'une pièce.
+ * @param {object} infos  { fournisseurId, attendueLe }
+ */
+export function commanderPiece(dossierId, ligneId, infos) {
+  const o = infos || {};
+  return maj('Pièce commandée', (e) => {
+    const l = ligneDe(e, dossierId, ligneId);
+    if (!l) return null;
+    l.commande = 'commandee';
+    l.fournisseurId = o.fournisseurId || null;
+    l.attendueLe = o.attendueLe || null;
+    l.commandeLe = Date.now();
+    l.recueLe = null;
+    return l;
+  }, { cible: { type: 'dossiers', id: dossierId } });
+}
+
+/** La pièce est arrivée. */
+export function recevoirPiece(dossierId, ligneId) {
+  return maj('Pièce reçue', (e) => {
+    const l = ligneDe(e, dossierId, ligneId);
+    if (!l) return null;
+    l.commande = 'recue';
+    l.recueLe = Date.now();
+    return l;
+  }, { cible: { type: 'dossiers', id: dossierId } });
+}
+
+/** Revenir en arrière : la pièce n'était finalement pas là, ou pas la bonne. */
+export function annulerReception(dossierId, ligneId) {
+  return maj('Réception annulée', (e) => {
+    const l = ligneDe(e, dossierId, ligneId);
+    if (!l) return null;
+    l.commande = l.commandeLe ? 'commandee' : 'a_commander';
+    l.recueLe = null;
+    return l;
+  }, { cible: { type: 'dossiers', id: dossierId } });
+}
+
+/** Toutes les pièces d'un dossier passent d'un coup en commandé. */
+export function commanderToutLeDossier(dossierId, infos) {
+  const o = infos || {};
+  let n = 0;
+  maj('Commande passée', (e) => {
+    const d = lit.dossier(e, dossierId);
+    if (!d) return null;
+    for (const l of d.lignes || []) {
+      if (l.commande !== 'a_commander') continue;
+      l.commande = 'commandee';
+      l.fournisseurId = o.fournisseurId || l.fournisseurId || null;
+      l.attendueLe = o.attendueLe || l.attendueLe || null;
+      l.commandeLe = Date.now();
+      n++;
+    }
+    return d;
+  }, { cible: { type: 'dossiers', id: dossierId } });
+  return n;
+}
+
+function ligneDe(e, dossierId, ligneId) {
+  const d = lit.dossier(e, dossierId);
+  if (!d) return null;
+  return (d.lignes || []).find(l => l.id === ligneId) || null;
+}
+
 /** Sort les pièces d'un dossier du stock, d'un seul geste. Rend le compte de
  *  ce qui est sorti et de ce qui manquait. */
 export function servirDossier(dossierId) {

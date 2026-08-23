@@ -19,10 +19,10 @@ import { icone } from '../core/icones.js';
 import { modale, confirmer, choisir, message, messageErreur } from '../core/ui.js';
 import { maj } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
-import { nombre, pluriel, plaqueJolie, correspond } from '../core/util.js';
+import { nombre, pluriel, plaqueJolie, correspond, compareTexte } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
-import { MOTIFS_PARC, TYPES_PLACE } from '../domain/schema.js';
+import { MOTIFS_PARC, TYPES_PLACE, ETAPES } from '../domain/schema.js';
 import {
   enTete, indic, plaque, pastilleEtape, barreRecherche, champ, vide
 } from '../ui/widgets.js';
@@ -75,7 +75,15 @@ export function peindre(ctx) {
       enTete({
         titre: 'Parc',
         sous: sousTitre(p),
-        actions: [bascule(refaire)]
+        actions: [
+          /* La ronde du matin : on marche dans la cour, téléphone en main, et
+             on remet chaque voiture à son étape. C'est le geste qui garde
+             l'atelier juste, et il ne se fait pas assis devant un plan. */
+          h('button.bt.bt--fort', {
+            type: 'button', onclick: () => modaleTour(e, refaire)
+          }, [icone('parc'), h('span', 'Tour du parc')]),
+          bascule(refaire)
+        ]
       }),
       anomalies(e, p, refaire),
       indicateurs(e, p),
@@ -87,6 +95,99 @@ export function peindre(ctx) {
 
   poser(racine, contenu());
   return racine;
+}
+
+/* ==========================================================================
+   LE TOUR DU PARC
+   --------------------------------------------------------------------------
+   Une ligne par véhicule garé, dans l'ordre des places. On touche l'étape qui
+   correspond, c'est enregistré aussitôt — pas de fenêtre, pas de bouton
+   Valider. Debout dans la cour, avec des gants, on ne remplit pas un
+   formulaire : on tape une pastille et on passe à la suivante.
+
+   Les étapes proposées sont celles d'une ronde, pas les neuf du dossier :
+   entre deux voitures, personne ne cherche « Attente accord » dans une liste.
+   ========================================================================== */
+
+const ETAPES_RONDE = ['diag', 'devis', 'piece', 'atelier', 'controle', 'pret'];
+
+function modaleTour(e, refaireEcran) {
+  const corps = h('div.pile-s');
+  let touche = 0;
+
+  function peindreTout() {
+    const p = releve(e);
+    const garees = p.occupees
+      .map(place => ({ place, d: p.prises.get(place.code) }))
+      .filter(x => x.d)
+      .sort((a, b) => compareTexte(a.place.code, b.place.code));
+
+    poser(corps, garees.length
+      ? garees.map(({ place, d }) => ligneTour(e, place, d, peindreTout, () => { touche++; }))
+      : h('div.petit.faible.centre', 'Le parc est vide : rien à faire ce matin.'));
+  }
+  peindreTout();
+
+  modale({
+    titre: 'Tour du parc',
+    taille: 'large',
+    corps: h('div.pile', [
+      h('div.petit.faible',
+        'Une ligne par véhicule. Touchez l’étape qui correspond : c’est enregistré '
+        + 'aussitôt, il n’y a rien à valider.'),
+      corps
+    ]),
+    actions: [{
+      texte: 'Tour terminé', ton: 'fort',
+      faire: () => {
+        refaireEcran();
+        if (touche) message(pluriel(touche, 'véhicule mis à jour', 'véhicules mis à jour'),
+          { ton: 'ok' });
+      }
+    }]
+  });
+}
+
+function ligneTour(e, place, d, repeindre, compter) {
+  const v = lit.vehicule(e, d.vehiculeId);
+  const c = lit.client(e, d.clientId || (v ? v.clientId : null));
+  const jours = lit.joursDansAtelier(d);
+  const cmd = lit.etatCommandes(d);
+  const attend = cmd.total - cmd.recues;
+
+  return h('div.carte.carte--muette.pile-s', [
+    h('div.rang', [
+      h('span.pastille.pastille--accent.num', place.code),
+      h('div.grandit.coupe', [
+        h('div.gras.coupe', v ? lit.nomVehicule(v) : 'Véhicule inconnu'),
+        h('div.minus.tres-faible.coupe', [
+          v ? plaqueJolie(v.immat) : null,
+          c ? lit.nomClient(c) : null,
+          jours === 0 ? 'arrivé aujourd’hui' : jours + ' jours sur le parc',
+          attend > 0 ? pluriel(attend, 'pièce attendue', 'pièces attendues') : null
+        ].filter(Boolean).join(' · '))
+      ]),
+      h('a.bt.bt--nu.bt--icone.bt--s', {
+        href: '#/dossier/' + d.id, 'aria-label': 'Ouvrir le dossier'
+      }, icone('droite'))
+    ]),
+    /* Les pastilles : la cible fait toute la hauteur d'un doigt, et l'étape
+       en cours est marquée pour qu'on sache si on a déjà fait cette voiture. */
+    h('div.rang-s.enroule', ETAPES_RONDE.map(cle => {
+      const et = ETAPES.find(x => x.cle === cle);
+      const actif = d.etape === cle;
+      return h('button.etiq' + (actif ? '.etiq--accent' : ''), {
+        type: 'button',
+        'aria-pressed': actif ? 'true' : 'false',
+        onclick: () => {
+          if (actif) return;
+          act.changerEtape(d.id, cle);
+          compter();
+          repeindre();
+        }
+      }, et ? et.court : cle);
+    }))
+  ]);
 }
 
 /* ==========================================================================

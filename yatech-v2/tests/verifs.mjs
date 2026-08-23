@@ -59,6 +59,10 @@ import { h } from '../js/core/dom.js';
 import { normaliser, neuf, nouvelleLigne, prochainNumero, estUneSauvegarde,
   VERSION_MODELE } from '../js/domain/schema.js';
 import { equipeDepart } from '../js/domain/demo.js';
+import {
+  ordreColonnes, colonnesVisibles, deuxColonnes, blocVisible, rangees,
+  raccourcisDe, BLOCS_COLONNES
+} from '../js/domain/accueil.js';
 import { S, maj, annuler, refaire, peutAnnuler } from '../js/core/store.js';
 
 let passes = 0, echecs = 0;
@@ -448,6 +452,50 @@ groupe('Des données abîmées n’empêchent pas d’ouvrir', () => {
   /* Les étiquettes sont des mots, pas des fiches : on garde les mots. */
   const etiq = normaliser({ version: 3, clients: [{ id: 'c1', etiquettes: ['bon payeur', null, 7] }] });
   verifie('les étiquettes gardent leurs mots', etiq.clients[0].etiquettes, ['bon payeur']);
+});
+
+groupe('L’accueil de chacun', () => {
+  const defaut = BLOCS_COLONNES.map(b => b.cle);
+  verifie('sans préférence, l’ordre d’origine', ordreColonnes(null), defaut);
+  verifie('et les raccourcis d’origine',
+    raccourcisDe(null), ['dossier', 'appel', 'pensebete', 'planning']);
+
+  /* Ce qui est enregistré n'est jamais cru sur parole : une sauvegarde plus
+     ancienne peut porter un bloc disparu, un doublon, ou en oublier un. */
+  const bancal = { preferences: { accueil: {
+    ordre: ['appels', 'nawak', 'appels', 'journee'], caches: ['rendre', 'inconnu']
+  } } };
+  const range = ordreColonnes(bancal);
+  verifie('les clés inventées sautent',range.includes('nawak'), false);
+  verifie('les doublons aussi', range.filter(k => k === 'appels').length, 1);
+  verifie('rien ne se perd', range.slice().sort().join(), defaut.slice().sort().join());
+  verifie('ce qui était choisi passe devant', range.slice(0, 2), ['appels', 'journee']);
+  /* Ce qui n'était pas rangé suit, dans l'ordre d'origine — à la fin, pour
+     ne pas bousculer ce que la personne a arrangé. */
+  verifie('le reste suit sans bousculer', range.slice(2), ['rendre', 'attente', 'pensebetes']);
+
+  verifie('un bloc masqué disparaît', blocVisible(bancal, 'rendre'), false);
+  verifie('les autres restent', blocVisible(bancal, 'journee'), true);
+  verifie('et il quitte la liste affichée', colonnesVisibles(bancal).includes('rendre'), false);
+
+  /* La première moitié à gauche : c'est la seule règle qu'on puisse
+     expliquer debout devant l'écran. */
+  verifie('cinq panneaux : trois à gauche, deux à droite',
+    deuxColonnes(['a', 'b', 'c', 'd', 'e']).map(c => c.length), [3, 2]);
+  verifie('un seul panneau reste à gauche',
+    deuxColonnes(['a']).map(c => c.length), [1, 0]);
+  verifie('aucun ne casse rien', deuxColonnes([]).map(c => c.length), [0, 0]);
+
+  /* Tout masquer laisserait une barre de raccourcis vide, sans moyen d'en
+     remettre : on garde le geste principal. */
+  verifie('les raccourcis ne se vident jamais',
+    raccourcisDe({ preferences: { raccourcis: [] } }), ['dossier']);
+  verifie('un raccourci inventé est ignoré',
+    raccourcisDe({ preferences: { raccourcis: ['parc', 'nawak'] } }), ['parc']);
+
+  verifie('le rangement ne garde que des clés connues',
+    rangees(['journee', 'nawak'], ['alertes', 'nawak']),
+    { ordre: ['journee'], caches: ['alertes'] });
 });
 
 groupe('Reconnaître une sauvegarde', () => {

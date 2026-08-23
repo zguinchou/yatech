@@ -322,6 +322,92 @@ groupe('Un atelier qui ne compte pas ses crédits', ({ client, vehicule }) => {
 });
 
 /* ==========================================================================
+   LES PIÈCES QU'ON COMMANDE
+   ========================================================================== */
+
+groupe('Commander une pièce, l’attendre, la recevoir', ({ client, vehicule }) => {
+  const f = { id: 'four1', nom: 'Doyen Auto' };
+  S.etat.fournisseurs.push(f);
+
+  const d = act.ouvrirDossier({ clientId: client.id, vehiculeId: vehicule.id, etape: 'piece' });
+  act.ajouterLigne(d.id, { type: 'piece', libelle: 'Démarreur', qte: 1, prixHT: 265 });
+  act.ajouterLigne(d.id, { type: 'mo', libelle: 'Pose', qte: 1.5, prixHT: 68 });
+  const frais = lit.dossier(S.etat, d.id);
+  const piece = frais.lignes.find(l => l.type === 'piece');
+  const mo = frais.lignes.find(l => l.type === 'mo');
+
+  /* Rien n'est suivi tant qu'on ne l'a pas demandé : une pièce du rayon n'a
+     pas à figurer dans une commande. */
+  verifie('rien en commande au départ', lit.etatCommandes(frais).total, 0);
+  verifie('aucune commande en cours dans l’atelier', lit.commandesEnCours(S.etat).length, 0);
+
+  act.suivreCommande(d.id, piece.id, true);
+  verifie('la pièce passe à commander',
+    lit.dossier(S.etat, d.id).lignes.find(l => l.id === piece.id).commande, 'a_commander');
+  verifie('et remonte dans l’atelier', lit.commandesEnCours(S.etat).length, 1);
+
+  /* La main-d'œuvre ne se commande pas : le schéma le refuse. */
+  act.suivreCommande(d.id, mo.id, true);
+  const propre = normaliser(JSON.parse(JSON.stringify(S.etat)));
+  verifie('une ligne de main-d’œuvre ne se commande pas',
+    propre.dossiers.find(x => x.id === d.id).lignes.find(l => l.id === mo.id).commande, null);
+
+  /* On passe commande. */
+  const hier = Date.now() - 86400000;
+  act.commanderPiece(d.id, piece.id, { fournisseurId: f.id, attendueLe: hier });
+  let l = lit.dossier(S.etat, d.id).lignes.find(x => x.id === piece.id);
+  verifie('elle est commandée', l.commande, 'commandee');
+  verifie('chez le bon fournisseur', l.fournisseurId, 'four1');
+  vrai('la date de commande est notée', l.commandeLe > 0);
+
+  /* Annoncée pour hier, toujours pas là : c'est un retard. */
+  vrai('annoncée pour hier, elle est en retard', lit.commandeEnRetard(l));
+  verifie('l’atelier le voit', lit.commandesEnCours(S.etat).filter(x => x.retard).length, 1);
+  verifie('et l’alerte le dit',
+    lit.alertes(S.etat).filter(a => a.cle === 'commandes-retard').length, 1);
+
+  /* Elle arrive. */
+  act.recevoirPiece(d.id, piece.id);
+  l = lit.dossier(S.etat, d.id).lignes.find(x => x.id === piece.id);
+  verifie('elle est reçue', l.commande, 'recue');
+  vrai('la date de réception est notée', l.recueLe > 0);
+  verifie('elle sort des commandes en cours', lit.commandesEnCours(S.etat).length, 0);
+  verifie('plus d’alerte de retard',
+    lit.alertes(S.etat).filter(a => a.cle === 'commandes-retard').length, 0);
+  verifie('le dossier se sait servi', lit.etatCommandes(lit.dossier(S.etat, d.id)).recues, 1);
+
+  /* On s'est trompé : ce n'était pas la bonne. */
+  act.annulerReception(d.id, piece.id);
+  verifie('annuler la réception la remet en commande',
+    lit.dossier(S.etat, d.id).lignes.find(x => x.id === piece.id).commande, 'commandee');
+
+  /* Retirer du suivi efface tout ce qui va avec. */
+  act.suivreCommande(d.id, piece.id, false);
+  l = lit.dossier(S.etat, d.id).lignes.find(x => x.id === piece.id);
+  verifie('retirée du suivi', l.commande, null);
+  verifie('et son fournisseur avec', l.fournisseurId, null);
+});
+
+groupe('Tout commander d’un coup', ({ client, vehicule }) => {
+  const d = act.ouvrirDossier({ clientId: client.id, vehiculeId: vehicule.id, etape: 'piece' });
+  for (const nom of ['Plaquettes', 'Disques', 'Capteur ABS']) {
+    act.ajouterLigne(d.id, { type: 'piece', libelle: nom, qte: 1, prixHT: 50 });
+  }
+  for (const l of lit.dossier(S.etat, d.id).lignes) act.suivreCommande(d.id, l.id, true);
+  verifie('trois pièces à commander', lit.etatCommandes(lit.dossier(S.etat, d.id)).aCommander, 3);
+
+  /* Une seule est déjà partie : elle ne doit pas être recommandée. */
+  const une = lit.dossier(S.etat, d.id).lignes[0];
+  act.commanderPiece(d.id, une.id, {});
+  const n = act.commanderToutLeDossier(d.id, { attendueLe: Date.now() + 86400000 });
+  verifie('les deux restantes partent ensemble', n, 2);
+  const bilan = lit.etatCommandes(lit.dossier(S.etat, d.id));
+  verifie('plus rien à commander', bilan.aCommander, 0);
+  verifie('trois en attente', bilan.commandees, 3);
+  verifie('aucune en retard', bilan.retard, 0);
+});
+
+/* ==========================================================================
    LA MÉMOIRE DES CALCULATEURS
    ========================================================================== */
 

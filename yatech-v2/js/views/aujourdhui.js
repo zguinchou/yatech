@@ -19,6 +19,10 @@ import {
   enTete, indic, plaque, champ, pastilleEtape, menuEnvoi
 } from '../ui/widgets.js';
 import { nouveauDossierModale } from './dossier-nouveau.js';
+import {
+  BLOCS_HAUT, BLOCS_COLONNES, RACCOURCIS, hautVisible, colonnesVisibles,
+  deuxColonnes, blocVisible, ordreColonnes, rangees, raccourcisDe, nomBloc
+} from '../domain/accueil.js';
 
 export function peindre(ctx) {
   const e = ctx.etat;
@@ -27,23 +31,32 @@ export function peindre(ctx) {
 
   function refaire() { poser(racine, contenu()); }
 
+  /* Chaque bloc sait se dessiner ; l'ordre et ce qu'on masque appartiennent
+     à la personne. Le reste de l'écran ne change pas d'un poste à l'autre :
+     on range son accueil, on ne réinvente pas l'outil. */
+  const DESSIN = {
+    raccourcis:  () => raccourcis(e, moi, refaire),
+    alertes:     () => bandeAlertes(e),
+    indicateurs: () => indicateurs(e),
+    journee:     () => maJournee(e, moi, refaire),
+    rendre:      () => aRendre(e),
+    attente:     () => enAttente(e),
+    appels:      () => appels(e, refaire),
+    pensebetes:  () => penseBetes(e, moi, refaire)
+  };
+
   function contenu() {
+    const [gauche, droite] = deuxColonnes(colonnesVisibles(moi));
     return [
-      salutation(e, moi),
-      raccourcis(e, refaire),
-      bandeAlertes(e),
-      indicateurs(e),
-      h('div.deux-colonnes', [
-        h('div.pile', [
-          maJournee(e, moi, refaire),
-          aRendre(e),
-          enAttente(e)
-        ]),
-        h('div.pile', [
-          appels(e, refaire),
-          penseBetes(e, moi, refaire)
-        ])
-      ])
+      salutation(e, moi, refaire),
+      ...hautVisible(moi).map(b => DESSIN[b.cle]()),
+      gauche.length || droite.length
+        ? h('div.deux-colonnes', [
+            h('div.pile', gauche.map(k => DESSIN[k]())),
+            h('div.pile', droite.map(k => DESSIN[k]()))
+          ])
+        : h('div.petit.faible.centre',
+            'Vous avez tout masqué. « Ranger mon accueil » remet ce que vous voulez.')
     ];
   }
 
@@ -55,12 +68,19 @@ export function peindre(ctx) {
    L'EN-TÊTE
    ========================================================================== */
 
-function salutation(e, moi) {
+function salutation(e, moi, refaire) {
   const heure = new Date().getHours();
   const bonjour = heure < 12 ? 'Bonjour' : (heure < 18 ? 'Bon après-midi' : 'Bonsoir');
   return enTete({
     titre: bonjour + (moi && moi.prenom ? ', ' + moi.prenom : ''),
-    sous: fmt.date(Date.now(), 'complet')
+    sous: fmt.date(Date.now(), 'complet'),
+    actions: moi ? [
+      h('button.bt.bt--nu.bt--icone', {
+        type: 'button', 'aria-label': 'Ranger mon accueil',
+        title: 'Ranger mon accueil',
+        onclick: () => modaleRanger(e, moi, refaire)
+      }, icone('reglages'))
+    ] : null
   });
 }
 
@@ -68,17 +88,143 @@ function salutation(e, moi) {
    LES RACCOURCIS — ce qu'on fait dix fois par jour
    ========================================================================== */
 
-function raccourcis(e, refaire) {
-  const bt = (texte, ico, action, fort) => h('button.bt' + (fort ? '.bt--fort' : '.bt--contour'), {
-    type: 'button', onclick: action
-  }, [icone(ico), h('span', texte)]);
+function raccourcis(e, moi, refaire) {
+  /* Les trois gestes qui ouvrent une fenêtre ; le reste mène à un écran. */
+  const GESTES = {
+    dossier:  () => nouveauDossierModale(e, refaire),
+    appel:    () => modaleAppel(e, refaire),
+    pensebete:() => modaleTache(e, refaire)
+  };
 
-  return h('div.rang.enroule', [
-    bt('Nouveau dossier', 'plus', () => nouveauDossierModale(e, refaire), true),
-    bt('Appel reçu', 'telephone', () => modaleAppel(e, refaire)),
-    bt('Pense-bête', 'epingle', () => modaleTache(e, refaire)),
-    h('a.bt.bt--contour', { href: '#/planning' }, [icone('planning'), h('span', 'Planning')])
-  ]);
+  return h('div.rang.enroule', raccourcisDe(moi).map(cle => {
+    const r = RACCOURCIS[cle];
+    const classe = '.bt' + (r.fort ? '.bt--fort' : '.bt--contour');
+    return r.vers
+      ? h('a' + classe, { href: '#' + r.vers }, [icone(r.icone), h('span', r.nom)])
+      : h('button' + classe, { type: 'button', onclick: GESTES[cle] },
+          [icone(r.icone), h('span', r.nom)]);
+  }));
+}
+
+/* ==========================================================================
+   RANGER SON ACCUEIL
+   --------------------------------------------------------------------------
+   Ce que cette personne veut voir, et dans quel ordre. Enregistré sur elle,
+   pas sur le garage : le poste du comptoir et celui de l'atelier ne montrent
+   pas la même chose, et c'est très bien.
+   ========================================================================== */
+
+function modaleRanger(e, moi, refaire) {
+  let ordre = ordreColonnes(moi);
+  let caches = BLOCS_HAUT.concat(BLOCS_COLONNES)
+    .map(b => b.cle).filter(k => !blocVisible(moi, k));
+  let courts = raccourcisDe(moi).slice();
+
+  const corps = h('div.pile');
+
+  const basculer = (cle) => {
+    const i = caches.indexOf(cle);
+    if (i >= 0) caches.splice(i, 1); else caches.push(cle);
+    peindreTout();
+  };
+  const deplacer = (cle, sens) => {
+    const i = ordre.indexOf(cle);
+    const j = i + sens;
+    if (i < 0 || j < 0 || j >= ordre.length) return;
+    ordre[i] = ordre[j];
+    ordre[j] = cle;
+    peindreTout();
+  };
+
+  function ligneBloc(cle, deplacable, rang, total) {
+    const vu = !caches.includes(cle);
+    return h('div.liste__ligne', [
+      h('label.rang-s.grandit.coupe', { style: { cursor: 'pointer' } }, [
+        h('input', {
+          type: 'checkbox', checked: vu,
+          style: { accentColor: 'var(--accent)', flex: 'none' },
+          onchange: () => basculer(cle)
+        }),
+        h('span' + (vu ? '' : '.tres-faible'), nomBloc(cle))
+      ]),
+      deplacable ? h('div.rang-s', [
+        h('button.bt.bt--nu.bt--icone.bt--s', {
+          type: 'button', 'aria-label': 'Monter ' + nomBloc(cle),
+          disabled: rang === 0, onclick: () => deplacer(cle, -1)
+        }, icone('haut')),
+        h('button.bt.bt--nu.bt--icone.bt--s', {
+          type: 'button', 'aria-label': 'Descendre ' + nomBloc(cle),
+          disabled: rang === total - 1, onclick: () => deplacer(cle, 1)
+        }, icone('bas'))
+      ]) : null
+    ]);
+  }
+
+  function peindreTout() {
+    poser(corps, [
+      h('div.majuscule', 'En haut, sur toute la largeur'),
+      h('div.liste', BLOCS_HAUT.map(b => ligneBloc(b.cle, false))),
+
+      h('div.majuscule', 'Les panneaux'),
+      h('div.petit.faible', 'La première moitié se range à gauche, le reste à droite.'),
+      h('div.liste', ordre.map((k, i) => ligneBloc(k, true, i, ordre.length))),
+
+      h('div.majuscule', 'Mes raccourcis'),
+      h('div.petit.faible', 'Les boutons en haut de l’accueil, dans l’ordre choisi.'),
+      h('div.rang-s.enroule', Object.keys(RACCOURCIS).map(cle => {
+        const actif = courts.includes(cle);
+        return h('button.etiq' + (actif ? '.etiq--accent' : ''), {
+          type: 'button', 'aria-pressed': actif ? 'true' : 'false',
+          onclick: () => {
+            const i = courts.indexOf(cle);
+            if (i >= 0) courts.splice(i, 1); else courts.push(cle);
+            peindreTout();
+          }
+        }, [icone(RACCOURCIS[cle].icone, { taille: 13 }), h('span', RACCOURCIS[cle].nom)]);
+      }))
+    ]);
+  }
+  peindreTout();
+
+  modale({
+    titre: 'Ranger mon accueil',
+    taille: 'large',
+    corps,
+    actions: [
+      {
+        texte: 'Tout remettre', ton: 'contour',
+        faire: () => {
+          maj('Accueil remis d’origine', (etat) => {
+            const u = lit.utilisateur(etat, moi.id);
+            if (!u) return;
+            u.preferences = Object.assign({}, u.preferences, { accueil: null, raccourcis: null });
+          });
+          refaire();
+        }
+      },
+      { texte: 'Annuler', ton: 'contour' },
+      {
+        texte: 'Enregistrer', ton: 'fort',
+        faire: () => {
+          maj('Accueil rangé', (etat) => {
+            const u = lit.utilisateur(etat, moi.id);
+            if (!u) return;
+            u.preferences = Object.assign({}, u.preferences, {
+              accueil: rangees(ordre, caches),
+              raccourcis: courts.slice()
+            });
+          });
+          /* La personne connectée porte sa propre copie : sans ça, l'écran
+             se repeint avec les anciennes préférences jusqu'au rechargement. */
+          moi.preferences = Object.assign({}, moi.preferences, {
+            accueil: rangees(ordre, caches), raccourcis: courts.slice()
+          });
+          refaire();
+          message('Accueil rangé', { ton: 'ok' });
+        }
+      }
+    ]
+  });
 }
 
 /* ==========================================================================

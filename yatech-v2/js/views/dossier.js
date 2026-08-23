@@ -25,7 +25,7 @@ import { choisirFichier, reduireImage } from '../core/fichiers.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import { totaux } from '../domain/calculs.js';
-import { ETAPES, NATURES, PRIORITES, MOTIFS_PARC } from '../domain/schema.js';
+import { ETAPES, NATURES, PRIORITES, MOTIFS_PARC, ETATS_COMMANDE } from '../domain/schema.js';
 import { editeurLignes } from '../ui/lignes.js';
 import {
   champ, grilleChamps, pastilleEtape, pastilleNature, pastillePriorite,
@@ -349,6 +349,7 @@ function barreOnglets(e, d, actif, surChoix) {
 
 function ongletTravaux(e, d, moi, changer, refaireOnglets) {
   const zoneStock = h('div');
+  const zoneCommandes = h('div');
   const zoneCheck = h('div');
   /* Le compte rendu de la dernière sortie de stock vit hors du panneau : il
      survit à son repeint, sinon on n'a pas le temps de lire ce qui a manqué. */
@@ -378,6 +379,7 @@ function ongletTravaux(e, d, moi, changer, refaireOnglets) {
       if (lignes.length !== nbLignes) {
         nbLignes = lignes.length;
         refaireStock();
+        refaireCommandes();
         marquerServies();
         refaireOnglets();
       }
@@ -553,11 +555,227 @@ function ongletTravaux(e, d, moi, changer, refaireOnglets) {
     ]));
   }
 
+  /* --- ce qu'on a commandé, et ce qu'on attend ---------------------------- */
+  function refaireCommandes() {
+    poser(zoneCommandes, panneauCommandes(e, d, () => {
+      refaireCommandes();
+      refaireStock();
+      refaireOnglets();
+    }));
+  }
+
   refaireStock();
+  refaireCommandes();
   refaireCheck();
   requestAnimationFrame(marquerServies);
 
-  return h('div.pile', [editeur.noeud, zoneStock, zoneCheck]);
+  return h('div.pile', [editeur.noeud, zoneCommandes, zoneStock, zoneCheck]);
+}
+
+/* ==========================================================================
+   LES PIÈCES QU'ON COMMANDE
+   --------------------------------------------------------------------------
+   « Attente pièce » dit qu'on attend. Ce panneau dit QUOI, chez QUI, et
+   ANNONCÉE POUR QUAND — les trois choses qu'on n'a jamais sous la main quand
+   le client rappelle pour savoir où en est sa voiture.
+
+   Le suivi est volontaire : on ne met pas en commande une pièce qui dort
+   dans le rayon. C'est celui qui fait le devis qui sait.
+   ========================================================================== */
+
+function panneauCommandes(e, d, refaire) {
+  const pieces = (d.lignes || []).filter(l => l.type === 'piece');
+  if (!pieces.length) return null;
+
+  const suivies = pieces.filter(l => l.commande);
+  const libres = pieces.filter(l => !l.commande);
+  const bilan = lit.etatCommandes(d);
+
+  return h('div.panneau', [
+    h('div.panneau__tete', [
+      icone('camion', { taille: 16 }),
+      h('h2.grandit', 'Commandes de pièces'),
+      bilan.retard
+        ? h('span.pastille.pastille--danger', bilan.retard + ' en retard')
+        : (bilan.total
+          ? h('span.petit.faible', bilan.recues + ' / ' + bilan.total + ' reçues')
+          : null)
+    ]),
+
+    h('div.panneau__corps.pile', [
+      suivies.length
+        ? h('div.pile-s', suivies.map(l => ligneCommande(e, d, l, refaire)))
+        : h('div.petit.faible',
+            'Aucune pièce en commande. Mettez en commande celles que vous n’avez pas en rayon.'),
+
+      /* Le dossier est en « attente pièce » et personne ne sait laquelle :
+         c'est exactement le dossier qui dort une semaine. On propose le
+         geste, on ne le fait pas à sa place — une pièce déjà en rayon n'a
+         rien à faire dans une commande. */
+      !suivies.length && d.etape === 'piece' && libres.length
+        ? h('div.bandeau.bandeau--alerte', [
+            icone('alerte'),
+            h('div.grandit', [
+              h('div.gras', 'Ce dossier attend une pièce.'),
+              h('div.petit', 'Laquelle ? Sans le dire, personne ne saura quoi relancer.')
+            ]),
+            h('button.bt.bt--fort.bt--s', {
+              type: 'button',
+              onclick: () => {
+                /* Celles qui ne sortent pas du rayon : ce sont forcément
+                   celles qu'il faut commander. */
+                const aSuivre = libres.filter(l => !l.pieceId);
+                const liste = aSuivre.length ? aSuivre : libres;
+                for (const l of liste) act.suivreCommande(d.id, l.id, true);
+                refaire();
+              }
+            }, 'Les marquer à commander')
+          ])
+        : null,
+
+      /* Passer toute la commande d'un coup : au téléphone avec le
+         fournisseur, on ne coche pas ligne par ligne. */
+      bilan.aCommander > 1
+        ? h('button.bt.bt--fort', {
+            type: 'button',
+            onclick: () => modaleCommander(e, d, null, refaire)
+          }, [icone('camion'), h('span', 'Tout commander (' + bilan.aCommander + ')')])
+        : null,
+
+      libres.length
+        ? h('details.repli', [
+            h('summary', 'Mettre une autre pièce en commande (' + libres.length + ')'),
+            h('div.pile-s', { style: { marginTop: 'var(--e-2)' } }, libres.map(l =>
+              h('div.carte.carte--muette.rang', [
+                h('span.qte', fmt.nb(l.qte, 2)),
+                h('div.grandit.coupe', [
+                  h('div.coupe', l.libelle || 'Pièce'),
+                  l.ref ? h('div.minus.tres-faible.coupe.num', l.ref) : null
+                ]),
+                h('button.bt.bt--contour.bt--s', {
+                  type: 'button',
+                  onclick: () => { act.suivreCommande(d.id, l.id, true); refaire(); }
+                }, [icone('plus', { taille: 14 }), h('span', 'À commander')])
+              ])
+            ))
+          ])
+        : null,
+
+      /* Tout est arrivé et le dossier attend encore : on propose le pas
+         suivant plutôt que de le laisser dormir en « attente pièce ». */
+      bilan.total && bilan.recues === bilan.total && d.etape === 'piece'
+        ? h('div.bandeau.bandeau--ok', [
+            icone('cocheRonde'),
+            h('div.grandit', [
+              h('div.gras', 'Tout est arrivé.'),
+              h('div.petit', 'Le dossier peut passer en atelier.')
+            ]),
+            h('button.bt.bt--fort.bt--s', {
+              type: 'button',
+              onclick: () => { act.changerEtape(d.id, 'atelier'); message('Dossier passé en atelier', { ton: 'ok' }); refaire(); }
+            }, 'Passer en atelier')
+          ])
+        : null
+    ])
+  ]);
+}
+
+function ligneCommande(e, d, l, refaire) {
+  const etat = ETATS_COMMANDE[l.commande] || ETATS_COMMANDE.a_commander;
+  const f = l.fournisseurId ? lit.fournisseur(e, l.fournisseurId) : null;
+  const retard = lit.commandeEnRetard(l);
+
+  const detail = [
+    l.ref || null,
+    f ? f.nom : null,
+    l.attendueLe
+      ? (retard ? '⚠ annoncée ' + fmt.date(l.attendueLe, 'court') : 'attendue ' + fmt.quand(l.attendueLe, { avecHeure: false }))
+      : null,
+    l.recueLe ? 'reçue le ' + fmt.date(l.recueLe, 'court') : null
+  ].filter(Boolean).join(' · ');
+
+  return h('div.carte.rang.rang-haut' + (retard ? '.carte--danger' : ''), [
+    h('span.qte', fmt.nb(l.qte, 2)),
+    h('div.grandit.coupe.pile-s', [
+      h('div.rang-s.enroule', [
+        h('span.gras.coupe', l.libelle || 'Pièce'),
+        h('span.pastille.pastille--' + (retard ? 'danger' : etat.ton), retard ? 'En retard' : etat.nom)
+      ]),
+      detail ? h('div.minus.tres-faible.coupe', detail) : null
+    ]),
+    h('div.rang-s', [
+      l.commande === 'a_commander'
+        ? h('button.bt.bt--contour.bt--s', {
+            type: 'button', onclick: () => modaleCommander(e, d, l, refaire)
+          }, 'Commander')
+        : null,
+      l.commande === 'commandee'
+        ? h('button.bt.bt--fort.bt--s', {
+            type: 'button',
+            onclick: () => { act.recevoirPiece(d.id, l.id); message('Pièce reçue', { ton: 'ok' }); refaire(); }
+          }, [icone('coche', { taille: 14 }), h('span', 'Reçue')])
+        : null,
+      l.commande === 'recue'
+        ? h('button.bt.bt--nu.bt--s', {
+            type: 'button',
+            onclick: () => { act.annulerReception(d.id, l.id); refaire(); }
+          }, 'Annuler')
+        : null,
+      h('button.bt.bt--nu.bt--icone.bt--s', {
+        type: 'button', 'aria-label': 'Retirer du suivi',
+        onclick: () => { act.suivreCommande(d.id, l.id, false); refaire(); }
+      }, icone('croix'))
+    ])
+  ]);
+}
+
+/** Passer commande : chez qui, et pour quand. Une ligne, ou toutes. */
+function modaleCommander(e, d, ligne, refaire) {
+  const quoi = ligne ? (ligne.libelle || 'cette pièce')
+    : lit.lignesCommandees(d).filter(l => l.commande === 'a_commander').length + ' pièces';
+
+  const fournisseurs = (e.fournisseurs || []).filter(f => !f.archive);
+  const chFournisseur = champ({
+    etiquette: 'Fournisseur', type: 'liste',
+    valeur: (ligne && ligne.fournisseurId) || '',
+    options: [{ valeur: '', texte: '— non précisé —' }]
+      .concat(fournisseurs.map(f => ({ valeur: f.id, texte: f.nom })))
+  });
+  const chDate = champ({
+    etiquette: 'Annoncée pour', type: 'date',
+    valeur: (ligne && ligne.attendueLe) || null,
+    aide: 'La date que le fournisseur annonce. Passée, la pièce remonte en retard.'
+  });
+
+  modale({
+    titre: 'Commander ' + quoi,
+    corps: h('div.pile', [
+      fournisseurs.length
+        ? null
+        : h('div.bandeau', [
+            icone('info'),
+            h('span', 'Aucun fournisseur enregistré. Vous pouvez commander sans le '
+              + 'préciser, ou en ajouter depuis une fiche pièce.')
+          ]),
+      chFournisseur.noeud,
+      chDate.noeud
+    ]),
+    actions: [
+      { texte: 'Annuler', ton: 'contour' },
+      {
+        texte: 'C’est commandé', ton: 'fort',
+        faire: () => {
+          const infos = { fournisseurId: chFournisseur.lire() || null, attendueLe: chDate.lire() || null };
+          if (ligne) act.commanderPiece(d.id, ligne.id, infos);
+          else {
+            const n = act.commanderToutLeDossier(d.id, infos);
+            message(pluriel(n, 'pièce commandée', 'pièces commandées'), { ton: 'ok' });
+          }
+          refaire();
+        }
+      }
+    ]
+  });
 }
 
 /* ==========================================================================
