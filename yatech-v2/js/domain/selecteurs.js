@@ -465,7 +465,7 @@ export function alertes(e) {
     const jours = Math.round((maintenant - d.envoyeLe) / JOUR);
     if (jours >= delai) {
       sortie.push({
-        cle: 'devis-' + d.id, ton: 'alerte', icone: 'devis',
+        cle: 'devis-' + d.id, famille: 'devis', ton: 'alerte', icone: 'devis',
         titre: 'Devis ' + d.numero + ' sans réponse',
         detail: 'Envoyé il y a ' + jours + ' jours',
         vers: '/devis/' + d.id, poids: 40 + jours
@@ -477,7 +477,7 @@ export function alertes(e) {
   for (const d of e.devis || []) {
     if (d.statut !== 'expire') continue;
     sortie.push({
-      cle: 'perime-' + d.id, ton: 'neutre', icone: 'sablier',
+      cle: 'perime-' + d.id, famille: 'devis', ton: 'neutre', icone: 'sablier',
       titre: 'Devis ' + d.numero + ' périmé',
       detail: 'Validité dépassée',
       vers: '/devis/' + d.id, poids: 20
@@ -492,7 +492,7 @@ export function alertes(e) {
     if (jours >= seuil) {
       const v = vehicule(e, d.vehiculeId);
       sortie.push({
-        cle: 'parc-' + d.id, ton: 'danger', icone: 'parc',
+        cle: 'parc-' + d.id, famille: 'parc', ton: 'danger', icone: 'parc',
         titre: (v ? nomVehicule(v) : 'Un véhicule') + ' immobilisé depuis ' + jours + ' jours',
         detail: 'Place ' + d.place,
         vers: '/dossier/' + d.id, poids: 60 + jours
@@ -508,7 +508,7 @@ export function alertes(e) {
     if (t.reste <= 0.005) continue;
     const jours = Math.round((maintenant - f.echeanceLe) / JOUR);
     sortie.push({
-      cle: 'impaye-' + f.id, ton: 'danger', icone: 'euro',
+      cle: 'impaye-' + f.id, famille: 'paiement', ton: 'danger', icone: 'euro',
       titre: 'Facture ' + f.numero + ' impayée',
       detail: jours + ' jours de retard',
       vers: '/facture/' + f.id, poids: 70 + Math.min(jours, 60)
@@ -523,7 +523,7 @@ export function alertes(e) {
   const enRetard = cmds.filter(x => x.retard);
   if (aCommander.length) {
     sortie.push({
-      cle: 'a-commander', ton: 'alerte', icone: 'stock',
+      cle: 'a-commander', famille: 'pieces', nb: aCommander.length, ton: 'alerte', icone: 'stock',
       titre: aCommander.length + (aCommander.length > 1 ? ' pièces à commander' : ' pièce à commander'),
       detail: aCommander.slice(0, 3)
         .map(x => x.ligne.libelle || 'pièce').join(', '),
@@ -532,7 +532,7 @@ export function alertes(e) {
   }
   if (enRetard.length) {
     sortie.push({
-      cle: 'commandes-retard', ton: 'danger', icone: 'horloge',
+      cle: 'commandes-retard', famille: 'pieces', nb: enRetard.length, ton: 'danger', icone: 'horloge',
       titre: enRetard.length + (enRetard.length > 1 ? ' pièces en retard' : ' pièce en retard'),
       detail: 'Annoncées pour une date déjà passée : relancez le fournisseur',
       vers: '/stock?commandes=1', poids: 72
@@ -543,7 +543,7 @@ export function alertes(e) {
   const manque = piecesEnAlerte(e);
   if (manque.length) {
     sortie.push({
-      cle: 'stock', ton: 'alerte', icone: 'stock',
+      cle: 'stock', famille: 'pieces', nb: manque.length, ton: 'alerte', icone: 'stock',
       titre: manque.length === 1 ? 'Une pièce sous le seuil' : manque.length + ' pièces sous le seuil',
       detail: manque.slice(0, 3).map(p => p.libelle).join(', '),
       vers: '/stock?filtre=alerte', poids: 35
@@ -555,7 +555,7 @@ export function alertes(e) {
   const seuilCredits = nombre(r.creditsAlerte, 5);
   if (r.suiviCredits !== false && solde <= seuilCredits) {
     sortie.push({
-      cle: 'credits', ton: solde <= 0 ? 'danger' : 'alerte', icone: 'puce',
+      cle: 'credits', famille: 'credits', nb: Math.max(0, seuilCredits - solde + 1), ton: solde <= 0 ? 'danger' : 'alerte', icone: 'puce',
       titre: solde <= 0 ? 'Plus de crédits Autotuner' : 'Il reste ' + solde + ' crédits',
       detail: 'Pensez à recharger avant la prochaine reprogrammation',
       vers: '/electronique', poids: solde <= 0 ? 65 : 30
@@ -566,7 +566,7 @@ export function alertes(e) {
   const demandes = demandesEnAttente(e);
   if (demandes.length) {
     sortie.push({
-      cle: 'demandes', ton: 'info', icone: 'pro',
+      cle: 'demandes', famille: 'rdv', nb: demandes.length, ton: 'info', icone: 'pro',
       titre: demandes.length + (demandes.length > 1 ? ' demandes de créneau' : ' demande de créneau'),
       detail: 'Venues du portail professionnel',
       vers: '/planning?demandes=1', poids: 55
@@ -577,7 +577,7 @@ export function alertes(e) {
   const rappels = (e.appels || []).filter(a => a.aRappeler && !a.traite);
   if (rappels.length) {
     sortie.push({
-      cle: 'appels', ton: 'alerte', icone: 'telephone',
+      cle: 'appels', famille: 'appels', nb: rappels.length, ton: 'alerte', icone: 'telephone',
       titre: rappels.length + (rappels.length > 1 ? ' personnes à rappeler' : ' personne à rappeler'),
       detail: rappels.slice(0, 2).map(a => a.nom || a.tel).join(', '),
       vers: '/?appels=1', poids: 58
@@ -588,7 +588,7 @@ export function alertes(e) {
   const facturable = aFacturer(e);
   if (facturable.length) {
     sortie.push({
-      cle: 'afacturer', ton: 'accent', icone: 'facture',
+      cle: 'afacturer', famille: 'paiement', nb: facturable.length, ton: 'accent', icone: 'facture',
       titre: facturable.length + (facturable.length > 1 ? ' dossiers à facturer' : ' dossier à facturer'),
       detail: 'Véhicules rendus, facture non établie',
       vers: '/factures?filtre=attente', poids: 50
@@ -598,7 +598,7 @@ export function alertes(e) {
   /* --- conflits de place ---------------------------------------------------------- */
   for (const c of conflitsParc(e)) {
     sortie.push({
-      cle: 'conflit-' + c.place, ton: 'danger', icone: 'alerte',
+      cle: 'conflit-' + c.place, famille: 'parc', ton: 'danger', icone: 'alerte',
       titre: 'Deux véhicules sur la place ' + c.place,
       detail: 'À corriger : le plan du parc est faux',
       vers: '/parc', poids: 75

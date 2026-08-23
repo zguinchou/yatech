@@ -518,6 +518,57 @@ Dit franchement, pour éviter les mauvaises surprises :
 
 ---
 
+## Être prévenu
+
+L'outil peut faire apparaître un **avertissement du navigateur** — la bulle qui
+passe par-dessus les autres fenêtres — quand quelque chose arrive : un appel à
+rappeler, une pièce en retard, un créneau demandé par un confrère.
+
+Dit franchement, parce que la moitié de la valeur d'un avertissement tient à
+savoir quand il n'arrivera pas :
+
+- **Ça ne marche que si Yatech est ouvert quelque part**, même en arrière-plan.
+  Tous les onglets fermés, plus de veille. C'est la limite d'un outil sans
+  serveur, et l'écran de réglage l'écrit en toutes lettres.
+- **Ça n'envoie ni SMS ni e-mail tout seul.** Pour joindre quelqu'un qui n'est
+  pas devant l'écran, la cloche propose **« Prévenir quelqu'un »** : le message
+  est écrit, l'application du téléphone s'ouvre, la personne l'envoie d'un
+  geste. Sans coordonnées sur la fiche, il est copié — et l'outil le dit avant
+  qu'on ait tapé le message, pas après.
+
+### La règle : « ça a empiré », pas « je ne l'ai pas vue »
+
+C'est ce qui sépare un outil qu'on garde d'un outil qu'on éteint le deuxième
+jour.
+
+- **Le premier tour sur un appareil ne dit rien** : il prend le pouls. Qui
+  vient d'allumer les avertissements ne reçoit pas l'arriéré de la semaine.
+- « Deux personnes à rappeler » sonne **une fois**. Un troisième appelle : ça
+  sonne, c'est un fait nouveau. On en traite un : **ça ne sonne pas**, on est
+  justement en train de le régler.
+- Une alerte réglée est oubliée. Si elle revient, elle sonnera de nouveau.
+- Trois bulles au maximum d'un coup, une étiquette par famille : au retour du
+  déjeuner, on a une bulle par sujet, pas quarante.
+
+### Ce qui se règle, et par qui
+
+Dans *Réglages → Alertes*. Le garage propose, **chacun dispose** : ce que
+quelqu'un a réglé pour lui-même l'emporte, champ par champ, sur ce que le
+garage propose. Ce qu'il n'a pas touché continue de suivre.
+
+- recevoir des avertissements, et un petit son avec (fabriqué par le
+  navigateur, rien à télécharger) ;
+- **de quoi** : sept familles — appels, créneaux, pièces, impayés, devis, parc,
+  crédits ;
+- **la paix** : une plage horaire pendant laquelle rien ne sonne. Elle traverse
+  minuit sans se tromper (19 h → 7 h 30), et une plage de durée nulle ne
+  bâillonne pas la journée.
+
+Le titre de l'onglet porte le nombre de points à traiter : dans une rangée
+d'onglets, c'est ce qu'on voit sans rien ouvrir.
+
+---
+
 ## Ce qui résiste
 
 Trois choses ont été durcies parce qu'elles cassaient pour de bon :

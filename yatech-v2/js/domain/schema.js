@@ -209,6 +209,19 @@ export const OPERATIONS_QUI_ECRIVENT = ['ecriture', 'codage', 'cle'];
 
    L'état vit sur la LIGNE du dossier, pas sur la pièce du stock : c'est cette
    pièce-là, pour cette voiture-là, qu'on attend. */
+/* --- de quoi on peut être prévenu -----------------------------------------
+   Les alertes portent une famille ; c'est elle qu'on choisit de recevoir ou
+   non, pas chaque alerte une par une. Sept cases, pas soixante. */
+export const FAMILLES_ALERTE = {
+  appels:   { nom: 'Les appels à rappeler', icone: 'telephone' },
+  rdv:      { nom: 'Les demandes de créneau', icone: 'pro' },
+  pieces:   { nom: 'Les pièces : à commander, en retard, stock bas', icone: 'stock' },
+  paiement: { nom: 'Les impayés et ce qui reste à facturer', icone: 'euro' },
+  devis:    { nom: 'Les devis sans réponse', icone: 'devis' },
+  parc:     { nom: 'Le parc : véhicules oubliés, places en conflit', icone: 'parc' },
+  credits:  { nom: 'Les crédits Autotuner', icone: 'puce' }
+};
+
 export const ETATS_COMMANDE = {
   a_commander: { nom: 'À commander', court: 'À cmd.', ton: 'danger', rang: 0 },
   commandee:   { nom: 'Commandée',   court: 'Cmd.',   ton: 'alerte', rang: 1 },
@@ -357,6 +370,22 @@ export const REGLAGES_DEFAUT = {
   teinte: 38,               // teinte d'accent, en degrés
   densite: 'confort',       // confort | compact
   ecranAccueil: '/',
+
+  /* --- être prévenu --------------------------------------------------------
+     Ce que le garage propose par défaut ; chacun l'ajuste pour lui-même dans
+     ses préférences. Éteint d'origine : un outil qui se met à sonner sans
+     qu'on l'ait demandé, on le referme. */
+  notifs: {
+    actives: false,          // le garage autorise-t-il les avertissements ?
+    son: false,             // un petit son en plus de l'avertissement
+    quoi: {                 // par famille d'alerte
+      appels: true, rdv: true, pieces: true, paiement: true,
+      devis: true, parc: true, credits: true
+    },
+    silenceActif: true,     // ne pas déranger la nuit
+    silenceDe: 19 * 60,     // minutes depuis minuit
+    silenceA: 7 * 60 + 30
+  },
 
   /* --- l'accès ------------------------------------------------------------ */
   verrouAuto: 0,            // minutes d'inactivité avant verrouillage ; 0 = jamais
@@ -747,7 +776,11 @@ export function nouvelUtilisateur(champs) {
     preferences: {
       ecranAccueil: null, densite: null, theme: null,
       accueil: null,       // { ordre: [clés], caches: [clés] }
-      raccourcis: null     // [clés] ; null = ceux d'origine
+      raccourcis: null,    // [clés] ; null = ceux d'origine
+      rail: false,         // le menu de gauche, sur grand écran
+      /* null : on suit ce que le garage propose. Un objet de la même forme
+         que `reglages.notifs` remplace, champ par champ, ce qui y figure. */
+      notifs: null
     },
     cree: Date.now()
   }, champs);

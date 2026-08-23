@@ -20,6 +20,7 @@ import { equipeDepart, catalogueDepart } from './domain/demo.js';
 import { devise } from './core/fmt.js';
 import * as coque from './coque.js';
 import { attend } from './core/util.js';
+import * as veille from './core/veille.js';
 
 /* ==========================================================================
    LES ÉCRANS
@@ -114,6 +115,10 @@ async function demarrer() {
   routeur.demarrer(peindre);
 
   coque.surveillerReseau();
+  /* La veille : elle regarde les alertes et fait apparaître un avertissement
+     quand il en naît une. Elle ne fait rien tant que personne ne l'a
+     autorisée — voir Réglages → Alertes. */
+  veille.demarrer();
   brancherRaccourcis();
   brancherVerrou();
   brancherServiceWorker();
@@ -180,6 +185,9 @@ export function ouvrirSession(utilisateur) {
 }
 
 export function fermerSession() {
+  /* Ce qui a déjà été annoncé appartenait à la personne qui part : la
+     suivante doit pouvoir être prévenue des mêmes choses. */
+  veille.oublier();
   S.moi = null;
   try { localStorage.removeItem(CLE_SESSION); } catch (e) {}
   routeur.aller('/connexion');

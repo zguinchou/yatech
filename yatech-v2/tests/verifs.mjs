@@ -63,6 +63,7 @@ import {
   ordreColonnes, colonnesVisibles, deuxColonnes, colonnes, blocVisible, rangees,
   raccourcisDe, BLOCS_COLONNES, CACHES_DORIGINE
 } from '../js/domain/accueil.js';
+import { reglagesDe, silencieux, aAnnoncer, vuesSuivantes } from '../js/core/veille.js';
 import { S, maj, annuler, refaire, peutAnnuler } from '../js/core/store.js';
 
 let passes = 0, echecs = 0;
@@ -86,6 +87,7 @@ function verifie(quoi, obtenu, attendu) {
 }
 
 function vrai(quoi, valeur) { verifie(quoi, !!valeur, true); }
+function faux(quoi, valeur) { verifie(quoi, !!valeur, false); }
 
 /* ==========================================================================
    LES NOMBRES ET LES DATES
@@ -525,6 +527,93 @@ groupe('L’accueil de chacun', () => {
   verifie('le rangement ne garde que des clés connues',
     rangees(['journee', 'nawak'], ['alertes', 'nawak']),
     { ordre: ['journee'], caches: ['alertes'] });
+});
+
+groupe('Être prévenu', () => {
+  const garage = {
+    notifs: {
+      actives: true, son: false,
+      quoi: { appels: true, rdv: true, pieces: true, paiement: true, devis: true, parc: true, credits: true },
+      silenceActif: true, silenceDe: 19 * 60, silenceA: 7 * 60 + 30
+    }
+  };
+  const a18h = new Date(2026, 5, 10, 18, 0).getTime();
+  const a20h = new Date(2026, 5, 10, 20, 0).getTime();
+  const a3h  = new Date(2026, 5, 10, 3, 0).getTime();
+  const a8h  = new Date(2026, 5, 10, 8, 0).getTime();
+
+  /* --- ce que chacun règle pour lui-même --------------------------------- */
+  const brut = reglagesDe(garage, null);
+  verifie('sans personne, les réglages du garage', brut.actives, true);
+
+  const paulette = { preferences: { notifs: { son: true, quoi: { credits: false } } } };
+  const sien = reglagesDe(garage, paulette);
+  verifie('son réglage à elle l’emporte', sien.son, true);
+  verifie('ce qu’elle n’a pas touché reste celui du garage', sien.actives, true);
+  verifie('une famille refusée est refusée', sien.quoi.credits, false);
+  verifie('les autres restent acceptées', sien.quoi.appels, true);
+
+  /* --- la paix le soir ---------------------------------------------------- */
+  faux('18 h, on peut déranger', silencieux(sien, a18h));
+  vrai('20 h, non', silencieux(sien, a20h));
+  vrai('3 h du matin, encore moins', silencieux(sien, a3h));
+  faux('8 h, la journée commence', silencieux(sien, a8h));
+  faux('sans plage de silence, jamais',
+    silencieux({ silenceActif: false, silenceDe: 19 * 60, silenceA: 7 * 60 }, a3h));
+  /* Une plage vide ne doit pas faire taire la journée entière. */
+  faux('une plage de durée nulle ne bâillonne rien',
+    silencieux({ silenceActif: true, silenceDe: 600, silenceA: 600 }, a18h));
+  /* Une plage qui ne traverse pas minuit : la pause de midi. */
+  const midi = { silenceActif: true, silenceDe: 12 * 60, silenceA: 14 * 60 };
+  vrai('13 h dans la pause', silencieux(midi, new Date(2026, 5, 10, 13, 0).getTime()));
+  faux('15 h hors de la pause', silencieux(midi, new Date(2026, 5, 10, 15, 0).getTime()));
+
+  /* --- ce qu'on annonce --------------------------------------------------- */
+  const liste = [
+    { cle: 'appels', famille: 'appels', titre: 'Deux personnes à rappeler' },
+    { cle: 'credits', famille: 'credits', titre: 'Plus de crédits' },
+    { cle: 'impaye-1', famille: 'paiement', titre: 'Facture impayée' }
+  ];
+  verifie('éteint, on n’annonce rien',
+    aAnnoncer(liste, [], reglagesDe({ notifs: { actives: false } }, null), a18h).length, 0);
+  verifie('la nuit non plus', aAnnoncer(liste, [], sien, a3h).length, 0);
+
+  const dit = aAnnoncer(liste, {}, sien, a18h);
+  verifie('les familles acceptées passent', dit.map(a => a.cle), ['appels', 'impaye-1']);
+  verifie('déjà annoncée, on se tait',
+    aAnnoncer(liste, { appels: 2, credits: 1, 'impaye-1': 1 }, sien, a18h).length, 0);
+
+  /* --- « ça a empiré », pas « je ne l'ai pas vue » ------------------------- */
+  const appels = (n) => [{ cle: 'appels', famille: 'appels', nb: n, titre: n + ' à rappeler' }];
+  verifie('un appel de plus, ça sonne',
+    aAnnoncer(appels(3), { appels: 2 }, sien, a18h).length, 1);
+  verifie('un appel traité, ça ne sonne pas',
+    aAnnoncer(appels(1), { appels: 2 }, sien, a18h).length, 0);
+  verifie('le même nombre non plus',
+    aAnnoncer(appels(2), { appels: 2 }, sien, a18h).length, 0);
+  /* Sans compte, une alerte pèse un : présente ou absente, rien entre les deux. */
+  verifie('une alerte sans compte ne sonne qu’une fois',
+    aAnnoncer([{ cle: 'impaye-1', famille: 'paiement', titre: 'x' }], { 'impaye-1': 1 }, sien, a18h).length, 0);
+
+  /* On ne fait pas apparaître dix bulles d'un coup. */
+  const dix = Array.from({ length: 10 }, (_, i) => ({ cle: 'x' + i, famille: 'appels', titre: 'x' }));
+  verifie('trois bulles au plus d’un coup', aAnnoncer(dix, {}, sien, a18h).length, 3);
+
+  /* Une famille inconnue — ajoutée par une mise à jour — passe quand même :
+     mieux vaut un avertissement de trop qu'un impayé qu'on n'apprend pas. */
+  verifie('une famille inconnue n’est pas filtrée',
+    aAnnoncer([{ cle: 'z', famille: 'nouveaute', titre: 'x' }], {}, sien, a18h).length, 1);
+
+  /* --- ce dont on se souvient --------------------------------------------- */
+  const apres = vuesSuivantes(appels(3));
+  verifie('on retient le compte du moment', apres.appels, 3);
+  const oubli = vuesSuivantes([{ cle: 'appels', nb: 2 }]);
+  verifie('une alerte réglée est oubliée', oubli['impaye-1'], undefined);
+  verifie('pour pouvoir sonner de nouveau si elle revient',
+    aAnnoncer([{ cle: 'impaye-1', famille: 'paiement', titre: 'x' }], oubli, sien, a18h).length, 1);
+  /* Une salve entière est retenue, même si on n'en a annoncé que trois : le
+     reste ne doit pas ressortir en gouttes au tour suivant. */
+  verifie('toute la salve est retenue', Object.keys(vuesSuivantes(dix)).length, 10);
 });
 
 groupe('Reconnaître une sauvegarde', () => {

@@ -397,8 +397,130 @@ function menuAlertes(ancre) {
       icone: a.icone,
       danger: a.ton === 'danger',
       faire: () => routeur.aller(a.vers)
-    }))
+    })),
+    null,
+    /* Prévenir quelqu'un qui n'est pas devant l'écran. L'outil ne sait pas
+       envoyer un SMS tout seul — il écrit le message et ouvre l'application
+       du téléphone. Un geste, et c'est parti. */
+    { texte: 'Prévenir quelqu’un', icone: 'partage', faire: () => modalePrevenir() },
+    { texte: 'Régler mes alertes', icone: 'cloche', faire: () => routeur.aller('/reglages/alertes') }
   ]);
+}
+
+/* ==========================================================================
+   PRÉVENIR QUELQU'UN
+   --------------------------------------------------------------------------
+   Une page hébergée n'expédie rien toute seule : ni SMS, ni e-mail, ni
+   WhatsApp, sans un service qui les envoie pour elle. Ce qu'elle sait faire,
+   et qui suffit à trois dans un garage : écrire le message en entier et
+   l'ouvrir dans l'application du téléphone.
+   ========================================================================== */
+
+async function modalePrevenir() {
+  const e = S.etat;
+  const { modale } = await import('./core/ui.js');
+  const { champ, menuEnvoi } = await import('./ui/widgets.js');
+  const { alertes: lireAlertes } = await import('./domain/selecteurs.js');
+
+  /* Tout le monde sauf soi : on ne se prévient pas soi-même. */
+  const equipe = (e.utilisateurs || [])
+    .filter(u => u.actif && (!S.moi || u.id !== S.moi.id));
+
+  if (!equipe.length) {
+    message('Personne d’autre dans l’équipe.', { ton: 'alerte' });
+    return;
+  }
+
+  const avert = h('div');
+  const joignable = (u) => !!(u && (String(u.tel || '').trim() || String(u.email || '').trim()));
+
+  const chQui = champ({
+    etiquette: 'Prévenir', type: 'liste', valeur: equipe[0].id,
+    options: equipe.map(u => ({
+      valeur: u.id,
+      texte: [u.prenom, u.nom].filter(Boolean).join(' ')
+        + (joignable(u) ? '' : ' — pas de coordonnées')
+    })),
+    surChangement: () => majAvert()
+  });
+
+  /* On le dit AVANT d'avoir écrit le message, pas après : découvrir qu'on ne
+     peut joindre personne une fois le texte tapé, c'est une saisie perdue. */
+  function majAvert() {
+    const u = (e.utilisateurs || []).find(x => x.id === chQui.lire());
+    poser(avert, joignable(u) ? null : h('div.bandeau.bandeau--alerte', [
+      icone('alerte'),
+      h('div.grandit', [
+        h('div.gras', 'Aucun moyen de la joindre.'),
+        h('div.petit', 'Ni téléphone ni e-mail sur sa fiche : le message sera '
+          + 'copié, à vous de le coller où vous voulez. Ajoutez ses coordonnées '
+          + 'dans Réglages → Équipe pour l’envoyer d’un geste.')
+      ])
+    ]));
+  }
+
+  const dernieres = lireAlertes(e).slice(0, 6);
+  const chQuoi = champ({
+    etiquette: 'Le message', type: 'zone', lignes: 3,
+    valeur: dernieres.length ? dernieres[0].titre : '',
+    exemple: 'Ce qu’il faut savoir, en une phrase.'
+  });
+
+  /* Les alertes du moment en un clic : c'est presque toujours ça qu'on veut
+     transmettre, et le retaper au clavier d'un téléphone est une punition. */
+  const suggestions = dernieres.length
+    ? h('div.pile-s', [
+        h('div.minus.tres-faible', 'À transmettre en un clic'),
+        h('div.rang-s.enroule', dernieres.map(a => h('button.etiq', {
+          type: 'button', onclick: () => chQuoi.ecrire(a.titre + (a.detail ? ' — ' + a.detail : ''))
+        }, a.titre)))
+      ])
+    : null;
+
+  majAvert();
+
+  modale({
+    titre: 'Prévenir quelqu’un',
+    corps: h('div.pile', [
+      h('div.bandeau', [
+        icone('info'),
+        h('span', 'Le message est préparé ici et s’ouvre dans WhatsApp, les SMS ou '
+          + 'la messagerie. C’est vous qui l’envoyez : l’outil ne poste rien tout seul.')
+      ]),
+      chQui.noeud,
+      avert,
+      suggestions,
+      chQuoi.noeud
+    ]),
+    actions: [
+      { texte: 'Annuler', ton: 'contour' },
+      {
+        texte: 'Choisir comment', ton: 'fort', ferme: false,
+        faire: (api) => {
+          const u = (e.utilisateurs || []).find(x => x.id === chQui.lire());
+          const texte = chQuoi.lire();
+          if (!texte) { message('Écrivez ce qu’il faut dire.', { ton: 'alerte' }); return; }
+          const nom = e.reglages.nomOutil || 'Yatech';
+          const signe = S.moi ? '\n— ' + [S.moi.prenom, S.moi.nom].filter(Boolean).join(' ') : '';
+          const complet = '[' + nom + '] ' + texte + signe;
+          api.fermer();
+          /* Sans coordonnées, il reste le presse-papiers : c'est toujours
+             mieux que de recopier à la main sur un clavier de téléphone. */
+          if (!joignable(u)) {
+            import('./core/fichiers.js').then(({ copier }) => copier(complet).then((ok) =>
+              message(ok ? 'Message copié' : 'Copie impossible sur cet appareil',
+                { ton: ok ? 'ok' : 'danger' })));
+            return;
+          }
+          menuEnvoi(document.getElementById('bt-alertes'), {
+            tel: u && u.tel, email: u && u.email,
+            sujet: nom + ' — à traiter',
+            texte: complet
+          });
+        }
+      }
+    ]
+  });
 }
 
 /** Le petit point rouge sur la cloche, quand il y a du grave. */

@@ -126,6 +126,15 @@ export function jeuDemo() {
   });
 
   e.utilisateurs = equipeDepart();
+  /* Le jeu de démonstration donne des coordonnées à l'équipe : sans elles,
+     « Prévenir quelqu'un » n'a rien à montrer. Un garage neuf, lui, part sans
+     — on n'invente pas le numéro de portable de quelqu'un. */
+  const joignables = [
+    { tel: '06 11 22 33 44', email: 'yanis@garage-yatech.fr' },
+    { tel: '06 55 66 77 88', email: 'karim@garage-yatech.fr' },
+    { tel: '06 99 88 77 66', email: 'sophie@garage-yatech.fr' }
+  ];
+  e.utilisateurs.forEach((u, i) => Object.assign(u, joignables[i] || {}));
   e.prestations = catalogueDepart();
   e.credits = {
     solde: 12,

@@ -18,15 +18,17 @@ import { S, maj, instantane, remplacer, ecrireMaintenant } from '../core/store.j
 import * as base from '../core/db.js';
 import { telecharger, nomDate, choisirFichier, lireTexte } from '../core/fichiers.js';
 import * as fmt from '../core/fmt.js';
-import { nombre, minutesEnHeure, ecartJours, JOUR } from '../core/util.js';
+import { nombre, minutesEnHeure, heureEnMinutes, ecartJours, JOUR } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import {
   ROLES, ETAPES, TYPES_PLACE, OUTILS_ELECTRO,
-  apercuNumero, nouvelUtilisateur, normaliser, neuf, estUneSauvegarde } from '../domain/schema.js';
+  apercuNumero, nouvelUtilisateur, normaliser, neuf, estUneSauvegarde,
+  FAMILLES_ALERTE } from '../domain/schema.js';
 import { enTete, champ, tete } from '../ui/widgets.js';
 import { appliquerApparence, MENU } from '../coque.js';
 import { verrou } from '../core/crypto.js';
+import * as veille from '../core/veille.js';
 
 /* Les teintes proposées pour l'accent : huit repères bien séparés sur la roue,
    plutôt qu'un sélecteur libre où l'on tombe sur un orange illisible. */
@@ -68,6 +70,7 @@ const SECTIONS = [
   { cle: 'planning',     nom: 'Planning',     icone: 'planning', peindre: sectionPlanning },
   { cle: 'stock',        nom: 'Stock',        icone: 'stock',    peindre: sectionStock },
   { cle: 'electronique', nom: 'Électronique', icone: 'puce',     peindre: sectionElectronique },
+  { cle: 'alertes',      nom: 'Alertes',      icone: 'cloche',   peindre: sectionAlertes,   pourTous: true },
   { cle: 'apparence',    nom: 'Apparence',    icone: 'soleil',   peindre: sectionApparence, pourTous: true },
   { cle: 'donnees',      nom: 'Données',      icone: 'archive',  peindre: sectionDonnees,   pourTous: true }
 ];
@@ -1054,6 +1057,159 @@ function sectionStock(ctx) {
         aide: 'Délai conseillé entre deux inventaires. 0 = pas de rappel.', taille: 's'
       })
     ])
+  ]);
+}
+
+/* ==========================================================================
+   ALERTES
+   --------------------------------------------------------------------------
+   Ce que l'outil a le droit de faire pour attirer l'attention. Chacun règle le
+   sien : c'est lui qu'on dérange.
+
+   On dit franchement ce que ça fait et ce que ça ne fait pas. Un écran qui
+   promet des avertissements et n'en envoie pas quand l'onglet est fermé, c'est
+   pire que pas d'avertissement du tout.
+   ========================================================================== */
+
+function sectionAlertes(ctx, refaire) {
+  const e = ctx.etat;
+  const moi = ctx.moi;
+  const r = veille.reglagesDe(e.reglages, moi);
+  const permission = veille.etatPermission();
+
+  /* Toute case cochée ici est enregistrée SUR LA PERSONNE : le garage propose,
+     chacun dispose. Ce qui n'a jamais été touché continue de suivre le garage. */
+  const poser = (champs) => {
+    if (!moi) return;
+    const avant = (moi.preferences && moi.preferences.notifs) || {};
+    const apres = Object.assign({}, avant, champs);
+    if (champs.quoi) apres.quoi = Object.assign({}, avant.quoi || {}, champs.quoi);
+    moi.preferences = Object.assign({}, moi.preferences, { notifs: apres });
+    maj('Réglage des alertes', (etat) => {
+      const u = lit.utilisateur(etat, moi.id);
+      if (!u) return;
+      const a = (u.preferences && u.preferences.notifs) || {};
+      const b = Object.assign({}, a, champs);
+      if (champs.quoi) b.quoi = Object.assign({}, a.quoi || {}, champs.quoi);
+      u.preferences = Object.assign({}, u.preferences, { notifs: b });
+    });
+    refaire();
+  };
+
+  const pretes = permission === 'granted';
+
+  return h('div.pile', [
+    /* --- ce que ça fait, sans enjoliver ---------------------------------- */
+    h('div.bandeau', [
+      icone('info'),
+      h('div.grandit', [
+        h('div.gras', 'Ce que l’outil peut faire, et ce qu’il ne peut pas.'),
+        h('div.petit', 'Il fait apparaître un avertissement par-dessus les autres '
+          + 'fenêtres quand quelque chose arrive — un appel à rappeler, une pièce en '
+          + 'retard, un créneau demandé. Cela ne marche que si Yatech est ouvert '
+          + 'quelque part, même en arrière-plan : tous les onglets fermés, plus rien. '
+          + 'Il n’envoie ni SMS ni e-mail tout seul ; pour joindre quelqu’un qui n’est '
+          + 'pas devant l’écran, servez-vous de « Prévenir » depuis la cloche.')
+      ])
+    ]),
+
+    permission === 'impossible'
+      ? h('div.bandeau.bandeau--alerte', [
+          icone('alerte'),
+          h('span', 'Ce navigateur ne sait pas afficher d’avertissement. Le reste de '
+            + 'l’outil fonctionne normalement ; la cloche en haut garde la liste.')
+        ])
+      : null,
+
+    permission === 'denied'
+      ? h('div.bandeau.bandeau--danger', [
+          icone('alerte'),
+          h('div.grandit', [
+            h('div.gras', 'Les avertissements sont refusés pour ce site.'),
+            h('div.petit', 'C’est le navigateur qui décide, pas l’outil : il faut '
+              + 'les réautoriser dans ses réglages de site (le cadenas à côté de '
+              + 'l’adresse), puis revenir ici.')
+          ])
+        ])
+      : null,
+
+    panneau('Sur cet appareil', [
+      ligne('Avertissements du navigateur',
+        pretes ? 'Autorisés. Cet appareil peut faire apparaître des bulles.'
+          : 'À autoriser une fois par appareil et par navigateur.',
+        permission === 'default'
+          ? h('button.bt.bt--fort', {
+              type: 'button',
+              onclick: async () => {
+                await veille.demanderPermission();
+                refaire();
+              }
+            }, [icone('cloche'), h('span', 'Autoriser')])
+          : h('span.pastille.pastille--' + (pretes ? 'ok' : 'danger'),
+              pretes ? 'autorisés' : 'refusés')),
+
+      pretes ? ligne('Voir à quoi ça ressemble',
+        'Une bulle d’essai, tout de suite.',
+        h('button.bt.bt--contour', {
+          type: 'button',
+          onclick: () => {
+            if (!veille.essai(r)) messageErreur('Le navigateur n’a rien affiché.');
+          }
+        }, 'Essayer')) : null
+    ]),
+
+    panneau('Me prévenir', [
+      ligne('Recevoir des avertissements',
+        moi ? 'Pour ' + lit.nomUtilisateur(moi) + ', sur tous ses appareils autorisés.'
+          : 'Personne n’est connecté.',
+        bascule(!!r.actives, (v) => poser({ actives: v }), !moi)),
+
+      ligne('Un petit son avec',
+        'Court, fabriqué par le navigateur. Rien à télécharger.',
+        bascule(!!r.son, (v) => poser({ son: v }), !moi))
+    ]),
+
+    panneau('De quoi', Object.keys(FAMILLES_ALERTE).map(cle =>
+      ligne(FAMILLES_ALERTE[cle].nom, null,
+        bascule(r.quoi[cle] !== false, (v) => poser({ quoi: { [cle]: v } }), !moi))
+    )),
+
+    panneau('La paix', [
+      ligne('Ne pas déranger le soir et la nuit',
+        r.silenceActif
+          ? 'De ' + minutesEnHeure(nombre(r.silenceDe, 0)) + ' à '
+            + minutesEnHeure(nombre(r.silenceA, 0)) + '. Rien ne sonne pendant ce temps.'
+          : 'L’outil peut avertir à toute heure.',
+        bascule(!!r.silenceActif, (v) => poser({ silenceActif: v }), !moi)),
+
+      r.silenceActif ? ligne('À partir de', null,
+        h('input.saisie', {
+          type: 'time', step: 300, value: minutesEnHeure(nombre(r.silenceDe, 0)),
+          style: { maxWidth: '9rem' },
+          onchange: (ev) => poser({ silenceDe: heureEnMinutes(ev.target.value) })
+        })) : null,
+
+      r.silenceActif ? ligne('Jusqu’à', null,
+        h('input.saisie', {
+          type: 'time', step: 300, value: minutesEnHeure(nombre(r.silenceA, 0)),
+          style: { maxWidth: '9rem' },
+          onchange: (ev) => poser({ silenceA: heureEnMinutes(ev.target.value) })
+        })) : null
+    ]),
+
+    estPatron(ctx) ? panneau('Ce que le garage propose', [
+      h('div.panneau__corps', h('div.petit.faible',
+        'Ces réglages servent de point de départ à qui n’a rien choisi. '
+        + 'Ils ne défont pas les choix déjà faits par quelqu’un.')),
+      reglageBascule(ctx, {
+        cle: 'notifs.actives', titre: 'Avertir, par défaut',
+        lire: (etat) => !!(etat.reglages.notifs || {}).actives,
+        ecrire: (etat, v) => {
+          etat.reglages.notifs = Object.assign({}, etat.reglages.notifs, { actives: v });
+        },
+        aide: 'Pour les personnes qui n’ont pas encore réglé les leurs.'
+      })
+    ]) : null
   ]);
 }
 
