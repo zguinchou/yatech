@@ -29,7 +29,8 @@ import { maj } from '../core/store.js';
 import * as fmt from '../core/fmt.js';
 import {
   jour0, lundi, plusJours, estAujourdhui, minutesEnHeure, heureEnMinutes,
-  depuisIsoJour, nombre, borne, par, grouper, pluriel, plaqueJolie } from '../core/util.js';
+  depuisIsoJour, nombre, borne, par, grouper, pluriel, plaqueJolie,
+  attend } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import { TYPES_CRENEAU, nouveauCreneau } from '../domain/schema.js';
@@ -135,7 +136,13 @@ function barre(cadre) {
         h('button.bt.bt--fort', {
           type: 'button',
           onclick: () => modaleCreneau(cadre, null, {})
-        }, [icone('plus'), h('span', 'Créneau')])
+        }, [icone('plus'), h('span', 'Créneau')]),
+        /* Une demande arrivée par WhatsApp : on colle, elle entre au planning
+           avec le véhicule, la plaque et les prestations déjà dedans. */
+        h('button.bt.bt--contour', {
+          type: 'button',
+          onclick: () => modaleCollerDemande(cadre)
+        }, [icone('televerser'), h('span', 'Coller une demande')])
       ]
     }),
     h('div.rang.enroule', [
@@ -879,6 +886,94 @@ function ligneListe(cadre, c) {
       : null,
     c.fait ? h('span.pastille.pastille--ok.pastille--sans-point', 'fait') : null
   ]);
+}
+
+/* ==========================================================================
+   UNE DEMANDE REÇUE PAR MESSAGE
+   --------------------------------------------------------------------------
+   Le confrère a rempli son espace et envoyé un message avec un code dedans.
+   On colle le message entier — personne ne va sélectionner proprement soixante
+   caractères sur un téléphone — et la demande entre au planning.
+   ========================================================================== */
+
+function modaleCollerDemande(cadre) {
+  const zone = h('textarea.saisie', {
+    rows: 6,
+    placeholder: 'Collez ici le message reçu du confrère, en entier.',
+    autofocus: true
+  });
+  const apercu = h('div');
+  let lue = null;
+
+  async function relire() {
+    const { deballerDemande } = await import('../domain/demandePro.js');
+    lue = await deballerDemande(zone.value);
+    if (!lue) {
+      poser(apercu, zone.value.trim()
+        ? h('div.bandeau.bandeau--alerte', [
+            icone('alerte'),
+            h('div.grandit', [
+              h('div.gras', 'Aucun code trouvé dans ce texte.'),
+              h('div.petit', 'Le message du confrère se termine par une ligne '
+                + '« YATECH-RDV: » suivie du code. S’il manque, posez le créneau '
+                + 'à la main : le message reste lisible.')
+            ])
+          ])
+        : null);
+      return;
+    }
+    const c = lue.ci ? lit.client(cadre.e, lue.ci) : null;
+    poser(apercu, h('div.bandeau.bandeau--ok', [
+      icone('cocheRonde'),
+      h('div.grandit.pile-s', [
+        h('div.gras', 'Demande de ' + (c ? lit.nomClient(c) : (lue.cn || 'un confrère'))),
+        h('div.petit', [
+          lue.ve || null,
+          lue.im ? plaqueJolie(lue.im) : null,
+          nombre(lue.j, 0) ? 'souhaité le ' + fmt.date(lue.j, 'lettre') : null
+        ].filter(Boolean).join(' · ')),
+        (lue.p || []).length
+          ? h('div.pile-s', (lue.p || []).map(([code, libelle, prix]) =>
+              h('div.rang-s', [
+                h('span.grandit.coupe', libelle),
+                nombre(prix, 0) ? h('span.num.petit', fmt.euros(prix)) : null
+              ])))
+          : null,
+        !c && lue.cn
+          ? h('div.minus.tres-faible', 'Ce confrère n’est pas (ou plus) dans vos '
+              + 'clients : la demande sera créée sans fiche rattachée.')
+          : null
+      ])
+    ]));
+  }
+
+  zone.addEventListener('input', attend(relire, 250));
+
+  modale({
+    titre: 'Coller une demande',
+    corps: h('div.pile', [
+      h('div.bandeau', [
+        icone('info'),
+        h('span', 'Rien ne circule tout seul entre son téléphone et le vôtre : '
+          + 'c’est son message qui porte la demande. Collez-le ici et elle entre '
+          + 'au planning avec le véhicule et les prestations qu’il a cochées.')
+      ]),
+      zone,
+      apercu
+    ]),
+    actions: [
+      { texte: 'Annuler', ton: 'contour' },
+      {
+        texte: 'Créer la demande', ton: 'fort',
+        faire: () => {
+          if (!lue) { message('Aucun code lisible dans ce texte.', { ton: 'alerte' }); return false; }
+          act.recevoirDemandePro(lue);
+          message('Demande ajoutée au planning', { ton: 'ok' });
+          cadre.refaire();
+        }
+      }
+    ]
+  });
 }
 
 /* ==========================================================================

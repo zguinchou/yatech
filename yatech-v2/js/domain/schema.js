@@ -720,6 +720,9 @@ export function nouvellePrestation(champs) {
     prixHT: 0,               // grille particulier ; 0 = calculé sur le temps
     prixPro: 0,              // grille confrère ; 0 = remise générale appliquée
     credits: 0,              // crédits Autotuner que la prestation consomme
+    /* Pas homologuée pour la voie publique. La mention suit la prestation
+       partout : sur la grille du confrère comme sur le document du client. */
+    horsRoute: false,
     detail: '',
     actif: true,
     cree: Date.now()
@@ -1036,6 +1039,7 @@ export function normaliser(e) {
   e.prestations.forEach(p => {
     if (!p.id) p.id = id('pst');
     if (typeof p.actif !== 'boolean') p.actif = true;
+    if (typeof p.horsRoute !== 'boolean') p.horsRoute = false;
     if (typeof p.temps !== 'number') p.temps = 0;
     if (typeof p.prixHT !== 'number') p.prixHT = 0;
     if (typeof p.prixPro !== 'number') p.prixPro = 0;

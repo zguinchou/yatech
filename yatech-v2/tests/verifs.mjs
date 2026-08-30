@@ -64,6 +64,9 @@ import {
   raccourcisDe, BLOCS_COLONNES, CACHES_DORIGINE
 } from '../js/domain/accueil.js';
 import { reglagesDe, silencieux, aAnnoncer, vuesSuivantes } from '../js/core/veille.js';
+import {
+  preparerDemande, emballerDemande, deballerDemande, messageDemande, MARQUE
+} from '../js/domain/demandePro.js';
 import { S, maj, annuler, refaire, peutAnnuler } from '../js/core/store.js';
 
 let passes = 0, echecs = 0;
@@ -616,6 +619,42 @@ groupe('Être prévenu', () => {
   verifie('toute la salve est retenue', Object.keys(vuesSuivantes(dix)).length, 10);
 });
 
+groupe('La demande d’un confrère fait l’aller-retour', () => {
+  const demande = {
+    clientId: 'cli_9', confrere: 'Garage du Pont',
+    vehicule: 'Golf VII 2.0 TDI', immat: 'ab123cd',
+    jour: Date.UTC(2026, 5, 15), heure: 9 * 60,
+    tel: '04 78 00 11 22',
+    texte: 'Le client se plaint d’un manque de puissance à froid.',
+    prestations: [
+      { code: 'REP-01', libelle: 'Stage 1 — cartographie moteur', prix: 290 },
+      { code: 'REP-05', libelle: 'Retrait EGR', prix: 190 }
+    ]
+  };
+
+  const range = preparerDemande(demande);
+  verifie('le confrère est identifié', range.ci, 'cli_9');
+  verifie('la plaque est rangée proprement', range.im, 'AB123CD');
+  verifie('les prestations voyagent en clair', range.p.length, 2);
+  verifie('avec leur prix', range.p[0][2], 290);
+  /* Un texte de trois pages ne doit pas faire un code de trois pages. */
+  const long = preparerDemande({ texte: 'x'.repeat(2000), prestations: [] });
+  verifie('le texte est borné', long.t.length, 600);
+  verifie('les prestations aussi',
+    preparerDemande({ prestations: Array.from({ length: 50 }, () => ({ code: 'A' })) }).p.length, 20);
+
+  /* --- le message que le confrère envoie vraiment ------------------------- */
+  const texte = messageDemande({
+    confrere: 'Garage du Pont', vehicule: 'Golf VII', immat: 'AB-123-CD',
+    jourTexte: 'lundi 15 juin, 9 h', total: '480 € HT',
+    prestations: [{ libelle: 'Stage 1', prix: '290 €' }, { libelle: 'Retrait EGR', prix: '190 €' }],
+    texte: 'Manque de puissance à froid.', tel: '04 78 00 11 22'
+  }, 'YATECH-RDV:zABC');
+  vrai('le message se lit sans le code', texte.includes('Stage 1') && texte.includes('Golf VII'));
+  vrai('le jour souhaité y est', texte.includes('lundi 15 juin'));
+  vrai('et le code est à la fin', texte.trim().endsWith('YATECH-RDV:zABC'));
+});
+
 groupe('Reconnaître une sauvegarde', () => {
   /* Ce contrôle protège d'une perte de données : normaliser() est indulgent
      par nécessité et transformerait n'importe quoi en garage vide. */
@@ -789,6 +828,42 @@ groupe('Modifications et annulation', () => {
   verifie('n’importe quel texte est refusé', await deballer('pbonjour'), null);
   verifie('une grille d’une version future est refusée',
     await deballer(await emballer(Object.assign({}, gPro, { v: 99 }))), null);
+}
+
+/* --- l'aller-retour d'une demande, asynchrone aussi ---------------------- */
+{
+  groupeCourant = groupes.find(g => g.nom === 'La demande d’un confrère fait l’aller-retour');
+
+  const d = {
+    clientId: 'cli_9', confrere: 'Garage du Pont', vehicule: 'Golf VII',
+    immat: 'AB-123-CD', jour: Date.UTC(2026, 5, 15), heure: 9 * 60,
+    texte: 'Manque de puissance à froid.', tel: '0478001122',
+    prestations: [{ code: 'REP-01', libelle: 'Stage 1', prix: 290 }]
+  };
+  const code = await emballerDemande(d);
+  vrai('le code s’annonce', code.startsWith(MARQUE));
+  vrai('et ne contient que des caractères qu’un SMS ne casse pas',
+    /^YATECH-RDV:[zp][A-Za-z0-9_-]+$/.test(code));
+  vrai('il tient dans un message', code.length < 1200);
+
+  const relu = await deballerDemande(code);
+  verifie('le confrère est retrouvé', relu.ci, 'cli_9');
+  verifie('le véhicule aussi', relu.ve, 'Golf VII');
+  verifie('la prestation aussi', relu.p[0][1], 'Stage 1');
+
+  /* Personne ne sélectionne proprement soixante caractères sur un téléphone :
+     on doit retrouver le code dans le message entier, guillemets compris. */
+  const messageEntier = messageDemande(Object.assign({}, d, { jourTexte: 'lundi 15 juin' }), code);
+  const dansLeMessage = await deballerDemande(messageEntier);
+  vrai('on le retrouve dans le message complet', dansLeMessage && dansLeMessage.ci === 'cli_9');
+  const cite = '> ' + messageEntier.replace(/\n/g, '\n> ') + '\n\nrépondu depuis mon téléphone';
+  const dansLaCitation = await deballerDemande(cite);
+  vrai('même recopié dans une réponse citée', dansLaCitation && dansLaCitation.ci === 'cli_9');
+
+  verifie('un texte sans code ne donne rien', await deballerDemande('bonjour, un rdv ?'), null);
+  verifie('un code abîmé ne donne rien', await deballerDemande(MARQUE + 'zNAWAK!!'), null);
+  verifie('une demande d’une version future est refusée',
+    await deballerDemande(MARQUE + await (await import('../js/core/codec.js')).emballer({ v: 99, p: [] })), null);
 }
 
 /* ==========================================================================

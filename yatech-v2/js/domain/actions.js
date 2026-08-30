@@ -11,10 +11,10 @@
    ========================================================================== */
 
 import { S, maj, noter } from '../core/store.js';
-import { id, nombre, cts, plusJours, plaqueNue, JOUR } from '../core/util.js';
+import { id, nombre, cts, plusJours, plaqueNue, plaqueJolie, JOUR } from '../core/util.js';
 import {
   nouveauDossier, nouveauDevis, nouvelleFacture, nouveauMouvement, nouvelleLigne,
-  nouvelleIntervention, prochainNumero, ETAPES_OUVERTES, CLES_ETAPES
+  nouvelleIntervention, nouveauCreneau, prochainNumero, ETAPES_OUVERTES, CLES_ETAPES
 } from './schema.js';
 import { totaux, contexte, figerLignes, prixPiece, prixPrestation } from './calculs.js';
 import * as lit from './selecteurs.js';
@@ -267,6 +267,56 @@ export function mouvementStock(champs, options) {
     e.mouvements.push(m);
     return m;
   }, { cible: { type: 'pieces', id: champs.pieceId } });
+}
+
+/* ==========================================================================
+   UNE DEMANDE DE CONFRÈRE, REÇUE PAR MESSAGE
+   --------------------------------------------------------------------------
+   Le confrère a rempli sa page, envoyé un message, et collé un code. On le
+   déballe et la demande entre au planning telle qu'il l'a écrite — sans
+   retaper la plaque ni les prestations.
+   ========================================================================== */
+
+/**
+ * @param {object} d  ce que `demandePro.deballerDemande` a rendu
+ * @returns {object|null} le créneau créé
+ */
+export function recevoirDemandePro(d) {
+  if (!d) return null;
+  return maj('Demande de confrère reçue', (e) => {
+    /* Le confrère est identifié par son id s'il existe encore ; sinon on
+       garde son nom dans le titre plutôt que de perdre la demande. */
+    const c = d.ci ? lit.client(e, d.ci) : null;
+    const nom = c ? lit.nomClient(c) : (d.cn || 'Un confrère');
+    const plaque = d.im ? plaqueJolie(d.im) : '';
+    const debut = nombre(d.j, 0)
+      ? nombre(d.j, 0) + nombre(d.h, 0) * 60000
+      : Date.now() + JOUR;
+    const duree = Math.max(30, (d.p || []).length * 60) * 60000;
+
+    const prestations = (d.p || [])
+      .map(([code, libelle, prix]) => '• ' + libelle
+        + (code ? ' (' + code + ')' : '')
+        + (nombre(prix, 0) ? ' — ' + nombre(prix, 0) + ' € HT' : ''));
+
+    const cre = nouveauCreneau({
+      clientId: c ? c.id : null,
+      type: 'rdv',
+      demande: true,
+      debut,
+      fin: debut + duree,
+      titre: nom + (d.ve ? ' — ' + String(d.ve).slice(0, 40) : '')
+        + (plaque ? ' (' + plaque + ')' : ''),
+      note: [
+        [d.ve, plaque].filter(Boolean).join(' · '),
+        prestations.length ? prestations.join('\n') : '',
+        d.t || '',
+        d.te ? 'Le joindre : ' + d.te : ''
+      ].filter(Boolean).join('\n')
+    });
+    e.creneaux.push(cre);
+    return cre;
+  });
 }
 
 /* ==========================================================================

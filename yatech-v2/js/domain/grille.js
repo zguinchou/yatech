@@ -24,9 +24,10 @@
    ========================================================================== */
 
 import { prixPrestation, contexte } from './calculs.js';
+import { emballer, deballer as deballerBrut } from '../core/codec.js';
 import { nombre } from '../core/util.js';
 
-export const VERSION_GRILLE = 1;
+export const VERSION_GRILLE = 2;
 
 /* ==========================================================================
    FABRIQUER
@@ -50,7 +51,10 @@ export function preparerGrille(e, client) {
       p.code || '',
       p.libelle || '',
       prixPrestation(p, ctx),
-      nombre(p.temps, 0)
+      nombre(p.temps, 0),
+      /* Modèle 2 : le confrère doit savoir ce qui n'est pas homologué route
+         AVANT de le demander — c'est lui qui rendra la voiture à son client. */
+      p.horsRoute ? 1 : 0
     ]);
   }
 
@@ -66,6 +70,11 @@ export function preparerGrille(e, client) {
       e: r.email || ''
     },
     c: client ? (client.societe || [client.prenom, client.nom].filter(Boolean).join(' ')) : '',
+    /* L'identifiant du confrère revient dans sa demande : le garage sait de
+       qui elle vient sans avoir à deviner d'après un nom mal orthographié. */
+    ci: client ? client.id : '',
+    /* Les jours ouvrés, pour que la page propose des dates qui existent. */
+    jo: Array.isArray(r.joursOuvres) ? r.joursOuvres.slice() : [1, 2, 3, 4, 5],
     th: ctx.taux,
     tva: ctx.tvaApplicable ? ctx.tva : 0,
     rem: nombre(client && client.remise, 0),
@@ -74,68 +83,16 @@ export function preparerGrille(e, client) {
   };
 }
 
-/* ==========================================================================
-   EMBALLER ET DÉBALLER
-   Base64 « sûr pour une adresse » : ni +, ni /, ni =. Compressé quand le
-   navigateur sait le faire — la grille passe alors de deux kilo-octets à
-   sept cents, ce qui garde le lien collable dans un SMS.
-   ========================================================================== */
-
-const enB64url = (octets) => {
-  let s = '';
-  for (let i = 0; i < octets.length; i++) s += String.fromCharCode(octets[i]);
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-};
-
-const deB64url = (texte) => {
-  const t = String(texte).replace(/-/g, '+').replace(/_/g, '/');
-  const brut = atob(t + '==='.slice((t.length + 3) % 4));
-  const octets = new Uint8Array(brut.length);
-  for (let i = 0; i < brut.length; i++) octets[i] = brut.charCodeAt(i);
-  return octets;
-};
-
-async function comprimer(octets) {
-  if (typeof CompressionStream === 'undefined') return null;
-  try {
-    const flux = new Blob([octets]).stream().pipeThrough(new CompressionStream('gzip'));
-    return new Uint8Array(await new Response(flux).arrayBuffer());
-  } catch (e) { return null; }
-}
-
-async function decomprimer(octets) {
-  if (typeof DecompressionStream === 'undefined') return null;
-  try {
-    const flux = new Blob([octets]).stream().pipeThrough(new DecompressionStream('gzip'));
-    return new Uint8Array(await new Response(flux).arrayBuffer());
-  } catch (e) { return null; }
-}
-
-/** Emballe la grille pour la mettre dans une adresse. */
-export async function emballer(grille) {
-  const brut = new TextEncoder().encode(JSON.stringify(grille));
-  const serre = await comprimer(brut);
-  /* La lettre de tête dit comment déballer : « z » compressé, « p » tel quel.
-     Sans elle, un navigateur qui ne sait pas compresser produirait un lien
-     qu'un autre ne saurait pas relire. */
-  return serre && serre.length < brut.length
-    ? 'z' + enB64url(serre)
-    : 'p' + enB64url(brut);
-}
+/* L'emballage vit dans `core/codec.js` : la grille et la demande de rendez-vous
+   voyagent de la même façon, et une seule implémentation se relit. */
+export { emballer };
 
 /** Déballe une grille reçue dans une adresse. Rend null si ce n'en est pas une. */
 export async function deballer(charge) {
-  const t = String(charge || '').trim();
-  if (t.length < 2) return null;
-  try {
-    const octets = deB64url(t.slice(1));
-    const brut = t[0] === 'z' ? await decomprimer(octets) : octets;
-    if (!brut) return null;
-    const g = JSON.parse(new TextDecoder().decode(brut));
-    if (!g || typeof g !== 'object' || !Array.isArray(g.f)) return null;
-    if (nombre(g.v, 0) > VERSION_GRILLE) return null;   // écrite par une version plus récente
-    return g;
-  } catch (e) { return null; }
+  const g = await deballerBrut(charge);
+  if (!g || typeof g !== 'object' || !Array.isArray(g.f)) return null;
+  if (nombre(g.v, 0) > VERSION_GRILLE) return null;   // écrite par une version plus récente
+  return g;
 }
 
 /** Le lien complet à envoyer au confrère. */

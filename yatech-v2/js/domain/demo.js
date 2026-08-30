@@ -73,6 +73,38 @@ export function catalogueDepart() {
     p('ECU-07', 'Remise à zéro compteurs après intervention', 'Électronique','electro',0.5, 55,  45),
     p('ECU-08', 'Sauvegarde EEPROM / lecture mémoire',        'Électronique','electro',1,  95,  75),
 
+    /* --- reprogrammation moteur --------------------------------------------
+       C'est ce qu'un confrère demande le plus souvent, et c'est ce dont il
+       veut le prix avant d'appeler. Une famille à part : on ne cherche pas un
+       Stage 1 au milieu des vidanges.
+
+       Les prestations marquées « hors route » ne sont pas homologuées pour un
+       usage sur la voie publique. Le champ existe pour que ce soit écrit sur
+       la grille du confrère comme sur le document du client final. */
+    p('REP-01', 'Stage 1 — cartographie moteur',              'Reprogrammation','electro',2,   390, 290, { credits: 1 }),
+    p('REP-02', 'Stage 2 — avec mécanique modifiée',          'Reprogrammation','electro',3,   590, 450, { credits: 1 }),
+    p('REP-03', 'Cartographie sur mesure (banc / route)',     'Reprogrammation','electro',4,   790, 620, { credits: 2 }),
+    p('REP-04', 'Conversion éthanol E85',                     'Reprogrammation','electro',2,   450, 350, { credits: 1 }),
+    p('REP-05', 'Retrait EGR',                                'Reprogrammation','electro',1.5, 250, 190, { credits: 1, horsRoute: true }),
+    p('REP-06', 'Retrait FAP / DPF',                          'Reprogrammation','electro',1.5, 290, 220, { credits: 1, horsRoute: true }),
+    p('REP-07', 'Retrait AdBlue / SCR',                       'Reprogrammation','electro',2,   390, 300, { credits: 1, horsRoute: true }),
+    p('REP-08', 'Retrait catalyseur / sonde lambda',          'Reprogrammation','electro',1.5, 250, 190, { credits: 1, horsRoute: true }),
+    p('REP-09', 'Suppression volets d’admission',             'Reprogrammation','electro',1,   180, 140, { credits: 1 }),
+    p('REP-10', 'Désactivation Start & Stop',                 'Reprogrammation','electro',0.5, 90,  70),
+    p('REP-11', 'Retrait limiteur de vitesse (Vmax)',         'Reprogrammation','electro',1,   190, 150, { credits: 1, horsRoute: true }),
+    p('REP-12', 'DTC off — effacement de défauts en mémoire', 'Reprogrammation','electro',1,   120, 95),
+    p('REP-13', 'Reprogrammation boîte automatique (TCU)',    'Reprogrammation','electro',2.5, 450, 350, { credits: 1 }),
+
+    /* --- codage et antidémarrage -------------------------------------------- */
+    p('COD-01', 'Codage calculateur neuf ou d’occasion',      'Codage','electro',2,   220, 170, { credits: 1 }),
+    p('COD-02', 'Immo off — désactivation antidémarrage',     'Codage','electro',1.5, 190, 150, { credits: 1 }),
+    p('COD-03', 'Programmation de clé supplémentaire',        'Codage','electro',1,   110, 85,  { credits: 1 }),
+    p('COD-04', 'Toutes clés perdues',                        'Codage','electro',2.5, 280, 220, { credits: 1 }),
+    p('COD-05', 'Codage injecteurs (IMA / correction)',       'Codage','electro',1,   120, 95),
+    p('COD-06', 'Correction compteur après réparation',       'Codage','electro',1,   140, 110),
+    p('COD-07', 'Codage boîtier confort / BSI',               'Codage','electro',1.5, 170, 135),
+    p('COD-08', 'Adaptation calculateur de boîte',            'Codage','electro',2,   240, 190, { credits: 1 }),
+
     /* --- prestations pour confrères ---------------------------------------- */
     p('PRO-01', 'Intervention électronique sur véhicule confrère','Confrères','electro',1, 0, 0,
       { detail: 'Déplacement non compris. Le véhicule reste sous la responsabilité du garage demandeur.' }),

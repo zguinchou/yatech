@@ -464,6 +464,61 @@ au client. C'est lui qui roule avec.
 
 ---
 
+## L'espace des confrères
+
+Un garage voisin nous confie l'électronique. Il doit pouvoir consulter **ses**
+prix et demander un rendez-vous sans décrocher le téléphone.
+
+### Pourquoi ce n'est pas un compte avec mot de passe
+
+Il faut le dire avant tout le reste. Un compte, ça suppose un serveur qui garde
+les identifiants et les données — l'outil n'en a pas, et c'est ce qui lui permet
+de tourner sans abonnement. **Un e-mail et un mot de passe qui n'ouvriraient
+rien de vérifiable seraient un décor.**
+
+Ce qui marche vraiment, et qui est en place : **un lien par confrère**, qui
+porte lui-même ses tarifs. Le lien EST la clé — on en renvoie un nouveau pour
+révoquer l'ancien. Il s'ouvre sur son téléphone, sans réseau, sans compte, et
+rien ne part sur un serveur : ce qui suit le `#` d'une adresse n'est jamais
+envoyé à l'hébergeur.
+
+*(Un vrai espace avec comptes est faisable — Cloudflare Pages Functions + D1,
+gratuit à ce volume — mais c'est un autre chantier : une base en ligne, une
+synchronisation, des sauvegardes. À décider, pas à improviser.)*
+
+### Ce qu'il voit
+
+- **Ses tarifs**, à son prix confrère, par famille. Dont les deux qu'il attend :
+  **Reprogrammation** (Stage 1, Stage 2, sur mesure, éthanol E85, EGR, FAP,
+  AdBlue, catalyseur, volets, Start & Stop, Vmax, DTC, boîte TCU) et **Codage**
+  (calculateur, immo off, clé supplémentaire, toutes clés perdues, injecteurs,
+  compteur, BSI, boîte).
+- Ce qui **n'est pas homologué route** est marqué comme tel : c'est lui qui
+  rendra la voiture à son client.
+- Jamais un prix d'achat, jamais une marge, jamais un autre client.
+
+### Comment il prend rendez-vous
+
+Il touche le **+** devant ce qu'il veut — le prix part avec la demande, personne
+ne le retape. Il indique le véhicule, la plaque, un jour souhaité, et ce qu'il
+a constaté. La page fabrique un **message** qu'il envoie d'un geste par
+WhatsApp, SMS ou e-mail.
+
+Le message est lisible tel quel, et il porte un **code** à la fin. Au garage :
+*Planning → Coller une demande*, on colle le message entier, et la demande entre
+au planning avec le véhicule, la plaque, les prestations et le numéro pour
+rappeler. **Rien n'est retapé.** Et si le code manque, le message reste lisible
+et se saisit à la main.
+
+La demande lève l'alerte « demande de créneau » — celle qui déclenche un
+avertissement si la famille *rdv* est acceptée.
+
+Deux choses dites franchement sur sa page : le message part de **son**
+téléphone, la page n'envoie rien toute seule ; et tant que le garage n'a pas
+répondu, **ce n'est pas un rendez-vous, c'est une demande**.
+
+---
+
 ## Ce qu'on envoie à un confrère
 
 Deux choses différentes, sur la fiche d'un client professionnel.

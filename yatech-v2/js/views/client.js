@@ -561,29 +561,32 @@ function blocGrilleTarifaire(e, c) {
   };
 
   const peindre = () => poser(zone, [
-    h('p.petit.faible', 'Le lien contient la grille : il s’ouvre sur le téléphone du '
-      + 'confrère, sans réseau et sans code. Il donne une photographie de vos tarifs '
-      + 'du jour — après un changement de prix, renvoyez-en un.'),
+    h('p.petit.faible', 'Un seul lien, à envoyer une fois. Il porte vos tarifs et '
+      + 's’ouvre sur SON téléphone, sans réseau et sans compte. Il y coche ce qu’il '
+      + 'veut, choisit un jour, et vous renvoie une demande que vous collez ici en '
+      + 'un geste. C’est une photographie de vos prix du jour : après un changement '
+      + 'de tarif, renvoyez-en un.'),
     h('div.rang.enroule', [
       h('button.bt.bt--fort', {
         type: 'button',
         onclick: async (ev) => {
           const l = await fabriquer();
           const ok = await copier(l);
-          message(ok ? 'Lien de la grille copié' : 'Copie impossible',
+          message(ok ? 'Lien de son espace copié' : 'Copie impossible',
             { ton: ok ? 'ok' : 'danger' });
         }
-      }, [icone('copier'), h('span', 'Copier le lien de la grille')]),
+      }, [icone('copier'), h('span', 'Copier le lien')]),
       h('button.bt.bt--contour', {
         type: 'button',
         onclick: async (ev) => {
           const l = await fabriquer();
           menuEnvoi(ev.currentTarget, {
             tel: c.tel, email: c.email,
-            sujet: 'Votre grille tarifaire — ' + (e.reglages.raisonSociale || e.reglages.nomOutil || ''),
+            sujet: 'Votre espace professionnel — ' + (e.reglages.raisonSociale || e.reglages.nomOutil || ''),
             texte: (e.reglages.messageGrille
-              || 'Bonjour,\n\nVoici votre grille tarifaire :\n{lien}\n\nElle s’ouvre '
-                 + 'directement, sans code. Gardez le lien.').replace('{lien}', l)
+              || 'Bonjour,\n\nVoici votre espace : vos tarifs, et de quoi nous '
+                 + 'demander un rendez-vous en cochant ce qu’il vous faut.\n{lien}\n\n'
+                 + 'Il s’ouvre directement, sans code. Gardez le lien.').replace('{lien}', l)
           });
         }
       }, [icone('partage'), h('span', 'Envoyer')]),
@@ -599,7 +602,7 @@ function blocGrilleTarifaire(e, c) {
   return h('div.panneau', [
     h('div.panneau__tete', [
       icone('tarifs', { taille: 16 }),
-      h('h2.grandit', 'Sa grille tarifaire'),
+      h('h2.grandit', 'Son espace professionnel'),
       h('span.pastille.pastille--ok.pastille--sans-point', 'marche partout')
     ]),
     h('div.panneau__corps', zone)

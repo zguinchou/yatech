@@ -414,6 +414,27 @@ input[type="checkbox"], input[type="radio"] {
   white-space: nowrap;
 }
 
+/* --------------------------------------------------------------------------
+   BARRE DE PANIER
+   Ce que le confrère a coché le suit au bas de l'écran, avec de quoi passer à
+   la demande. Sous le pouce, au-dessus de tout, et jamais au-dessus du texte
+   qu'on est en train de lire — la page réserve la place en bas.
+   -------------------------------------------------------------------------- */
+.barre-panier {
+  position: sticky;
+  bottom: var(--e-3);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-3);
+  margin-top: var(--e-4);
+  border: 1px solid var(--accent-trait);
+  border-radius: var(--r-m);
+  background: var(--plan);
+  box-shadow: var(--ombre-2, 0 6px 24px rgba(0,0,0,.18));
+}
+
 /* ==========================================================================
    PASTILLES D'ÉTAT
    Une pastille dit un état, jamais une action. La couleur porte le sens :
