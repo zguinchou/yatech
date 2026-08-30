@@ -887,8 +887,24 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
   cursor: pointer;
   transition: background .18s, border-color .18s;
 }
-.place[data-etat="libre"]  { background: color-mix(in srgb, var(--libre) 26%, transparent);  border-color: color-mix(in srgb, var(--libre) 75%, transparent); }
-.place[data-etat="occupe"] { background: color-mix(in srgb, var(--occupe) 30%, transparent); border-color: color-mix(in srgb, var(--occupe) 70%, transparent); }
+/* Une place prise n'a pas besoin d'être peinte en rouge : la voiture est
+   dessus, on la voit. On rend donc l'enrobé à l'enrobé, et la couleur ne sert
+   plus qu'à ce qui n'est pas visible autrement — une place libre, qui n'a
+   justement rien à montrer. */
+.place[data-etat="libre"] {
+  background: color-mix(in srgb, var(--libre) 15%, transparent);
+  border-color: color-mix(in srgb, var(--libre) 80%, transparent);
+}
+.place[data-etat="occupe"] {
+  background: none;
+  border-color: color-mix(in srgb, var(--marquage) 62%, transparent);
+}
+/* Une voiture qui dort là depuis trop longtemps, elle, doit se voir : c'est
+   une place qui ne rapporte plus rien. */
+.place[data-etat="occupe"].vieille {
+  background: color-mix(in srgb, var(--occupe) 16%, transparent);
+  border-color: color-mix(in srgb, var(--occupe) 65%, transparent);
+}
 .place:hover { background: color-mix(in srgb, var(--accent) 40%, transparent); border-color: var(--accent); }
 .place.choisie { background: color-mix(in srgb, var(--accent) 52%, transparent); border-color: var(--accent); }
 .place.cible { animation: pulse 1.1s ease-in-out infinite; }
@@ -919,13 +935,68 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
 
 .caisse { inset: 0; --bh: var(--hb); border-radius: 3px; }
 .caisse > i    { --c: color-mix(in srgb, var(--peau) 88%, #000); }
-.caisse > i.t  { --c: var(--peau); border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+/* Le capot et le coffre prennent la lumière autrement que les flancs : une
+   arête claire au milieu suffit à donner du galbe à la tôle. */
+.caisse > i.t {
+  --c: transparent; border-radius: 3px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--peau) 82%, #000) 0 7%,
+      var(--peau) 22%, color-mix(in srgb, var(--peau) 88%, #fff) 50%,
+      var(--peau) 78%, color-mix(in srgb, var(--peau) 82%, #000) 93% 100%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+}
 .caisse > i.n  { --c: color-mix(in srgb, var(--peau) 72%, #000); }
 .caisse > i.s  { --c: color-mix(in srgb, var(--peau) 62%, #000); }
 
-.cabine { left: 13%; right: 13%; top: 24%; bottom: 26%; --bh: var(--hc); transform: translateZ(var(--hb)); }
+/* L'habitacle tient un bon tiers de la longueur, posé un peu en arrière :
+   c'est la proportion d'une berline. Occupant la moitié, la voiture devenait
+   un fourgon. */
+.cabine { left: 16%; right: 16%; top: 31%; bottom: 33%; --bh: var(--hc); transform: translateZ(var(--hb)); }
 .cabine > i    { --c: color-mix(in srgb, #0d1418 68%, var(--peau)); }
-.cabine > i.t  { --c: color-mix(in srgb, var(--peau) 82%, #000); border-radius: 2px; }
+/* Le toit vu de dessus, ce sont trois bandes : le pare-brise incliné à
+   l'avant, la tôle du pavillon, la lunette arrière. C'est ce qui fait qu'on
+   reconnaît une voiture et pas une boîte. */
+.cabine > i.t {
+  --c: transparent; border-radius: 2px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, #0a1016 76%, var(--peau)) 0 29%,
+      color-mix(in srgb, var(--peau) 86%, #fff) 34% 64%,
+      color-mix(in srgb, #0a1016 68%, var(--peau)) 69% 100%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.28);
+}
+
+/* — les roues : quatre pavés sombres au ras du sol, qui dépassent de la
+   carrosserie. Sans elles, la caisse flottait. — */
+.auto > .roue {
+  position: absolute; width: 10%; height: 15%;
+  background: linear-gradient(180deg, #262b31, #101418);
+  border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.45);
+  transform: translateZ(1px);
+}
+.auto > .roue.ag { left: -2.5%;  top: 15%; }
+.auto > .roue.ad { right: -2.5%; top: 15%; }
+.auto > .roue.rg { left: -2.5%;  bottom: 14%; }
+.auto > .roue.rd { right: -2.5%; bottom: 14%; }
+
+/* — les feux, posés sur les faces avant et arrière — */
+.caisse > i.phares, .caisse > i.feux {
+  position: absolute; left: 14%; right: 14%; height: 2px; border-radius: 1px;
+  background: none; box-shadow: none;
+}
+.caisse > i.phares {
+  top: 2px; transform: translateZ(calc(var(--hb) + .4px));
+  background: linear-gradient(90deg, #fdf6e3 0 22%, transparent 22% 78%, #fdf6e3 78%);
+  opacity: .9;
+}
+.caisse > i.feux {
+  bottom: 2px; transform: translateZ(calc(var(--hb) + .4px));
+  background: linear-gradient(90deg, #d8382a 0 24%, transparent 24% 76%, #d8382a 76%);
+  opacity: .85;
+}
+/* Vue à plat, le relief ne se lit plus : les feux deviendraient deux traits
+   posés n'importe où. On les garde pour la vue en volume. */
+.sol.plan .caisse > i.phares, .sol.plan .caisse > i.feux { display: none; }
 
 /* — la pastille au-dessus de la voiture — */
 .marqueur {
@@ -1064,6 +1135,21 @@ select.saisie { appearance: none; background-image: none; padding-right: 30px; c
    loin avec des mains sales. */
 body { zoom: var(--echelle, 1); }
 @media print { body { zoom: 1; } }
+
+/* --- les familles de réglages --------------------------------------------
+   Cinq intertitres au lieu de seize volets d'affilée : l'œil s'arrête sur une
+   famille avant de chercher un volet dedans. */
+.fam-titre {
+  grid-column: 1/-1; display: flex; align-items: baseline; gap: 12px;
+  flex-wrap: wrap; margin: 16px 2px 1px; padding-bottom: 7px;
+  border-bottom: 1px solid var(--trait-fin);
+}
+.fam-titre:first-of-type { margin-top: 4px; }
+.fam-titre b {
+  font-family: var(--din); font-size: 12px; font-weight: 700;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--encre-2);
+}
+.fam-titre span { font-size: 12px; color: var(--encre-3); }
 
 /* --- chercher un réglage --------------------------------------------------
    Une vingtaine de volets, c'est déjà trop pour retrouver un réglage à l'œil. */
@@ -5214,6 +5300,7 @@ const S = {
   focusPresta: null,     // ligne de tarif tout juste ajoutée, à faire pointer
   memoDe: null,
   menuCible: null,          // l'écran que les flèches désignent dans le menu
+  voirCompteurs: false,     // la longue liste des compteurs est-elle dépliée ?
   memosFaits: false,
   parcVue: 'iso',
   parcFiltre: 'tous',
@@ -9531,7 +9618,10 @@ function peauVoiture(immat) {
    reste en infobulle et sur la fiche du véhicule. */
 const FILTRES_PARC = [
   { id: 'libre',   nom: 'Libres',    aide: 'Places libres',             ton: 'var(--libre)' },
-  { id: 'occupe',  nom: 'Occupées',  aide: 'Places occupées',           ton: 'var(--occupe)' },
+  /* Une place prise n'est plus peinte en rouge sur le plan — la voiture s'y
+     voit. Sa pastille de légende suit : c'est la couleur du marquage au sol.
+     Le rouge est rendu à ce qui appelle une action, l'immobilisation. */
+  { id: 'occupe',  nom: 'Occupées',  aide: 'Places occupées',           ton: 'var(--marquage-txt)' },
   { id: 'diag',    nom: 'Diag',      aide: 'Diagnostic à faire',        ton: 'var(--occupe)' },
   { id: 'devis',   nom: 'Devis',     aide: 'Devis en attente',          ton: 'var(--attente)' },
   { id: 'piece',   nom: 'Pièce',     aide: 'Attente pièce',             ton: 'var(--attente)' },
@@ -9660,7 +9750,8 @@ function vueParking() {
     const t = TYPE_PLACE[p.type] || TYPE_PLACE.std;
     const etiq = v ? etiquettePlaque(v.immat, BAY_W * S.parcZoom) : '';
 
-    return `<div class="place ${S.placeId === p.id ? 'choisie' : ''} ${S.immatPlacement && !o ? 'cible' : ''}"
+    return `<div class="place ${S.placeId === p.id ? 'choisie' : ''} ${S.immatPlacement && !o ? 'cible' : ''} ${
+          vieux ? 'vieille' : ''}"
         data-etat="${o ? 'occupe' : 'libre'}" data-type="${p.type}"
         data-act="ouvrir-place" data-id="${p.id}"
         style="left:${MARGE_G + p.col * CELL_W}px;top:${rangY(p.rang)}px;width:${BAY_W}px;height:${BAY_H}px;${visible ? '' : 'opacity:.2'}"
@@ -9669,7 +9760,12 @@ function vueParking() {
       ${t.abr ? `<span class="place-type">${esc(t.abr)}</span>` : ''}
       ${o && v ? `
         <div class="auto" style="--peau:${peauVoiture(v.immat)};${p.type === 'util' ? '--hb:17px;--hc:15px;' : ''}transform:rotate(${p.orient}deg)">
-          <div class="bloc caisse"><i class="t"></i><i class="n"></i><i class="s"></i><i class="o"></i><i class="e"></i></div>
+          ${/* Quatre roues au sol, la carrosserie par-dessus, l'habitacle
+                dessus encore : vue du dessus, une voiture se reconnaît à ses
+                roues qui dépassent et à ses vitres. */ ''}
+          <i class="roue ag"></i><i class="roue ad"></i><i class="roue rg"></i><i class="roue rd"></i>
+          <div class="bloc caisse"><i class="t"></i><i class="n"></i><i class="s"></i><i class="o"></i><i class="e"></i>
+            <i class="phares"></i><i class="feux"></i></div>
           <div class="bloc cabine"><i class="t"></i><i class="n"></i><i class="s"></i><i class="o"></i><i class="e"></i></div>
         </div>
         <div class="marqueur ${etiq ? '' : 'point'}" style="--ton:${tonEtat(o.etat)};--lev:${hampe(S.parcZoom, p.col)}px">
@@ -11011,6 +11107,53 @@ function nomVolet(section) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+/* Seize volets d'affilée, c'est une liste, pas un rangement : on cherche « le
+   parc » entre « vos textes » et « la voix ». On les range donc en cinq
+   familles, dans l'ordre où l'on s'en sert — ce qu'on touche tous les jours en
+   haut, ce qu'on règle une fois pour toutes en bas. L'ordre du code ne change
+   pas : c'est l'affichage qui se range, et un volet ajouté demain tombera dans
+   « le reste » plutôt que de disparaître. */
+const FAMILLES_REGLAGES = [
+  { nom: 'Au quotidien', dit: 'ce que vous touchez le plus souvent',
+    volets: ['l-allure-de-l-outil', 'l-ecran-d-accueil', 'le-planning', 'le-parc'] },
+  { nom: 'Le garage', dit: 'votre entreprise, vos prix, ce que lisent vos clients',
+    volets: ['votre-entreprise', 'devis-alertes', 'vos-textes', 'ce-que-voient-vos-clients', 'vos-mots'] },
+  { nom: 'Les outils', dit: 'le téléphone, la voix, les avertissements',
+    volets: ['le-telephone-de-l-atelier', 'la-voix', 'comment-vous-etre-prevenu'] },
+  { nom: 'Qui entre', dit: 'votre équipe et les garages confrères',
+    volets: ['l-equipe', 'acces-professionnels'] },
+  { nom: 'Vos données', dit: 'les sauvegardes et le passage dans EBP',
+    volets: ['donnees-cet-appareil', 'ebp-ne-rien-saisir-deux-fois'] }
+];
+
+/** Ranger les volets par famille. Une recherche en cours ne range rien : on
+ *  veut alors la liste des résultats, pas cinq intertitres presque vides. */
+function rangerVolets(zone, enRecherche) {
+  zone.querySelectorAll(':scope > .fam-titre').forEach(t => t.remove());
+  if (enRecherche) return;
+  const cartes = new Map();
+  zone.querySelectorAll(':scope > .carte[data-volet]').forEach(c => cartes.set(c.dataset.volet, c));
+  const restants = new Set(cartes.keys());
+  const apres = zone.querySelector(':scope > .rech-rien');
+  FAMILLES_REGLAGES.forEach(f => {
+    const siens = f.volets.filter(v => cartes.has(v));
+    if (!siens.length) return;
+    const t = document.createElement('div');
+    t.className = 'fam-titre';
+    t.innerHTML = `<b>${esc(f.nom)}</b><span>${esc(f.dit)}</span>`;
+    zone.insertBefore(t, apres);
+    siens.forEach(v => { zone.insertBefore(cartes.get(v), apres); restants.delete(v); });
+  });
+  // un volet ajouté demain sans famille : il se pose à la fin, jamais nulle part
+  if (restants.size) {
+    const t = document.createElement('div');
+    t.className = 'fam-titre';
+    t.innerHTML = '<b>Le reste</b><span>ce qui n\'entre dans aucune famille</span>';
+    zone.insertBefore(t, apres);
+    restants.forEach(v => zone.insertBefore(cartes.get(v), apres));
+  }
+}
+
 function plierReglages() {
   if (S.vue !== 'reglages') return;
   const zone = document.querySelector('.corps.grille');
@@ -11061,13 +11204,15 @@ function plierReglages() {
   /* Rien trouvé : le dire, plutôt que de laisser un écran vide qui ressemble à
      une panne. */
   let vide = zone.querySelector('.rech-rien');
+  if (!vide) {
+    vide = document.createElement('div');
+    vide.className = 'carte rech-rien';
+    vide.style.gridColumn = '1/-1';
+    vide.hidden = true;
+    zone.appendChild(vide);
+  }
+  rangerVolets(zone, !!mots.length);
   if (mots.length && !trouves) {
-    if (!vide) {
-      vide = document.createElement('div');
-      vide.className = 'carte rech-rien';
-      vide.style.gridColumn = '1/-1';
-      zone.appendChild(vide);
-    }
     vide.innerHTML = `<div class="vide"><h3>Aucun réglage pour « ${esc(S.rechReglage)} »</h3>
       <p class="mini">Essayez un mot plus court : « tva », « heure », « parc », « voix », « couleur ».</p></div>`;
     vide.hidden = false;
@@ -11755,11 +11900,17 @@ function vueReglages() {
           return n ? `<b>${n} affiché${n > 1 ? 's' : ''}</b> sur ${COMPTEURS.length}.`
                    : `<b>Aucun affiché</b> sur ${COMPTEURS.length}.`; })()}</p>
         <div class="rangee" style="gap:7px">
-          <button class="btn nu" data-act="compteurs-defaut">Remettre les six d'origine</button>
+          <button class="btn ${S.voirCompteurs ? '' : 'plein'}" data-act="voir-compteurs">
+            ${ic(S.voirCompteurs ? 'haut' : 'bas')} ${S.voirCompteurs ? 'Replier la liste'
+              : 'Choisir parmi les ' + COMPTEURS.length + ' compteurs'}</button>
+          ${S.voirCompteurs ? `<button class="btn nu" data-act="compteurs-defaut">Remettre les six d'origine</button>
           <button class="btn nu" data-act="compteurs-tous">Tout cocher</button>
-          <button class="btn nu" data-act="compteurs-aucun">Tout décocher</button>
+          <button class="btn nu" data-act="compteurs-aucun">Tout décocher</button>` : ''}
         </div>
-        ${(() => {
+        ${/* Quarante-quatre cases dépliées d'un coup, c'est un mur : on ouvre le
+              panneau pour ranger son accueil, pas pour relire toute la liste.
+              Elle se déplie quand on la demande. */ ''}
+        ${!S.voirCompteurs ? '' : (() => {
           const groupes = [];
           COMPTEURS.forEach(c => {
             const g = groupes.find(x => x.nom === c.groupe)
@@ -17344,6 +17495,8 @@ document.addEventListener('click', (e) => {
     'rech-reglage-vider'() { S.rechReglage = ''; S.focusRechReglage = true; rendre(); },
 
     'densite'() { poserMaPref('densite', id); poserDensite(id); rendre(); },
+
+    'voir-compteurs'() { S.voirCompteurs = !S.voirCompteurs; rendre(); },
 
     'ambiance'() {
       if (!AMBIANCES[id]) return;
