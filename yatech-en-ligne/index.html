@@ -2622,19 +2622,89 @@ button.brief-item:hover { transform: translateY(-1px); border-color: color-mix(i
 .voile.cote .modale-corps { overflow-y: auto; flex: 1; padding: 9px; gap: 9px; }
 .voile.cote .modale-pied { padding: 10px 13px; flex-direction: column; align-items: stretch; gap: 8px; }
 
-/* une ligne par destination : l'icône, le nom, ce qui attend */
-.voile.cote .tuiles { grid-template-columns: 1fr; gap: 3px; }
-.voile.cote .tuile {
-  flex-direction: row; align-items: center; gap: 10px;
-  min-height: 38px; padding: 7px 9px; border-radius: var(--r);
-  border-color: transparent; background: none;
+/* --- le panneau des écrans ------------------------------------------------
+   Une ligne par destination : l'icône, le nom, et ce qui y attend écrit en
+   toutes lettres. Un chiffre nu au bout d'une ligne ne dit pas de quoi il
+   s'agit — on ouvrait l'écran pour le découvrir. */
+/* Plus large que l'ancienne bande : il faut la place d'écrire ce qui attend.
+   Deux classes pour passer devant la règle générale du panneau latéral. */
+.voile.cote .modale.menu-plus { width: min(320px, 89vw); }
+.mn-tete {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 14px 12px; border-bottom: 1px solid var(--trait);
 }
-.voile.cote .tuile b { font-size: 13px; }
-.voile.cote .tuile { box-shadow: none; }
-.voile.cote .tuile:hover { background: var(--plan-2); border-color: var(--trait); }
-.voile.cote .tuile.on { background: var(--accent-voile); border-color: transparent; }
-.voile.cote .tuile svg { width: 17px; height: 17px; }
-.voile.cote .tuile .pastille { position: static; margin-left: auto; }
+.mn-tete h2 { font-family: var(--din); font-size: 15.5px; font-weight: 600; }
+.mn-tete .mini { margin-top: 2px; font-size: 11.5px; color: var(--encre-3); }
+.mn-tete .btn { margin-left: auto; flex: none; }
+.mn-corps { overflow-y: auto; flex: 1; padding: 7px; display: flex; flex-direction: column; gap: 1px; }
+
+.mn-l {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 8px 9px; border: 1px solid transparent; border-radius: var(--r);
+  background: none; color: var(--encre); text-align: left; cursor: pointer;
+  min-height: 46px; transition: background .12s, border-color .12s;
+}
+.mn-l:hover { background: var(--plan-2); }
+/* Le clavier et la souris ne désignent pas la même chose : la flèche vise,
+   le doigt survole. Les deux se voient, sans se confondre. */
+.mn-l.vise { background: var(--plan-2); border-color: var(--trait); }
+.mn-l:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mn-l.ici { background: var(--accent-voile); }
+.mn-l.ici .mn-txt b { color: var(--accent); }
+
+.mn-ico {
+  flex: none; width: 32px; height: 32px; border-radius: 7px;
+  display: grid; place-items: center;
+  background: var(--plan-2); border: 1px solid var(--trait-fin); color: var(--encre-2);
+}
+.mn-l.ici .mn-ico { background: var(--accent); border-color: var(--accent); color: var(--accent-sur); }
+/* Un écran où quelque chose attend porte une icône pleine : on le repère
+   avant même d'avoir lu la ligne. */
+.mn-ico.plein { background: var(--relief); border-color: var(--trait); color: var(--encre); }
+.mn-ico svg { width: 17px; height: 17px; }
+
+.mn-txt { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.mn-txt b { font-family: var(--din); font-size: 13.5px; font-weight: 600; line-height: 1.2; }
+.mn-txt small {
+  font-size: 11px; color: var(--encre-3); line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mn-nb {
+  flex: none; font-family: var(--chiffre); font-size: 11px; font-weight: 700;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: var(--occupe); color: #fff;
+}
+.mn-l kbd {
+  flex: none; font-family: var(--chiffre); font-size: 10.5px; font-weight: 600;
+  min-width: 19px; height: 19px; display: grid; place-items: center;
+  border: 1px solid var(--trait); border-bottom-width: 2px; border-radius: 4px;
+  color: var(--encre-3); background: var(--plan);
+}
+/* Sans clavier, la promesse d'un raccourci au clavier n'a pas lieu d'être. */
+@media (hover: none) { .mn-l kbd, .au-clavier { display: none; } }
+
+.mn-sep {
+  display: flex; align-items: center; gap: 9px; margin: 9px 2px 3px;
+  font-family: var(--chiffre); font-size: 9.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--encre-3);
+}
+.mn-sep::after { content: ''; flex: 1; height: 1px; background: var(--trait-fin); }
+.mn-l.geste .mn-ico { border-style: dashed; }
+.mn-l.geste:hover .mn-ico { border-style: solid; border-color: var(--accent); color: var(--accent); }
+
+.mn-pied {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px calc(10px + var(--sur-bas));
+  border-top: 1px solid var(--trait); background: var(--plan-2);
+}
+.mn-qui {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff;
+  font-family: var(--din); font-size: 14px; font-weight: 700;
+  background: hsl(var(--teinte, 220) 55% 42%);
+}
+.mn-pied .btn { flex: none; padding: 7px 10px; font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) {
   .voile.cote .modale { animation: none; }
 }
@@ -5143,6 +5213,7 @@ const S = {
   emailSaisi: '',        // l'e-mail retenu entre deux essais de connexion
   focusPresta: null,     // ligne de tarif tout juste ajoutée, à faire pointer
   memoDe: null,
+  menuCible: null,          // l'écran que les flèches désignent dans le menu
   memosFaits: false,
   parcVue: 'iso',
   parcFiltre: 'tous',
@@ -16397,7 +16468,9 @@ document.addEventListener('click', (e) => {
 
     'voix-aide'() { S.modale = { type: 'voix' }; rendre(); },
 
-    'menu-plus'() { S.modale = { type: 'plus' }; rendre(); },
+    /* On rouvre toujours sur l'écran où l'on est : garder la cible d'une
+       visite précédente ferait pointer les flèches ailleurs sans raison. */
+    'menu-plus'() { S.menuCible = null; S.modale = { type: 'plus' }; rendre(); },
     pdf() {
       toast('Dans la fenêtre d\'impression, choisissez « Enregistrer en PDF »');
       // certains cadres refusent l'impression : mieux vaut le dire que ne rien faire
@@ -17448,6 +17521,10 @@ document.addEventListener('click', (e) => {
     },
 
     exporter() { sauvegarderFichier(); },
+
+    /* Lancé depuis le menu : on referme le panneau avant, sinon il reste
+       ouvert par-dessus la fenêtre qu'on vient d'appeler. */
+    'mn-sauver'() { S.modale = null; rendre(); sauvegarderFichier(); },
 
     'export-ebp'() {
       const jour = isoLocal(Date.now());
@@ -19304,43 +19381,118 @@ function actionsEcran(vue) {
 
 /* Le menu « Plus » de la v1 pointe vers MENU.slice(5) : on le refait ici pour
    qu'il propose les écrans absents de la barre du bas. */
+/* Ce qui attend derrière chaque écran, écrit en toutes lettres. Un « 2 » posé
+   au bout d'une ligne ne dit pas s'il s'agit d'appels, de voitures prêtes ou
+   de rendez-vous : on ouvrait l'écran pour le découvrir, et c'était un
+   aller-retour pour rien. */
+function attentesEcran() {
+  const ph = (nb, un, plu) => nb ? `${nb} ${nb > 1 ? (plu || un + 's') : un}` : '';
+  const appels = appelsATraiter().length, relances = aRelancer().length;
+  const infos = attenteInfos().length;
+  const pros = demandesPro().length, annuls = annulationsClient().length;
+  const prets = pretsARendre().length;
+  const rappels = mesMemos(false).filter(m => m.quand && minuit(m.quand) <= minuit(Date.now())).length;
+  const ebp = devisATransferer().length;
+  return {
+    /* Court, parce que la ligne est étroite : « 1 appel · 1 relance » se lit
+       d'un coup, « 1 appel à traiter · 1 devis à rel… » ne se lit pas. */
+    atelier:  { n: appels + relances, dit: [ph(appels, 'appel'), ph(relances, 'relance')].filter(Boolean).join(' · ') },
+    planning: { n: pros + annuls, dit: [ph(pros, 'demande'), ph(annuls, 'annulation')].filter(Boolean).join(' · ') },
+    parking:  { n: prets, dit: ph(prets, 'voiture prête', 'voitures prêtes') },
+    memos:    { n: rappels, dit: ph(rappels, 'rappel aujourd\'hui', 'rappels aujourd\'hui') },
+    clients:  { n: infos, dit: ph(infos, 'fiche à compléter', 'fiches à compléter') },
+    catalogue: { n: 0, dit: '' },
+    reglages: { n: ebp, dit: ph(ebp, 'dossier pour EBP', 'dossiers pour EBP') },
+    devis:    { n: 0, dit: '' }
+  };
+}
+
+/* Les trois gestes qu'on lance d'où qu'on soit. Ils étaient dispersés : la
+   demande sur le bouton flottant, le rendez-vous au fond du planning, la
+   sauvegarde au bout des paramètres. */
+const GESTES_MENU = [
+  { act: 'appel', ico: 'tel', nom: 'Nouvelle demande', dit: 'un client au téléphone' },
+  { act: 'planif-nouveau', ico: 'agenda', nom: 'Nouveau rendez-vous', dit: 'poser un créneau' },
+  { act: 'mn-sauver', ico: 'devis', nom: 'Sauvegarder mes données', dit: 'un fichier, pour ne rien perdre' }
+];
+
+const DEST_MENU = () => MENU2.concat([{ id: 'devis', nom: 'Tous les devis', ico: 'devis' }]);
+
 modalePlus = function modalePlusV2() {
-  const badges = {
-    atelier:  appelsATraiter().length + aRelancer().length,
-    parking:  pretsARendre().length,
-    memos:    mesMemos(false).length,
-    planning: demandesPro().length,
-    reglages: devisATransferer().length
+  const att = attentesEcran();
+  const u = moi();
+  const vise = S.menuCible || S.vue;
+
+  const ligne = (m, i) => {
+    const a = att[m.id] || { n: 0, dit: '' };
+    const ici = S.vue === m.id;
+    return `<button class="mn-l ${ici ? 'ici' : ''} ${vise === m.id ? 'vise' : ''}"
+        data-act="aller" data-vue="${m.id}">
+      <span class="mn-ico ${a.n ? 'plein' : ''}">${ic(m.ico, 1.7)}</span>
+      <span class="mn-txt">
+        <b>${esc(m.nom)}</b>
+        ${a.dit ? `<small>${esc(a.dit)}</small>` : ici ? '<small>vous y êtes</small>' : ''}
+      </span>
+      ${a.n ? `<span class="mn-nb">${a.n}</span>` : ''}
+      <kbd>${i + 1}</kbd>
+    </button>`;
   };
 
-  const tuile = (id, nom, ico, n) => `<button class="tuile ${S.vue === id ? 'on' : ''}"
-      data-act="aller" data-vue="${id}">
-    ${ic(ico, 1.6)}<b>${esc(nom)}</b>
-    ${n ? `<span class="pastille">${n}</span>` : ''}
-  </button>`;
-
-  const u = moi();
-  return `<div class="voile cote" data-voile><div class="modale">
-    <div class="modale-tete">
-      <div><h2 style="font-size:15.5px">Où allez-vous ?</h2>
-        <div class="mini">ou dites « ${esc(motAppel())}, … »</div></div>
-      <button class="btn nu" style="margin-left:auto" data-act="fermer-modale">${ic('croix')}</button>
-    </div>
-    <div class="modale-corps pile">
-      <div class="tuiles">
-        ${MENU2.map(m => tuile(m.id, m.nom, m.ico, badges[m.id])).join('')}
-        ${tuile('devis', 'Tous les devis', 'devis', 0)}
+  return `<div class="voile cote" data-voile><div class="modale menu-plus">
+    <div class="mn-tete">
+      <div>
+        <h2>Où allez-vous ?</h2>
+        <div class="mini"><span class="au-clavier">tapez un chiffre, ou </span>dites « ${esc(motAppel())}, … »</div>
       </div>
-      ${/* Ce menu sert à changer d'écran. Changer de personne se fait par le
-            verrou, en bas : la liste de l'équipe ici doublait le pied et
-            allongeait le panneau d'autant. */ ''}
+      <button class="btn nu" data-act="fermer-modale" title="Fermer">${ic('croix')}</button>
     </div>
-    <div class="modale-pied">
-      <span class="mini">Connecté : <b>${esc(u.nom)}</b></span>
-      <button class="btn" data-act="verrouiller">${ic('cadenas')} Verrouiller</button>
+
+    <div class="mn-corps">
+      ${DEST_MENU().map(ligne).join('')}
+
+      <div class="mn-sep"><span>Faire</span></div>
+      ${GESTES_MENU.map(g => `<button class="mn-l geste" data-act="${g.act}"
+          ${g.act === 'planif-nouveau' ? `data-jour="${minuit(Date.now())}" data-user="${S.userId}"` : ''}>
+        <span class="mn-ico">${ic(g.ico, 1.7)}</span>
+        <span class="mn-txt"><b>${esc(g.nom)}</b><small>${esc(g.dit)}</small></span>
+      </button>`).join('')}
+    </div>
+
+    <div class="mn-pied">
+      <span class="mn-qui" style="--teinte:${u.teinte || 220}">${esc((u.nom || '?').slice(0, 1))}</span>
+      <span class="mn-txt"><b>${esc(u.nom)}</b><small>${estAdmin(u) ? 'administrateur' : 'salarié'}</small></span>
+      <button class="btn nu" data-act="verrouiller" title="Fermer la session">${ic('cadenas')} Verrouiller</button>
     </div>
   </div></div>`;
 };
+
+/* Au clavier : un chiffre mène droit à l'écran, les flèches promènent, Entrée
+   ouvre. Les mains restent où elles sont. */
+document.addEventListener('keydown', (e) => {
+  if (!S.modale || S.modale.type !== 'plus') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const dest = DEST_MENU();
+  if (/^[1-9]$/.test(e.key)) {
+    const m = dest[Number(e.key) - 1];
+    if (!m) return;
+    e.preventDefault();
+    S.menuCible = null; S.modale = null; S.vue = m.id; rendre();
+    return;
+  }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const i = dest.findIndex(m => m.id === (S.menuCible || S.vue));
+    const j = ((i < 0 ? 0 : i) + (e.key === 'ArrowDown' ? 1 : -1) + dest.length) % dest.length;
+    S.menuCible = dest[j].id;
+    rendre();
+    return;
+  }
+  if (e.key === 'Enter' && S.menuCible) {
+    e.preventDefault();
+    const cible = S.menuCible;
+    S.menuCible = null; S.modale = null; S.vue = cible; rendre();
+  }
+});
 
 /* ==========================================================================
    DÉMARRAGE
