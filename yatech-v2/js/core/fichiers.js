@@ -79,18 +79,29 @@ export function csvEnObjets(texte) {
    SORTIE
    ========================================================================== */
 
-/** Rend un fichier à la personne. Promesse vraie si le fichier est bien parti. */
-export function telecharger(nom, contenu, type) {
-  const typeFinal = type || 'text/csv;charset=utf-8';
-  const blob = contenu instanceof Blob ? contenu : new Blob([contenu], { type: typeFinal });
-
-  /* Certains hôtes (page publiée, application embarquée) interceptent les
-     téléchargements : on passe par leur passerelle quand elle existe. */
-  if (window.claude && window.claude.downloads && !(contenu instanceof Blob)) {
-    return window.claude.downloads.save({ filename: nom, data: contenu })
-      .then(() => true).catch(() => false);
+/*
+ * Certains hôtes — une page publiée, une application embarquée — interceptent
+ * les téléchargements : un lien `download` n'y fait rien du tout. Ils
+ * ouvrent à la place une passerelle, qu'on demande une seule fois et dont on
+ * garde la réponse. Absente, on retombe sur le lien, qui suffit partout
+ * ailleurs.
+ */
+let passerelle;
+function passerelleTelechargement() {
+  if (passerelle === undefined) {
+    const hote = typeof window === 'undefined' ? null : window.claude;
+    passerelle = (hote && typeof hote.use === 'function')
+      ? Promise.resolve(hote.use('downloads')).catch(() => null)
+      : Promise.resolve(null);
   }
+  return passerelle;
+}
+/* On la demande dès le chargement : au moment du clic, la réponse est déjà là
+   et le navigateur voit encore un geste de la personne. */
+if (typeof window !== 'undefined') passerelleTelechargement();
 
+/** Le lien invisible : la méthode ordinaire, celle des navigateurs. */
+function parLeLien(nom, blob) {
   try {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -103,10 +114,24 @@ export function telecharger(nom, contenu, type) {
     /* On libère l'adresse plus tard : révoquée dans la seconde, un gros PDF
        voit son téléchargement s'interrompre en cours de route. */
     setTimeout(() => URL.revokeObjectURL(url), 40000);
-    return Promise.resolve(true);
+    return true;
   } catch (e) {
-    return Promise.resolve(false);
+    return false;
   }
+}
+
+/** Rend un fichier à la personne. Promesse vraie si le fichier est bien parti. */
+export function telecharger(nom, contenu, type) {
+  const typeFinal = type || 'text/csv;charset=utf-8';
+  const blob = contenu instanceof Blob ? contenu : new Blob([contenu], { type: typeFinal });
+
+  return passerelleTelechargement().then((pont) => {
+    if (pont && typeof pont.save === 'function') {
+      return pont.save({ filename: nom, data: contenu })
+        .then(() => true).catch(() => false);
+    }
+    return parLeLien(nom, blob);
+  });
 }
 
 /** Un nom de fichier daté, sans accent ni espace. */
