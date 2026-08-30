@@ -113,9 +113,27 @@ export function ajouter(parent, enfants) {
   return parent;
 }
 
-/** Vide un nœud de tous ses enfants. */
+/**
+ * Vide un nœud de tous ses enfants.
+ *
+ * Retirer un champ qui a le focus déclenche son `blur`, et le gestionnaire de
+ * `blur` — un réglage qui s'enregistre, par exemple — peut repeindre ce même
+ * parent avant que la boucle ait fini. La boucle se retrouvait alors à retirer
+ * un enfant qui n'était déjà plus là, et le rendu s'arrêtait sur une erreur au
+ * milieu de l'écran. `replaceChildren` fait le ménage d'un coup, sans
+ * parcourir une liste qui bouge sous ses pieds.
+ */
 export function vider(noeud) {
-  while (noeud.firstChild) noeud.removeChild(noeud.firstChild);
+  if (typeof noeud.replaceChildren === 'function') {
+    try { noeud.replaceChildren(); return noeud; } catch (e) { /* on repasse en douceur */ }
+  }
+  /* Sans `replaceChildren`, on se protège autrement : on ne retire que ce qui
+     nous appartient encore. */
+  while (noeud.firstChild) {
+    const enfant = noeud.firstChild;
+    if (enfant.parentNode !== noeud) break;
+    noeud.removeChild(enfant);
+  }
   return noeud;
 }
 

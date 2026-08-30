@@ -36,7 +36,9 @@ export function peindre(ctx) {
   const charge = ctx.params.charge || (ctx.params.reste || '');
   deballer(charge).then((g) => {
     poser(cadre, g ? contenu(g) : illisible());
-    if (g) document.title = 'Espace pro — ' + (g.g && g.g.n ? g.g.n : 'Garage');
+    /* En aperçu, la page est montrée DANS l'outil : elle ne s'approprie ni le
+       titre de l'onglet ni le reste. */
+    if (g && !ctx.apercu) document.title = 'Espace pro — ' + (g.g && g.g.n ? g.g.n : 'Garage');
   }).catch(() => poser(cadre, illisible()));
 
   return racine;
@@ -119,7 +121,7 @@ function contenu(g) {
             ]),
             h('div.minus.tres-faible', [
               code || '',
-              temps ? fmt.heuresMO(temps) : ''
+              (temps && g.tp !== 0) ? fmt.heuresMO(temps) : ''
             ].filter(Boolean).join(' · '))
           ]),
           h('div.droite', [
@@ -314,19 +316,25 @@ function contenu(g) {
             h('div.gras', panier.size + (panier.size > 1 ? ' prestations' : ' prestation')),
             h('div.minus.tres-faible', fmt.euros(totalPanier()) + ' HT indicatif')
           ]),
-          h('button.bt.bt--fort', {
-            type: 'button',
-            onclick: () => { allerA('demande'); }
-          }, [icone('planning'), h('span', 'Demander un rendez-vous')])
+          rdvOuvert
+            ? h('button.bt.bt--fort', {
+                type: 'button',
+                onclick: () => { allerA('demande'); }
+              }, [icone('planning'), h('span', 'Demander un rendez-vous')])
+            : h('a.bt.bt--fort', { href: garage.t ? 'tel:' + telNu(garage.t) : '#' },
+                [icone('telephone'), h('span', 'Nous appeler')])
         ])
       : null);
   }
 
   /* --- les deux pages ------------------------------------------------------ */
+  /* Le garage peut fermer la prise de rendez-vous : certains préfèrent qu'on
+     les appelle. Autant ne pas montrer un onglet qui ne mène à rien. */
+  const rdvOuvert = g.rd !== 0;
   const ONGLETS = [
     { cle: 'tarifs', texte: 'Vos tarifs', icone: 'tarifs' },
-    { cle: 'demande', texte: 'Demander un rendez-vous', icone: 'planning' }
-  ];
+    rdvOuvert ? { cle: 'demande', texte: 'Demander un rendez-vous', icone: 'planning' } : null
+  ].filter(Boolean);
   const barreOnglets = h('div.onglets', { role: 'tablist' }, ONGLETS.map(o =>
     h('button', {
       type: 'button', role: 'tab',
@@ -432,6 +440,14 @@ function contenu(g) {
         g.c ? h('div.tete-ecran__sous', g.c) : null
       ])
     ]),
+
+    /* Le mot du garage : ses conditions, ce qu'il prend et ce qu'il ne prend
+       pas, son délai du moment. C'est ce qui évite trois appels. */
+    g.ac ? h('div.bandeau', [icone('info'), h('div.pre-ligne', g.ac)]) : null,
+    g.de ? h('div.bandeau.bandeau--alerte', [
+      icone('horloge'),
+      h('div', [h('b', 'Délai actuel : '), h('span', g.de)])
+    ]) : null,
 
     barreOnglets,
     zoneOnglet,

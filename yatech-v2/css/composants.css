@@ -435,6 +435,29 @@ input[type="checkbox"], input[type="radio"] {
   box-shadow: var(--ombre-2, 0 6px 24px rgba(0,0,0,.18));
 }
 
+/* --------------------------------------------------------------------------
+   APERÇU DE L'ESPACE CONFRÈRE
+   La vraie page, dans un cadre, avec les vrais prix. Une imitation dériverait
+   de ce que le confrère voit vraiment — et c'est justement ce qu'on veut
+   vérifier avant d'envoyer.
+   -------------------------------------------------------------------------- */
+.apercu-pro {
+  border: 1px solid var(--trait-fin);
+  border-radius: var(--r-m);
+  overflow: hidden;
+  background: var(--plan-2);
+}
+.apercu-pro {
+  max-height: 620px;
+  overflow-y: auto;
+  padding: var(--e-3);
+}
+@media (max-width: 700px) { .apercu-pro { max-height: 460px; } }
+/* La page du confrère se peint ici telle quelle : on lui retire seulement la
+   marge extérieure qu'elle prendrait sur un écran à elle. */
+.apercu-pro .portail { padding: 0; min-height: 0; }
+.apercu-pro .portail__cadre { max-width: none; margin: 0; }
+
 /* ==========================================================================
    PASTILLES D'ÉTAT
    Une pastille dit un état, jamais une action. La couleur porte le sens :

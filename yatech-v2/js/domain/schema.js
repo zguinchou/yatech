@@ -371,6 +371,21 @@ export const REGLAGES_DEFAUT = {
   densite: 'confort',       // confort | compact
   ecranAccueil: '/',
 
+  /* --- l'espace des confrères ----------------------------------------------
+     Ce qu'un garage partenaire voit dans le lien qu'on lui envoie. Réglé une
+     fois, appliqué à tous les liens fabriqués ensuite. */
+  espacePro: {
+    /* Les familles de prestations montrées. Vide = toutes. On ne montre pas
+       forcément les vidanges à quelqu'un qui ne nous confie que l'électronique. */
+    familles: [],
+    rdv: true,                // il peut demander un rendez-vous
+    temps: true,              // le temps de main-d'œuvre est affiché
+    accueil: '',              // un mot en haut de sa page ; vide = rien
+    /* Les délais qu'on annonce, pour qu'il ne demande pas pour demain matin
+       ce qui prend trois jours. Vide = on n'annonce rien. */
+    delai: ''
+  },
+
   /* --- être prévenu --------------------------------------------------------
      Ce que le garage propose par défaut ; chacun l'ajuste pour lui-même dans
      ses préférences. Éteint d'origine : un outil qui se met à sonner sans
@@ -445,6 +460,9 @@ export function nouveauClient(champs) {
     etiquettes: [],
     /* Accès au portail confrère : jeton dans le lien, code pour entrer. */
     portail: null,           // { jeton, verrou, ouvertLe, dernierAcces }
+    /* Le lien d'espace professionnel qu'on lui a envoyé, et combien de fois.
+       On ne garde pas le lien : il se refabrique, et il pèse. */
+    espacePro: null,         // { envoyeLe, version }
     archive: false,
     cree: Date.now(),
     maj: Date.now()

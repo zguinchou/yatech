@@ -173,3 +173,7 @@
   }
   .etiq[role="button"], button.etiq { min-height: 38px; padding: 0 var(--e-3); }
 }
+
+/* Un texte saisi sur plusieurs lignes, rendu tel qu'il a été écrit. Sans ça,
+   un mot d'accueil de trois paragraphes s'affiche en un seul bloc. */
+.pre-ligne { white-space: pre-line; }

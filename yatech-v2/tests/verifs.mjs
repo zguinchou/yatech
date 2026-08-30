@@ -40,8 +40,16 @@ class NoeudEssai {
   get texteDedans() {
     return this.childNodes.map(n => n.donnee !== undefined ? n.donnee : n.texteDedans).join('');
   }
-  appendChild(n) { this.childNodes.push(n); return n; }
-  removeChild(n) { this.childNodes.splice(this.childNodes.indexOf(n), 1); return n; }
+  appendChild(n) { this.childNodes.push(n); n.parentNode = this; return n; }
+  /* Comme un vrai navigateur : retirer un enfant qui n'en est plus un lève une
+     erreur. C'est ce qui permet d'éprouver `vider` pour de bon. */
+  removeChild(n) {
+    const i = this.childNodes.indexOf(n);
+    if (i < 0) throw new Error('NotFoundError: n’est plus un enfant');
+    this.childNodes.splice(i, 1);
+    n.parentNode = null;
+    return n;
+  }
   setAttribute(k, v) { this.attributs[k] = String(v); }
   getAttribute(k) { return this.attributs[k] === undefined ? null : this.attributs[k]; }
   addEventListener() {}
@@ -55,7 +63,7 @@ globalThis.document = {
   addEventListener() {}
 };
 
-import { h } from '../js/core/dom.js';
+import { h, poser, vider } from '../js/core/dom.js';
 import { normaliser, neuf, nouvelleLigne, prochainNumero, estUneSauvegarde,
   VERSION_MODELE } from '../js/domain/schema.js';
 import { equipeDepart } from '../js/domain/demo.js';
@@ -400,6 +408,27 @@ groupe('La fabrique d’éléments', () => {
 
   /* Un attribut booléen reçu en texte : « false » vaut faux. */
   verifie('spellcheck « false » est bien faux', h('input', { spellcheck: 'false' }).spellcheck, false);
+
+  /* Vider un conteneur pendant qu'un champ perd le focus : le gestionnaire de
+     `blur` repeint le même parent, et la boucle se retrouvait à retirer un
+     enfant qui n'était déjà plus là. L'écran s'arrêtait au milieu du rendu. */
+  const parent = h('div', [h('span', 'a'), h('span', 'b'), h('span', 'c')]);
+  const espion = parent.childNodes[0];
+  /* On simule le gestionnaire hostile : il vide le parent dans notre dos. */
+  const vraiRetrait = parent.removeChild.bind(parent);
+  let premier = true;
+  parent.removeChild = function (n) {
+    const r = vraiRetrait(n);
+    if (premier) { premier = false; parent.childNodes.forEach(x => { x.parentNode = null; }); parent.childNodes.length = 0; }
+    return r;
+  };
+  let casse = null;
+  try { vider(parent); } catch (err) { casse = err.message; }
+  verifie('vider survit à un repeint déclenché en pleine opération', casse, null);
+  verifie('et le conteneur finit vide', parent.childNodes.length, 0);
+  verifie('poser remplace bien le contenu',
+    poser(h('div', [h('b', 'vieux')]), [h('i', 'neuf')]).childNodes.length, 1);
+  vrai('l’espion a bien été détaché', espion.parentNode === null);
 });
 
 groupe('L’accès à l’outil', () => {

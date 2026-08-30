@@ -16,19 +16,28 @@ import { icone } from '../core/icones.js';
 import { modale, confirmer, message, messageOk, messageErreur } from '../core/ui.js';
 import { S, maj, instantane, remplacer, ecrireMaintenant } from '../core/store.js';
 import * as base from '../core/db.js';
-import { telecharger, nomDate, choisirFichier, lireTexte } from '../core/fichiers.js';
+import { telecharger, nomDate, choisirFichier, lireTexte, copier } from '../core/fichiers.js';
 import * as fmt from '../core/fmt.js';
-import { nombre, minutesEnHeure, heureEnMinutes, ecartJours, JOUR } from '../core/util.js';
+import { nombre, minutesEnHeure, heureEnMinutes, ecartJours, compareTexte, JOUR } from '../core/util.js';
 import * as lit from '../domain/selecteurs.js';
 import * as act from '../domain/actions.js';
 import {
   ROLES, ETAPES, TYPES_PLACE, OUTILS_ELECTRO,
   apercuNumero, nouvelUtilisateur, normaliser, neuf, estUneSauvegarde,
   FAMILLES_ALERTE } from '../domain/schema.js';
-import { enTete, champ, tete } from '../ui/widgets.js';
+import { enTete, champ, tete, menuEnvoi } from '../ui/widgets.js';
 import { appliquerApparence, MENU } from '../coque.js';
 import { verrou } from '../core/crypto.js';
 import * as veille from '../core/veille.js';
+
+/*
+ * Un champ qui s'enregistre le fait sur `change`, c'est-à-dire au moment
+ * précis où il perd le focus. Repeindre la section à cet instant revient à
+ * retirer le champ pendant que le navigateur distribue encore son `blur` :
+ * le nœud disparaît sous ses pieds et le rendu s'arrête sur une erreur au
+ * milieu de l'écran. On écrit tout de suite, on repeint juste après.
+ */
+function apresLEvenement(faire) { setTimeout(faire, 0); }
 
 /* Les teintes proposées pour l'accent : huit repères bien séparés sur la roue,
    plutôt qu'un sélecteur libre où l'on tombe sur un orange illisible. */
@@ -70,6 +79,7 @@ const SECTIONS = [
   { cle: 'planning',     nom: 'Planning',     icone: 'planning', peindre: sectionPlanning },
   { cle: 'stock',        nom: 'Stock',        icone: 'stock',    peindre: sectionStock },
   { cle: 'electronique', nom: 'Électronique', icone: 'puce',     peindre: sectionElectronique },
+  { cle: 'confreres',    nom: 'Confrères',    icone: 'pro',      peindre: sectionConfreres },
   { cle: 'alertes',      nom: 'Alertes',      icone: 'cloche',   peindre: sectionAlertes,   pourTous: true },
   { cle: 'apparence',    nom: 'Apparence',    icone: 'soleil',   peindre: sectionApparence, pourTous: true },
   { cle: 'donnees',      nom: 'Données',      icone: 'archive',  peindre: sectionDonnees,   pourTous: true }
@@ -1061,6 +1071,243 @@ function sectionStock(ctx) {
 }
 
 /* ==========================================================================
+   CONFRÈRES
+   --------------------------------------------------------------------------
+   Les garages partenaires, leurs accès, et ce qu'ils voient. Avec l'aperçu en
+   dessous : on règle, on regarde, on ajuste. Régler à l'aveugle puis envoyer
+   un lien pour découvrir ce qu'il montre, c'est la meilleure façon de montrer
+   ce qu'on ne voulait pas.
+   ========================================================================== */
+
+function sectionConfreres(ctx, refaire) {
+  const e = ctx.etat;
+  const reg = e.reglages.espacePro || {};
+  const pros = (e.clients || []).filter(c => !c.archive && (c.type === 'pro' || c.grille === 'pro'));
+
+  /* La famille par famille : on coche ce qu'ils ont le droit de voir. Aucune
+     cochée veut dire toutes — c'est le réglage d'origine, et il est juste. */
+  const famillesCatalogue = Array.from(new Set((e.prestations || [])
+    .filter(p => p.actif).map(p => p.famille || 'Divers'))).sort(compareTexte);
+  const choisies = Array.isArray(reg.familles) ? reg.familles.slice() : [];
+
+  const poserPro = (champs) => {
+    maj('Réglage de l’espace confrère', (etat) => {
+      etat.reglages.espacePro = Object.assign({}, etat.reglages.espacePro, champs);
+    });
+    apresLEvenement(refaire);
+  };
+
+  /* --- l'aperçu ----------------------------------------------------------- */
+  const cadreApercu = h('div.apercu-pro');
+  let vu = pros.length ? pros[0].id : '';
+
+  async function rafraichirApercu() {
+    const c = pros.find(x => x.id === vu) || pros[0] || null;
+    if (!c) {
+      poser(cadreApercu, h('div.vide', [
+        icone('pro', { taille: 30 }),
+        h('h3', 'Aucun confrère pour l’instant'),
+        h('p', 'Créez d’abord une fiche client en « professionnel » : l’aperçu '
+          + 'montre ce que CE confrère-là verra, à SES prix.')
+      ]));
+      return;
+    }
+    /* On peint la VRAIE page, celle que le lien ouvre, avec la vraie charge.
+       Pas une imitation : une imitation dérive de ce que le confrère voit, et
+       c'est justement ce qu'on veut vérifier.
+
+       Sans cadre isolé : l'écran du confrère est du HTML ordinaire de cet
+       outil, il se peint ici comme ailleurs. Le faire démarrer une seconde
+       fois dans un cadre isolé, en plus d'être lent, le laissait bloqué sur
+       son écran d'attente — deux applications ne se partagent pas la base. */
+    const { emballer, preparerGrille } = await import('../domain/grille.js');
+    const vue = await import('./grille.js');
+    const charge = await emballer(preparerGrille(e, c));
+    poser(cadreApercu, vue.peindre({ params: { charge }, apercu: true }));
+  }
+  rafraichirApercu();
+
+  return h('div.pile', [
+    h('div.bandeau', [
+      icone('info'),
+      h('div.grandit', [
+        h('div.gras', 'Un lien par confrère, qui porte ses tarifs.'),
+        h('div.petit', 'Il s’ouvre sur SON téléphone, sans réseau et sans compte : '
+          + 'les prix voyagent dans le lien. C’est ce qui le rend utilisable, et '
+          + 'c’est aussi sa limite — un lien déjà envoyé continue de montrer les '
+          + 'prix qu’il porte. Pour mettre à jour, on en renvoie un ; pour couper '
+          + 'l’accès pour de bon, il faudrait un serveur, ce que l’outil n’a pas.')
+      ])
+    ]),
+
+    /* --- les accès --------------------------------------------------------- */
+    h('div.panneau', [
+      h('div.panneau__tete', [
+        icone('pro', { taille: 16 }),
+        h('h2.grandit', 'Leurs accès'),
+        pros.length ? h('span.compte', String(pros.length)) : null
+      ]),
+      pros.length
+        ? h('div.liste', pros.map(c => ligneAccesPro(e, c, ctx, refaire, () => {
+            vu = c.id;
+            rafraichirApercu();
+          })))
+        : h('div.panneau__corps', h('div.petit.faible.centre',
+            'Aucun client professionnel. Créez la fiche d’un garage partenaire '
+            + 'dans Clients, en cochant « professionnel » : son accès se fabrique ici.'))
+    ]),
+
+    /* --- ce qu'ils voient --------------------------------------------------- */
+    panneau('Ce qu’ils voient', [
+      ligne('Familles de prestations',
+        choisies.length
+          ? choisies.length + ' famille(s) montrée(s) sur ' + famillesCatalogue.length
+          : 'Toutes. Décochez ce qui ne les regarde pas.',
+        h('div.rang-s.enroule', famillesCatalogue.map(f => {
+          const prise = !choisies.length || choisies.includes(f);
+          return h('button.etiq' + (prise ? '.etiq--accent' : ''), {
+            type: 'button', 'aria-pressed': prise ? 'true' : 'false',
+            onclick: () => {
+              /* Rien de coché = tout montré : on part donc de la liste
+                 complète dès qu'on en retire une. */
+              let l = choisies.length ? choisies.slice() : famillesCatalogue.slice();
+              const i = l.indexOf(f);
+              if (i >= 0) l.splice(i, 1); else l.push(f);
+              /* Tout recoché : on revient à « toutes », ce qui laisse les
+                 familles ajoutées plus tard visibles d'elles-mêmes. */
+              if (l.length === famillesCatalogue.length) l = [];
+              poserPro({ familles: l });
+            }
+          }, f);
+        }))),
+
+      reglageBascule(ctx, {
+        cle: 'espacePro.rdv', titre: 'Ils peuvent demander un rendez-vous',
+        lire: (etat) => (etat.reglages.espacePro || {}).rdv !== false,
+        ecrire: (etat, v) => {
+          etat.reglages.espacePro = Object.assign({}, etat.reglages.espacePro, { rdv: v });
+        },
+        aide: 'Éteint, leur page ne montre que les tarifs et un bouton pour appeler.'
+      }),
+
+      reglageBascule(ctx, {
+        cle: 'espacePro.temps', titre: 'Afficher le temps de main-d’œuvre',
+        lire: (etat) => (etat.reglages.espacePro || {}).temps !== false,
+        ecrire: (etat, v) => {
+          etat.reglages.espacePro = Object.assign({}, etat.reglages.espacePro, { temps: v });
+        },
+        aide: 'Le nombre d’heures à côté de chaque prestation.'
+      }),
+
+      ligne('Délai annoncé',
+        'Écrit en haut de leur page. Évite qu’on demande pour demain matin ce '
+        + 'qui prend trois jours. Vide : rien n’est annoncé.',
+        h('input.saisie', {
+          value: reg.delai || '', placeholder: 'Environ 3 jours en ce moment',
+          maxlength: 120,
+          onchange: (ev) => poserPro({ delai: ev.target.value.trim() })
+        })),
+
+      ligne('Mot d’accueil',
+        'Vos conditions, ce que vous prenez et ce que vous ne prenez pas. '
+        + 'Il s’affiche en haut de leur page.',
+        h('textarea.saisie', {
+          rows: 4, value: reg.accueil || '', maxlength: 400,
+          placeholder: 'Boîtiers acceptés déposés ou sur véhicule. Retour sous 48 h. '
+            + 'Merci de joindre la lecture d’origine si vous l’avez.',
+          onchange: (ev) => poserPro({ accueil: ev.target.value.trim() })
+        }))
+    ]),
+
+    /* --- l'aperçu ----------------------------------------------------------- */
+    h('div.panneau', [
+      h('div.panneau__tete', [
+        icone('oeil', { taille: 16 }),
+        h('h2.grandit', 'Ce que le confrère voit'),
+        pros.length > 1
+          ? h('select.saisie', {
+              style: { maxWidth: '16rem' },
+              onchange: (ev) => { vu = ev.target.value; rafraichirApercu(); }
+            }, pros.map(c => h('option', { value: c.id, texte: lit.nomClient(c) })))
+          : null,
+        h('button.bt.bt--nu.bt--s', {
+          type: 'button', onclick: rafraichirApercu
+        }, [icone('rafraichir', { taille: 14 }), h('span', 'Rafraîchir')])
+      ]),
+      h('div.panneau__corps', h('div.pile-s', [
+        h('p.petit.faible', 'La vraie page, avec les vrais prix de ce confrère. '
+          + 'Changez un réglage au-dessus, rafraîchissez, et vous voyez le résultat '
+          + 'avant d’envoyer quoi que ce soit.'),
+        cadreApercu
+      ]))
+    ])
+  ]);
+}
+
+/** Une ligne de confrère : l'état de son accès, et les gestes qui vont avec. */
+function ligneAccesPro(e, c, ctx, refaire, montrer) {
+  const env = c.espacePro || {};
+  const jamais = !env.envoyeLe;
+
+  const fabriquer = async () => {
+    const { lienGrille } = await import('../domain/grille.js');
+    return lienGrille(e, c);
+  };
+
+  const noter = () => maj('Accès confrère envoyé', (etat) => {
+    const x = lit.client(etat, c.id);
+    if (!x) return;
+    x.espacePro = Object.assign({}, x.espacePro, {
+      envoyeLe: Date.now(),
+      version: nombre((x.espacePro || {}).version, 0) + 1
+    });
+  });
+
+  return h('div.liste__ligne', [
+    h('div.grandit.coupe', [
+      h('div.gras.coupe', lit.nomClient(c)),
+      h('div.minus.tres-faible.coupe', jamais
+        ? 'Aucun accès envoyé pour l’instant'
+        : 'Envoyé ' + fmt.quand(env.envoyeLe, { avecHeure: false })
+          + (nombre(env.version, 0) > 1 ? ' · ' + env.version + 'e envoi' : ''))
+    ]),
+    h('div.rang-s.enroule', [
+      h('button.bt.bt--nu.bt--icone.bt--s', {
+        type: 'button', 'aria-label': 'Voir son espace', onclick: montrer
+      }, icone('oeil')),
+      h('button.bt.bt--contour.bt--s', {
+        type: 'button',
+        onclick: async () => {
+          const l = await fabriquer();
+          const ok = await copier(l);
+          noter();
+          messageOk(ok ? 'Lien copié — collez-le où vous voulez' : 'Copie impossible');
+          refaire();
+        }
+      }, [icone('copier', { taille: 14 }), h('span', 'Copier')]),
+      h('button.bt.bt--fort.bt--s', {
+        type: 'button',
+        onclick: async (ev) => {
+          const l = await fabriquer();
+          noter();
+          menuEnvoi(ev.currentTarget, {
+            tel: c.tel, email: c.email,
+            sujet: 'Votre espace professionnel — ' + nomDuGarage(e),
+            texte: 'Bonjour,\n\nVoici votre espace : vos tarifs, et de quoi nous '
+              + 'demander un rendez-vous en cochant ce qu’il vous faut.\n' + l
+              + '\n\nIl s’ouvre directement, sans code. Gardez le lien.\n\n'
+              + nomDuGarage(e)
+          });
+          refaire();
+        }
+      }, [icone('partage', { taille: 14 }), h('span', jamais ? 'Envoyer' : 'Renvoyer')])
+    ])
+  ]);
+}
+
+const nomDuGarage = (e) => e.reglages.raisonSociale || e.reglages.nomOutil || 'Le garage';
+
+/* ==========================================================================
    ALERTES
    --------------------------------------------------------------------------
    Ce que l'outil a le droit de faire pour attirer l'attention. Chacun règle le
@@ -1093,7 +1340,7 @@ function sectionAlertes(ctx, refaire) {
       if (champs.quoi) b.quoi = Object.assign({}, a.quoi || {}, champs.quoi);
       u.preferences = Object.assign({}, u.preferences, { notifs: b });
     });
-    refaire();
+    apresLEvenement(refaire);
   };
 
   const pretes = permission === 'granted';

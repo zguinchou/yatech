@@ -41,11 +41,17 @@ export function preparerGrille(e, client) {
   const r = e.reglages || {};
   const ctx = contexte(r, client);
 
+  /* Ce que le garage a décidé de montrer aux confrères. */
+  const reg = r.espacePro || {};
+  const montrees = Array.isArray(reg.familles) && reg.familles.length
+    ? new Set(reg.familles) : null;
+
   /* Regroupé par famille et rangé, comme sur le papier qu'on lui aurait donné. */
   const familles = new Map();
   for (const p of (e.prestations || [])) {
     if (!p.actif) continue;
     const f = p.famille || 'Divers';
+    if (montrees && !montrees.has(f)) continue;
     if (!familles.has(f)) familles.set(f, []);
     familles.get(f).push([
       p.code || '',
@@ -75,6 +81,12 @@ export function preparerGrille(e, client) {
     ci: client ? client.id : '',
     /* Les jours ouvrés, pour que la page propose des dates qui existent. */
     jo: Array.isArray(r.joursOuvres) ? r.joursOuvres.slice() : [1, 2, 3, 4, 5],
+    /* Ce que le garage a réglé pour ses confrères : le mot d'accueil, le
+       délai annoncé, et s'il accepte les demandes de rendez-vous. */
+    ac: String(reg.accueil || '').slice(0, 400),
+    de: String(reg.delai || '').slice(0, 120),
+    rd: reg.rdv === false ? 0 : 1,
+    tp: reg.temps === false ? 0 : 1,
     th: ctx.taux,
     tva: ctx.tvaApplicable ? ctx.tva : 0,
     rem: nombre(client && client.remise, 0),
